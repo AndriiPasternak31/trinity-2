@@ -48,13 +48,15 @@
               <option value="status">Status</option>
             </select>
 
-            <router-link
-              to="/processes/new"
-              class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-            >
-              <PlusIcon class="h-5 w-5 mr-1" />
-              Create Process
-            </router-link>
+            <PermissionGuard permission="process:create">
+              <router-link
+                to="/processes/new"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+              >
+                <PlusIcon class="h-5 w-5 mr-1" />
+                Create Process
+              </router-link>
+            </PermissionGuard>
           </div>
         </div>
 
@@ -333,7 +335,9 @@ import NavBar from '../components/NavBar.vue'
 import ProcessSubNav from '../components/ProcessSubNav.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import OnboardingChecklist from '../components/OnboardingChecklist.vue'
+import PermissionGuard from '../components/PermissionGuard.vue'
 import { useOnboarding } from '../composables/useOnboarding'
+import { usePermissions } from '../composables/usePermissions'
 import {
   PlusIcon,
   PlayIcon,
@@ -357,6 +361,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const processesStore = useProcessesStore()
+const { canCreateProcess, canDeleteProcess, canTriggerExecution } = usePermissions()
 const notification = ref(null)
 const actionInProgress = ref(null)
 const deleteTarget = ref(null)

@@ -130,6 +130,18 @@
               <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                 <p class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ authStore.userName }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ authStore.userEmail }}</p>
+                <!-- Role Badge -->
+                <span 
+                  v-if="authStore.roleDisplay"
+                  :class="[
+                    'mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                    authStore.isAdmin 
+                      ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300' 
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                  ]"
+                >
+                  {{ authStore.roleDisplay }}
+                </span>
               </div>
               <!-- Theme Selector in Menu -->
               <div class="px-4 py-2 border-b border-gray-100 dark:border-gray-700">

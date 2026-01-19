@@ -34,7 +34,7 @@
           <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Users ({{ users.length }})</h2>
           </div>
-          
+
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead class="bg-gray-50 dark:bg-gray-900/50">
@@ -89,7 +89,7 @@
               </tbody>
             </table>
           </div>
-          
+
           <!-- Empty State -->
           <div v-if="users.length === 0" class="p-8 text-center">
             <UsersIcon class="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -224,7 +224,7 @@ onMounted(async () => {
 async function loadUsers() {
   loading.value = true
   error.value = null
-  
+
   try {
     const response = await axios.get('/api/admin/users', {
       headers: authStore.authHeader
@@ -263,14 +263,14 @@ async function loadRoles() {
 
 async function updateUserRole(user) {
   updating.value = user.id
-  
+
   try {
     await axios.put(`/api/admin/users/${user.id}/role`, {
       role: user.role
     }, {
       headers: authStore.authHeader
     })
-    
+
     showSuccess(`Updated ${user.name || user.username}'s role`)
   } catch (err) {
     console.error('Failed to update role:', err)
@@ -298,8 +298,8 @@ function getRoleDisplay(role) {
 function formatDate(dateStr) {
   if (!dateStr) return 'Never'
   const date = new Date(dateStr)
-  return date.toLocaleDateString(undefined, { 
-    month: 'short', 
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
     day: 'numeric',
     year: 'numeric',
     hour: '2-digit',

@@ -68,7 +68,7 @@
 
             <!-- Save button (only for new or draft) -->
             <button
-              v-if="isNew || process?.status === 'draft'"
+              v-if="(isNew || process?.status === 'draft') && canUpdateProcess"
               @click="saveProcess"
               :disabled="saving || hasErrors"
               class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -98,7 +98,7 @@
 
             <!-- Publish button (only for draft) -->
             <button
-              v-if="!isNew && process?.status === 'draft'"
+              v-if="!isNew && process?.status === 'draft' && canPublishProcess"
               @click="publishProcess"
               :disabled="saving || hasErrors"
               class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -108,7 +108,7 @@
 
             <!-- Execute button (only for published) -->
             <button
-              v-if="!isNew && process?.status === 'published'"
+              v-if="!isNew && process?.status === 'published' && canTriggerExecution"
               @click="executeProcess"
               :disabled="saving"
               class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2"
@@ -767,11 +767,13 @@ import {
 import api from '../api'
 import jsyaml from 'js-yaml'
 import { useOnboarding } from '../composables/useOnboarding'
+import { usePermissions } from '../composables/usePermissions'
 
 const route = useRoute()
 const router = useRouter()
 const processesStore = useProcessesStore()
 const { celebrateCompletion } = useOnboarding()
+const { canUpdateProcess, canPublishProcess, canTriggerExecution } = usePermissions()
 
 // State
 const loading = ref(false)
