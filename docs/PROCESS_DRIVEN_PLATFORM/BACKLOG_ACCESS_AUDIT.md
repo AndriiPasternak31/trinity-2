@@ -2,7 +2,7 @@
 
 > **Phase**: Governance
 > **Goal**: Role-based access control, audit logging, and execution governance
-> **Stories**: 9
+> **Stories**: 14
 > **Focus**: RBAC for process operations, compliance audit trail, execution limits
 > **Reference**: See [`BACKLOG_INDEX.md`](./BACKLOG_INDEX.md) for conventions
 > **Source**: IT5 Section 5 (Access Management), Section 7.2 (P1 Implementation)
@@ -66,10 +66,12 @@ This backlog implements **IT5 P1 - Access & Audit** features for the Process Eng
 
 | Sprint | Stories | Focus |
 |--------|---------|-------|
-| **Sprint 1** | E17-01, E17-02 | Permission enum and role definitions |
-| **Sprint 2** | E17-03, E17-04 | Authorization service and API integration |
-| **Sprint 3** | E18-01, E18-02, E18-03 | Audit logging infrastructure |
-| **Sprint 4** | E19-01, E19-02 | Execution governance |
+| **Sprint 1** | E17-01, E17-02 | Permission enum and role definitions ✅ |
+| **Sprint 2** | E17-03, E17-04 | Authorization service and API integration ✅ |
+| **Sprint 3** | E18-01, E18-02, E18-03 | Audit logging infrastructure ✅ |
+| **Sprint 4** | E19-01, E19-02 | Execution governance (E19-01 ✅) |
+| **Sprint 5** | E17-05, E17-06 | RBAC UI - Backend APIs |
+| **Sprint 6** | E17-07, E17-08, E17-09 | RBAC UI - Frontend integration |
 
 ---
 
@@ -207,6 +209,122 @@ Limits and controls for execution resources.
 - Location: `dependencies.py` (add dependency) + routers
 - Pattern: `current_user: CurrentUser, auth: ProcessAuthorizationService = Depends(get_auth_service)`
 - Consider creating `AuthorizedUser` type annotation
+
+---
+
+### E17-05: User Permissions API
+
+**As a** frontend developer, **I want** an API to get my permissions, **so that** I can show/hide UI elements based on access.
+
+| Attribute | Value |
+|-----------|-------|
+| Size | S |
+| Priority | P1 |
+| Dependencies | E17-03 |
+| Status | pending |
+
+**Acceptance Criteria:**
+- [ ] GET /api/users/me/permissions returns role and permission list
+- [ ] Uses existing ROLE_PERMISSIONS mapping
+- [ ] Unit tests for permission serialization
+
+**Technical Notes:**
+- Enhance existing `/api/users/me` endpoint in `main.py`
+- Return: `{ role: string, permissions: string[] }`
+
+---
+
+### E17-06: Admin User Management API
+
+**As an** admin, **I want** API endpoints to manage users, **so that** I can assign roles to team members.
+
+| Attribute | Value |
+|-----------|-------|
+| Size | M |
+| Priority | P1 |
+| Dependencies | E17-03 |
+| Status | pending |
+
+**Acceptance Criteria:**
+- [ ] GET /api/admin/users lists all users (admin only)
+- [ ] PUT /api/admin/users/{id}/role updates user role
+- [ ] Returns 403 for non-admin users
+- [ ] Unit tests for role update validation
+- [ ] Validate role is valid ProcessRole
+
+**Technical Notes:**
+- Create new `routers/users.py`
+- Use ProcessAuthorizationService for admin check
+
+---
+
+### E17-07: Frontend Permissions Store
+
+**As a** frontend developer, **I want** permissions in the auth store, **so that** components can check access.
+
+| Attribute | Value |
+|-----------|-------|
+| Size | S |
+| Priority | P1 |
+| Dependencies | E17-05 |
+| Status | pending |
+
+**Acceptance Criteria:**
+- [ ] auth.js fetches permissions after login
+- [ ] usePermissions composable with can() helper
+- [ ] Getters: isAdmin, canCreateProcess, canTriggerExecution, etc.
+
+**Technical Notes:**
+- Update `src/frontend/src/stores/auth.js`
+- Create `src/frontend/src/composables/usePermissions.js`
+
+---
+
+### E17-08: User Management UI
+
+**As an** admin, **I want** a user management page, **so that** I can view and change user roles.
+
+| Attribute | Value |
+|-----------|-------|
+| Size | M |
+| Priority | P1 |
+| Dependencies | E17-06, E17-07 |
+| Status | pending |
+
+**Acceptance Criteria:**
+- [ ] Admin-only page at /admin/users
+- [ ] Lists users with email, role, last login
+- [ ] Role selector dropdown to change roles
+- [ ] Shows role permission matrix for reference
+- [ ] Smoke test: admin can change user role
+
+**Technical Notes:**
+- Create `src/frontend/src/views/UserManagement.vue`
+- Add route to `router/index.js`
+- Link from Settings page (admin only)
+
+---
+
+### E17-09: Permission-Aware Components
+
+**As a** user, **I want** UI elements hidden/disabled based on my permissions, **so that** I only see actions I can perform.
+
+| Attribute | Value |
+|-----------|-------|
+| Size | M |
+| Priority | P2 |
+| Dependencies | E17-07 |
+| Status | pending |
+
+**Acceptance Criteria:**
+- [ ] PermissionGuard component with hide/disable modes
+- [ ] ProcessList hides Create button if no process:create
+- [ ] ProcessEditor disables Save/Publish per permission
+- [ ] NavBar shows current role badge
+
+**Technical Notes:**
+- Create `src/frontend/src/components/PermissionGuard.vue`
+- Update ProcessList.vue, ProcessEditor.vue, NavBar.vue
 
 ---
 
@@ -384,5 +502,6 @@ pytest tests/process_engine/ --cov=services.process_engine.services.authorizatio
 
 | Date | Change |
 |------|--------|
+| 2026-01-19 | Add E17-05 to E17-09 for RBAC UI (5 new stories, 14 total) |
 | 2026-01-17 | Mark E17-01 to E19-01 as done (8/9 stories complete) |
 | 2026-01-17 | Initial creation - IT5 P1 Access & Audit backlog |

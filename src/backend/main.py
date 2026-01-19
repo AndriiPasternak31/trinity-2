@@ -410,6 +410,46 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     return {"username": current_user.username, "role": current_user.role}
 
 
+@app.get("/api/users/me/permissions")
+async def get_current_user_permissions(current_user: User = Depends(get_current_user)):
+    """
+    Get current user's role and permissions.
+    
+    Returns the user's process role and list of permissions for frontend
+    to use for showing/hiding UI elements.
+    
+    Reference: BACKLOG_ACCESS_AUDIT.md - E17-05
+    """
+    from services.process_engine.domain import ProcessRole, ROLE_PERMISSIONS, get_role_permissions
+    
+    # Map user role to ProcessRole
+    role_mapping = {
+        'admin': ProcessRole.ADMIN,
+        'process_admin': ProcessRole.ADMIN,
+        'process_designer': ProcessRole.DESIGNER,
+        'designer': ProcessRole.DESIGNER,
+        'process_operator': ProcessRole.OPERATOR,
+        'operator': ProcessRole.OPERATOR,
+        'process_approver': ProcessRole.APPROVER,
+        'approver': ProcessRole.APPROVER,
+        'process_viewer': ProcessRole.VIEWER,
+        'viewer': ProcessRole.VIEWER,
+        'user': ProcessRole.OPERATOR,  # Default users get operator access
+    }
+    
+    user_role = current_user.role or 'user'
+    process_role = role_mapping.get(user_role, ProcessRole.VIEWER)
+    
+    # Get permissions for this role
+    permissions = get_role_permissions(process_role)
+    
+    return {
+        "role": process_role.value,
+        "role_display": process_role.name.replace('_', ' ').title(),
+        "permissions": sorted([p.value for p in permissions])
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
