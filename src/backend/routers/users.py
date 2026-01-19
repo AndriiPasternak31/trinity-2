@@ -74,7 +74,7 @@ def require_admin(
 ) -> User:
     """
     Dependency that requires the current user to be an admin.
-    
+
     Raises 403 if user is not admin.
     """
     if not auth_service.is_admin(current_user):
@@ -89,18 +89,18 @@ def require_admin(
 def validate_role(role: str) -> ProcessRole:
     """
     Validate that a role string is a valid ProcessRole.
-    
+
     Returns the ProcessRole enum member.
     Raises HTTPException if invalid.
     """
     valid_roles = {r.value: r for r in ProcessRole}
-    
+
     if role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid role '{role}'. Valid roles: {list(valid_roles.keys())}"
         )
-    
+
     return valid_roles[role]
 
 
@@ -114,11 +114,11 @@ async def list_users(
 ):
     """
     List all users in the system.
-    
+
     Requires admin role.
     """
     users_data = db.list_users()
-    
+
     users = [
         UserResponse(
             id=u["id"],
@@ -131,9 +131,9 @@ async def list_users(
         )
         for u in users_data
     ]
-    
+
     logger.info(f"Admin {admin_user.username} listed {len(users)} users")
-    
+
     return UserListResponse(users=users, total=len(users))
 
 
@@ -144,17 +144,17 @@ async def get_user(
 ):
     """
     Get a specific user by ID.
-    
+
     Requires admin role.
     """
     user_data = db.get_user_by_id(user_id)
-    
+
     if not user_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found"
         )
-    
+
     return UserResponse(
         id=user_data["id"],
         username=user_data["username"],
@@ -174,45 +174,45 @@ async def update_user_role(
 ):
     """
     Update a user's role.
-    
+
     Requires admin role.
     Cannot change your own role (to prevent admin lockout).
     """
     # Validate the new role
     new_role = validate_role(request.role)
-    
+
     # Get the user to update
     user_data = db.get_user_by_id(user_id)
-    
+
     if not user_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with ID {user_id} not found"
         )
-    
+
     # Prevent admin from changing their own role
     if user_data["username"] == admin_user.username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot change your own role"
         )
-    
+
     previous_role = user_data["role"]
-    
+
     # Update the role
     updated_user = db.update_user(user_data["username"], {"role": new_role.value})
-    
+
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update user role"
         )
-    
+
     logger.info(
         f"Admin {admin_user.username} changed role of {user_data['username']} "
         f"from {previous_role} to {new_role.value}"
     )
-    
+
     return RoleUpdateResponse(
         id=user_id,
         username=user_data["username"],
@@ -228,11 +228,11 @@ async def get_available_roles(
 ):
     """
     Get list of available roles with descriptions.
-    
+
     Requires admin role.
     """
     from services.process_engine.domain import get_role_permissions
-    
+
     roles = []
     for role in ProcessRole:
         permissions = get_role_permissions(role)
@@ -242,7 +242,7 @@ async def get_available_roles(
             "description": _get_role_description(role),
             "permission_count": len(permissions)
         })
-    
+
     return {"roles": roles}
 
 

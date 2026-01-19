@@ -10,7 +10,12 @@ export const useAuthStore = defineStore('auth', {
     authError: null,
     // Runtime mode detection (from backend)
     emailAuthEnabled: null,  // Email-based authentication
-    modeDetected: false
+    modeDetected: false,
+    // RBAC: Role and permissions (E17-07)
+    role: null,                // e.g., 'process_operator'
+    roleDisplay: null,         // e.g., 'Process Operator'
+    permissions: [],           // e.g., ['process:read', 'execution:trigger']
+    permissionsLoaded: false
   }),
 
   getters: {
@@ -34,6 +39,51 @@ export const useAuthStore = defineStore('auth', {
 
     userPicture() {
       return this.user?.picture || null
+    },
+
+    // RBAC Getters (E17-07)
+    isAdmin() {
+      return this.role === 'process_admin'
+    },
+
+    isDesigner() {
+      return this.role === 'process_designer' || this.isAdmin
+    },
+
+    isOperator() {
+      return this.role === 'process_operator' || this.isAdmin
+    },
+
+    canCreateProcess() {
+      return this.permissions.includes('process:create')
+    },
+
+    canUpdateProcess() {
+      return this.permissions.includes('process:update')
+    },
+
+    canDeleteProcess() {
+      return this.permissions.includes('process:delete')
+    },
+
+    canPublishProcess() {
+      return this.permissions.includes('process:publish')
+    },
+
+    canTriggerExecution() {
+      return this.permissions.includes('execution:trigger')
+    },
+
+    canCancelExecution() {
+      return this.permissions.includes('execution:cancel')
+    },
+
+    canRetryExecution() {
+      return this.permissions.includes('execution:retry')
+    },
+
+    canDecideApproval() {
+      return this.permissions.includes('approval:decide')
     }
   },
 
@@ -85,6 +135,9 @@ export const useAuthStore = defineStore('auth', {
             this.isAuthenticated = true
             this.setupAxiosAuth()
             console.log('✅ Session restored for:', user.email || user.name)
+            
+            // Fetch permissions on session restore (E17-07)
+            await this.fetchPermissions()
           }
         } catch (e) {
           console.warn('Failed to parse stored user, clearing credentials')
@@ -146,6 +199,9 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('auth0_user', JSON.stringify(devUser))
         this.setupAxiosAuth()
+        
+        // Fetch permissions after successful login (E17-07)
+        await this.fetchPermissions()
 
         console.log('🔐 Admin login: authenticated as', username)
         return true
@@ -200,6 +256,9 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('auth0_user', JSON.stringify(this.user))
         this.setupAxiosAuth()
+        
+        // Fetch permissions after successful login (E17-07)
+        await this.fetchPermissions()
 
         console.log('📧 Email auth: authenticated as', this.user.email)
         return true
@@ -217,6 +276,11 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       this.isAuthenticated = false
       this.authError = null
+      // Clear RBAC state
+      this.role = null
+      this.roleDisplay = null
+      this.permissions = []
+      this.permissionsLoaded = false
 
       localStorage.removeItem('token')
       localStorage.removeItem('auth0_user')
@@ -229,6 +293,70 @@ export const useAuthStore = defineStore('auth', {
     // Clear auth error
     clearError() {
       this.authError = null
+    },
+
+    // =========================================================================
+    // RBAC: Fetch user permissions (E17-07)
+    // =========================================================================
+    
+    /**
+     * Fetch the current user's role and permissions from the backend.
+     * Called automatically after successful authentication.
+     */
+    async fetchPermissions() {
+      if (!this.isAuthenticated || !this.token) {
+        console.warn('Cannot fetch permissions: not authenticated')
+        return false
+      }
+
+      try {
+        const response = await axios.get('/api/users/me/permissions', {
+          headers: this.authHeader
+        })
+        
+        this.role = response.data.role
+        this.roleDisplay = response.data.role_display
+        this.permissions = response.data.permissions || []
+        this.permissionsLoaded = true
+        
+        console.log(`🔒 RBAC: Role=${this.roleDisplay}, Permissions=${this.permissions.length}`)
+        return true
+      } catch (error) {
+        console.error('Failed to fetch permissions:', error)
+        // Default to viewer permissions on error
+        this.role = 'process_viewer'
+        this.roleDisplay = 'Viewer'
+        this.permissions = ['process:read', 'execution:view']
+        this.permissionsLoaded = true
+        return false
+      }
+    },
+
+    /**
+     * Check if the current user has a specific permission.
+     * @param {string} permission - Permission to check (e.g., 'process:create')
+     * @returns {boolean}
+     */
+    hasPermission(permission) {
+      return this.permissions.includes(permission)
+    },
+
+    /**
+     * Check if the current user has any of the specified permissions.
+     * @param {string[]} permissions - Permissions to check
+     * @returns {boolean}
+     */
+    hasAnyPermission(permissions) {
+      return permissions.some(p => this.permissions.includes(p))
+    },
+
+    /**
+     * Check if the current user has all of the specified permissions.
+     * @param {string[]} permissions - Permissions to check
+     * @returns {boolean}
+     */
+    hasAllPermissions(permissions) {
+      return permissions.every(p => this.permissions.includes(p))
     }
   }
 })

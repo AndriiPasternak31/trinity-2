@@ -47,7 +47,7 @@ class TestRequireAdmin:
         """Admin user should pass admin check."""
         auth_service = ProcessAuthorizationService()
         admin_user = MockUser("admin", "admin")
-        
+
         # Admin should be allowed
         assert auth_service.is_admin(admin_user) == True
 
@@ -55,7 +55,7 @@ class TestRequireAdmin:
         """Process admin user should pass admin check."""
         auth_service = ProcessAuthorizationService()
         admin_user = MockUser("admin", "process_admin")
-        
+
         # Process admin should be allowed
         assert auth_service.is_admin(admin_user) == True
 
@@ -63,7 +63,7 @@ class TestRequireAdmin:
         """Regular user should fail admin check."""
         auth_service = ProcessAuthorizationService()
         regular_user = MockUser("user", "user")
-        
+
         # Regular user should NOT be admin
         assert auth_service.is_admin(regular_user) == False
 
@@ -71,7 +71,7 @@ class TestRequireAdmin:
         """Designer should fail admin check."""
         auth_service = ProcessAuthorizationService()
         designer = MockUser("designer", "process_designer")
-        
+
         # Designer should NOT be admin
         assert auth_service.is_admin(designer) == False
 
@@ -79,7 +79,7 @@ class TestRequireAdmin:
         """Operator should fail admin check."""
         auth_service = ProcessAuthorizationService()
         operator = MockUser("operator", "process_operator")
-        
+
         # Operator should NOT be admin
         assert auth_service.is_admin(operator) == False
 
@@ -126,7 +126,7 @@ class TestRoleValidation:
         """Invalid role should raise ValueError."""
         with pytest.raises(ValueError) as exc_info:
             self._validate_role("invalid_role")
-        
+
         assert "Invalid role" in str(exc_info.value)
 
 
@@ -178,7 +178,7 @@ class TestSelfRoleChange:
         # This tests the logic, not the endpoint directly
         admin_user = MockUser("admin", "admin")
         target_username = "admin"  # Same as requesting user
-        
+
         # The check should detect same username
         assert admin_user.username == target_username
 
@@ -199,11 +199,11 @@ class TestRoleValues:
 
     def test_expected_roles_exist(self):
         """Expected roles should exist."""
-        expected = ["process_admin", "process_designer", "process_operator", 
+        expected = ["process_admin", "process_designer", "process_operator",
                    "process_viewer", "process_approver"]
-        
+
         actual_values = [r.value for r in ProcessRole]
-        
+
         for expected_role in expected:
             assert expected_role in actual_values, \
                 f"Expected role '{expected_role}' not found"
