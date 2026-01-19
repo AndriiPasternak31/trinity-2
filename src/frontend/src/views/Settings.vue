@@ -19,6 +19,37 @@
 
         <!-- Settings Content -->
         <div v-else class="space-y-6">
+          <!-- Administration Section -->
+          <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-lg font-medium text-gray-900 dark:text-white">Administration</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Manage users and system access
+              </p>
+            </div>
+            <div class="px-6 py-4">
+              <router-link
+                to="/admin/users"
+                class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div class="flex items-center gap-3">
+                  <div class="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                    <svg class="h-6 w-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p class="font-medium text-gray-900 dark:text-white">User Management</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Manage user roles and permissions</p>
+                  </div>
+                </div>
+                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </router-link>
+            </div>
+          </div>
+
           <!-- API Keys Section -->
           <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">

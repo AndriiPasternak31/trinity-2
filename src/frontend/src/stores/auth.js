@@ -135,7 +135,7 @@ export const useAuthStore = defineStore('auth', {
             this.isAuthenticated = true
             this.setupAxiosAuth()
             console.log('✅ Session restored for:', user.email || user.name)
-            
+
             // Fetch permissions on session restore (E17-07)
             await this.fetchPermissions()
           }
@@ -199,7 +199,7 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('auth0_user', JSON.stringify(devUser))
         this.setupAxiosAuth()
-        
+
         // Fetch permissions after successful login (E17-07)
         await this.fetchPermissions()
 
@@ -256,7 +256,7 @@ export const useAuthStore = defineStore('auth', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('auth0_user', JSON.stringify(this.user))
         this.setupAxiosAuth()
-        
+
         // Fetch permissions after successful login (E17-07)
         await this.fetchPermissions()
 
@@ -298,7 +298,7 @@ export const useAuthStore = defineStore('auth', {
     // =========================================================================
     // RBAC: Fetch user permissions (E17-07)
     // =========================================================================
-    
+
     /**
      * Fetch the current user's role and permissions from the backend.
      * Called automatically after successful authentication.
@@ -313,12 +313,12 @@ export const useAuthStore = defineStore('auth', {
         const response = await axios.get('/api/users/me/permissions', {
           headers: this.authHeader
         })
-        
+
         this.role = response.data.role
         this.roleDisplay = response.data.role_display
         this.permissions = response.data.permissions || []
         this.permissionsLoaded = true
-        
+
         console.log(`🔒 RBAC: Role=${this.roleDisplay}, Permissions=${this.permissions.length}`)
         return true
       } catch (error) {

@@ -140,6 +140,12 @@ const routes = [
     component: () => import('../views/Settings.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
+  {
+    path: '/admin/users',
+    name: 'UserManagement',
+    component: () => import('../views/UserManagement.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
   // Legacy redirect for /system-agent -> agents page (consolidated)
   {
     path: '/system-agent',

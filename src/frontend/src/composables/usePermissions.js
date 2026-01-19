@@ -1,14 +1,14 @@
 /**
  * usePermissions Composable
- * 
+ *
  * Provides convenient access to RBAC permissions in Vue components.
  * Wraps the auth store's permission getters with additional helpers.
- * 
+ *
  * Reference: BACKLOG_ACCESS_AUDIT.md - E17-07
- * 
+ *
  * @example
  * const { can, isAdmin, canCreateProcess } = usePermissions()
- * 
+ *
  * if (can('process:create')) {
  *   // Show create button
  * }
