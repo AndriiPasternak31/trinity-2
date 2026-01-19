@@ -43,7 +43,7 @@ class TestGetRolePermissions:
     def test_designer_permissions(self):
         """Designer should have process CRUD and publish permissions."""
         permissions = get_role_permissions(ProcessRole.DESIGNER)
-        
+
         # Should have
         assert ProcessPermission.PROCESS_CREATE in permissions
         assert ProcessPermission.PROCESS_READ in permissions
@@ -51,7 +51,7 @@ class TestGetRolePermissions:
         assert ProcessPermission.PROCESS_DELETE in permissions
         assert ProcessPermission.PROCESS_PUBLISH in permissions
         assert ProcessPermission.EXECUTION_VIEW in permissions
-        
+
         # Should NOT have
         assert ProcessPermission.EXECUTION_TRIGGER not in permissions
         assert ProcessPermission.ADMIN_VIEW_ALL not in permissions
@@ -59,14 +59,14 @@ class TestGetRolePermissions:
     def test_operator_permissions(self):
         """Operator should have execution permissions but not process edit."""
         permissions = get_role_permissions(ProcessRole.OPERATOR)
-        
+
         # Should have
         assert ProcessPermission.PROCESS_READ in permissions
         assert ProcessPermission.EXECUTION_TRIGGER in permissions
         assert ProcessPermission.EXECUTION_VIEW in permissions
         assert ProcessPermission.EXECUTION_CANCEL in permissions
         assert ProcessPermission.EXECUTION_RETRY in permissions
-        
+
         # Should NOT have
         assert ProcessPermission.PROCESS_CREATE not in permissions
         assert ProcessPermission.PROCESS_UPDATE not in permissions
@@ -75,11 +75,11 @@ class TestGetRolePermissions:
     def test_viewer_permissions(self):
         """Viewer should only have read and view permissions."""
         permissions = get_role_permissions(ProcessRole.VIEWER)
-        
+
         # Should have (minimal)
         assert ProcessPermission.PROCESS_READ in permissions
         assert ProcessPermission.EXECUTION_VIEW in permissions
-        
+
         # Should NOT have
         assert ProcessPermission.PROCESS_CREATE not in permissions
         assert ProcessPermission.EXECUTION_TRIGGER not in permissions
@@ -88,12 +88,12 @@ class TestGetRolePermissions:
     def test_approver_permissions(self):
         """Approver should have approval and limited view permissions."""
         permissions = get_role_permissions(ProcessRole.APPROVER)
-        
+
         # Should have
         assert ProcessPermission.PROCESS_READ in permissions
         assert ProcessPermission.EXECUTION_VIEW in permissions
         assert ProcessPermission.APPROVAL_DECIDE in permissions
-        
+
         # Should NOT have
         assert ProcessPermission.EXECUTION_TRIGGER not in permissions
         assert ProcessPermission.PROCESS_CREATE not in permissions
@@ -138,7 +138,7 @@ class TestRoleMapping:
             'viewer': ProcessRole.VIEWER,
             'user': ProcessRole.OPERATOR,  # Default
         }
-        
+
         for role_str, expected_role in role_mapping.items():
             assert expected_role in ProcessRole
             # Verify permissions exist for this role

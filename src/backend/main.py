@@ -55,6 +55,7 @@ from routers.alerts import router as alerts_router
 from routers.process_templates import router as process_templates_router
 from routers.audit import router as audit_router
 from routers.docs import router as docs_router
+from routers.users import router as users_router
 
 # Import scheduler service
 from services.scheduler_service import scheduler_service
@@ -303,6 +304,7 @@ app.include_router(alerts_router)
 app.include_router(process_templates_router)
 app.include_router(audit_router)  # IT5 P1: Audit logging
 app.include_router(docs_router)   # Process documentation serving
+app.include_router(users_router)  # IT5 P1: User management (E17-06)
 
 
 # WebSocket endpoint
@@ -414,14 +416,14 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 async def get_current_user_permissions(current_user: User = Depends(get_current_user)):
     """
     Get current user's role and permissions.
-    
+
     Returns the user's process role and list of permissions for frontend
     to use for showing/hiding UI elements.
-    
+
     Reference: BACKLOG_ACCESS_AUDIT.md - E17-05
     """
     from services.process_engine.domain import ProcessRole, ROLE_PERMISSIONS, get_role_permissions
-    
+
     # Map user role to ProcessRole
     role_mapping = {
         'admin': ProcessRole.ADMIN,
@@ -436,13 +438,13 @@ async def get_current_user_permissions(current_user: User = Depends(get_current_
         'viewer': ProcessRole.VIEWER,
         'user': ProcessRole.OPERATOR,  # Default users get operator access
     }
-    
+
     user_role = current_user.role or 'user'
     process_role = role_mapping.get(user_role, ProcessRole.VIEWER)
-    
+
     # Get permissions for this role
     permissions = get_role_permissions(process_role)
-    
+
     return {
         "role": process_role.value,
         "role_display": process_role.name.replace('_', ' ').title(),
