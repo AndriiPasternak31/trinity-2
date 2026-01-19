@@ -1,3 +1,60 @@
+### 2026-01-19 22:00:00
+✨ **Feature: RBAC UI - User Management & Permission Controls**
+
+**Summary**: Implementation of frontend RBAC (Role-Based Access Control) features, making existing backend permissions visible and manageable in the UI (5 stories in E17).
+
+**Major Features**:
+
+1. **User Permissions API (E17-05)**
+   - GET `/api/users/me/permissions` endpoint
+   - Returns user's role and sorted permission list
+   - 12 unit tests for permission serialization
+
+2. **Admin User Management API (E17-06)**
+   - GET/PUT `/api/admin/users` endpoints (admin only)
+   - Role update with self-change prevention
+   - Available roles endpoint with descriptions
+   - 19 unit tests for admin checks and role validation
+
+3. **Frontend Permissions Store (E17-07)**
+   - `auth.js`: role, permissions state with automatic fetch after login
+   - `usePermissions.js`: composable with can(), canAny(), canAll() helpers
+   - Named permission checks (canCreateProcess, isAdmin, etc.)
+
+4. **User Management UI (E17-08)**
+   - Admin page at `/admin/users`
+   - User list with role selector dropdown
+   - Role reference panel showing permission counts
+   - Permission modal for viewing user access
+
+5. **Permission-Aware Components (E17-09)**
+   - `PermissionGuard.vue`: slot-based guard with hide/disable/tooltip modes
+   - ProcessList: hides Create button without process:create
+   - ProcessEditor: hides Save/Publish/Execute per permissions
+   - NavBar: displays role badge in user dropdown
+
+**Files Added**:
+- `src/backend/routers/users.py` - Admin user management API
+- `src/frontend/src/composables/usePermissions.js` - Permission composable
+- `src/frontend/src/components/PermissionGuard.vue` - Guard component
+- `src/frontend/src/views/UserManagement.vue` - Admin page
+- `tests/process_engine/unit/test_permissions_api.py` - API tests
+- `tests/process_engine/unit/test_user_management.py` - Admin tests
+
+**Files Modified**:
+- `src/backend/main.py` - Added /api/users/me/permissions endpoint
+- `src/frontend/src/stores/auth.js` - Added role, permissions state
+- `src/frontend/src/views/ProcessList.vue` - Permission guard on Create
+- `src/frontend/src/views/ProcessEditor.vue` - Permission-based button visibility
+- `src/frontend/src/views/Settings.vue` - Link to User Management
+- `src/frontend/src/components/NavBar.vue` - Role badge in dropdown
+- `src/frontend/src/router/index.js` - Added /admin/users route
+- `docs/PROCESS_DRIVEN_PLATFORM/BACKLOG_ACCESS_AUDIT.md` - Added E17-05 to E17-09
+
+**Backlog**: BACKLOG_ACCESS_AUDIT.md - Sprints 5-6 (E17-05 through E17-09)
+
+---
+
 ### 2026-01-19 18:00:00
 ✨ **Feature: Premium Onboarding & Process Creation Chat Assistant**
 

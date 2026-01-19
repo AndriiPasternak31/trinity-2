@@ -221,7 +221,7 @@ Limits and controls for execution resources.
 | Size | S |
 | Priority | P1 |
 | Dependencies | E17-03 |
-| Status | pending |
+| Status | ✅ done |
 
 **Acceptance Criteria:**
 - [ ] GET /api/users/me/permissions returns role and permission list
@@ -243,7 +243,7 @@ Limits and controls for execution resources.
 | Size | M |
 | Priority | P1 |
 | Dependencies | E17-03 |
-| Status | pending |
+| Status | ✅ done |
 
 **Acceptance Criteria:**
 - [ ] GET /api/admin/users lists all users (admin only)
@@ -267,7 +267,7 @@ Limits and controls for execution resources.
 | Size | S |
 | Priority | P1 |
 | Dependencies | E17-05 |
-| Status | pending |
+| Status | ✅ done |
 
 **Acceptance Criteria:**
 - [ ] auth.js fetches permissions after login
@@ -289,7 +289,7 @@ Limits and controls for execution resources.
 | Size | M |
 | Priority | P1 |
 | Dependencies | E17-06, E17-07 |
-| Status | pending |
+| Status | ✅ done |
 
 **Acceptance Criteria:**
 - [ ] Admin-only page at /admin/users
@@ -314,7 +314,7 @@ Limits and controls for execution resources.
 | Size | M |
 | Priority | P2 |
 | Dependencies | E17-07 |
-| Status | pending |
+| Status | ✅ done |
 
 **Acceptance Criteria:**
 - [ ] PermissionGuard component with hide/disable modes
@@ -502,6 +502,7 @@ pytest tests/process_engine/ --cov=services.process_engine.services.authorizatio
 
 | Date | Change |
 |------|--------|
+| 2026-01-19 | Sprint 5-6 complete: E17-05 to E17-09 done (13/14 stories complete) |
 | 2026-01-19 | Add E17-05 to E17-09 for RBAC UI (5 new stories, 14 total) |
 | 2026-01-17 | Mark E17-01 to E19-01 as done (8/9 stories complete) |
 | 2026-01-17 | Initial creation - IT5 P1 Access & Audit backlog |

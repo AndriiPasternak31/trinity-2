@@ -6,7 +6,7 @@
 
   <!-- Disable mode: Render but disable if no permission -->
   <template v-else-if="fallbackMode === 'disable'">
-    <div 
+    <div
       :class="{ 'opacity-50 cursor-not-allowed pointer-events-none': !hasPermission }"
       :title="!hasPermission ? tooltip : undefined"
     >
@@ -16,7 +16,7 @@
 
   <!-- Tooltip mode: Render with tooltip explaining why disabled -->
   <template v-else-if="fallbackMode === 'tooltip'">
-    <div 
+    <div
       class="relative inline-block"
       @mouseenter="showTooltip = !hasPermission"
       @mouseleave="showTooltip = false"
@@ -53,24 +53,24 @@
 <script setup>
 /**
  * PermissionGuard Component
- * 
+ *
  * Conditionally renders or disables content based on user permissions.
- * 
+ *
  * Reference: BACKLOG_ACCESS_AUDIT.md - E17-09
- * 
+ *
  * @example
  * <!-- Hide if no permission -->
  * <PermissionGuard permission="process:create">
  *   <button>Create Process</button>
  * </PermissionGuard>
- * 
+ *
  * <!-- Disable if no permission -->
  * <PermissionGuard permission="process:update" fallback="disable">
  *   <template #default="{ disabled }">
  *     <button :disabled="disabled">Save</button>
  *   </template>
  * </PermissionGuard>
- * 
+ *
  * <!-- Multiple permissions (any) -->
  * <PermissionGuard :permissions="['process:update', 'process:publish']" match="any">
  *   <button>Edit</button>
@@ -88,7 +88,7 @@ const props = defineProps({
     type: String,
     default: null
   },
-  
+
   /**
    * Multiple permissions to check
    */
@@ -96,7 +96,7 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  
+
   /**
    * How to match multiple permissions: 'any' or 'all'
    */
@@ -105,7 +105,7 @@ const props = defineProps({
     default: 'any',
     validator: (v) => ['any', 'all'].includes(v)
   },
-  
+
   /**
    * What to do when permission is denied:
    * - 'hide': Don't render the content (default)
@@ -117,7 +117,7 @@ const props = defineProps({
     default: 'hide',
     validator: (v) => ['hide', 'disable', 'tooltip'].includes(v)
   },
-  
+
   /**
    * Custom tooltip message when permission is denied
    */
@@ -125,7 +125,7 @@ const props = defineProps({
     type: String,
     default: 'You do not have permission to perform this action'
   },
-  
+
   /**
    * Require admin role instead of specific permission
    */
@@ -146,12 +146,12 @@ const hasPermission = computed(() => {
   if (props.requireAdmin) {
     return isAdmin.value
   }
-  
+
   // Single permission check
   if (props.permission) {
     return can(props.permission).value
   }
-  
+
   // Multiple permissions check
   if (props.permissions.length > 0) {
     if (props.match === 'all') {
@@ -160,7 +160,7 @@ const hasPermission = computed(() => {
       return canAny(...props.permissions).value
     }
   }
-  
+
   // No permission specified - allow by default
   return true
 })
