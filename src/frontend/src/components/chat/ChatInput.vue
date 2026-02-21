@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-3">
+  <div class="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl shadow-lg p-3">
     <form @submit.prevent="handleSubmit" class="flex items-end space-x-2">
       <textarea
         ref="textareaRef"
