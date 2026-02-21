@@ -749,6 +749,17 @@ onActivated(async () => {
   if (agent.value?.status === 'running') {
     await checkDashboardExists()
   }
+
+  // Handle tab query param (EXEC-023: Continue as Chat navigation)
+  // Must also check here since onMounted doesn't fire for cached components
+  if (route.query.tab) {
+    const requestedTab = route.query.tab
+    const validTabs = ['tasks', 'chat', 'dashboard', 'terminal', 'logs', 'files', 'schedules', 'credentials', 'skills', 'sharing', 'permissions', 'git', 'folders', 'info']
+    if (validTabs.includes(requestedTab)) {
+      activeTab.value = requestedTab
+    }
+  }
+
   // Refit terminal if on terminal tab
   if (activeTab.value === 'terminal') {
     nextTick(() => {

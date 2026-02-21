@@ -1,3 +1,17 @@
+### 2026-02-21 12:30:00
+🐛 **Fix: "Continue as Chat" Not Opening Chat Tab (EXEC-023)**
+
+Fixed issue where clicking "Continue as Chat" on Execution Detail page navigated to Agent Detail but didn't switch to the Chat tab.
+
+**Root Cause**: AgentDetail component is cached via KeepAlive. When navigating back to a cached instance, `onMounted` doesn't fire - only `onActivated` does. The `route.query.tab` handling was only in `onMounted`, so the tab switch was ignored for cached components.
+
+**Fix**: Added tab query param handling to `onActivated` hook in AgentDetail.vue.
+
+**File Modified**:
+- `src/frontend/src/views/AgentDetail.vue`: Added tab query param check in `onActivated` (lines 752-759)
+
+---
+
 ### 2026-02-21 12:00:00
 📚 **Docs: Feature Flow Updates for EXEC-023 Bug Fix**
 
