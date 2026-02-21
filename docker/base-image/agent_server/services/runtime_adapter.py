@@ -104,7 +104,8 @@ class AgentRuntime(ABC):
         system_prompt: Optional[str] = None,
         timeout_seconds: int = 900,
         max_turns: Optional[int] = None,
-        execution_id: Optional[str] = None
+        execution_id: Optional[str] = None,
+        resume_session_id: Optional[str] = None
     ) -> Tuple[str, List[ExecutionLogEntry], ExecutionMetadata, str]:
         """
         Execute a stateless task in headless mode (no conversation context).
@@ -113,6 +114,7 @@ class AgentRuntime(ABC):
         - Agent delegation from orchestrators
         - Batch processing without context pollution
         - Parallel task execution
+        - Resuming previous sessions (EXEC-023)
 
         Args:
             prompt: Task description
@@ -122,6 +124,7 @@ class AgentRuntime(ABC):
             timeout_seconds: Execution timeout
             max_turns: Maximum agentic turns for runaway prevention (None = unlimited)
             execution_id: Optional execution ID for process registry (enables termination tracking)
+            resume_session_id: Optional Claude Code session ID to resume (EXEC-023)
 
         Returns:
             Tuple of (response_text, execution_log, metadata, session_id)

@@ -403,6 +403,18 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
   - Late joiner support (buffered entries)
 - **Spec**: `docs/requirements/LIVE_EXECUTION_STREAMING.md`
 
+### 13.9 Continue Execution as Chat (EXEC-023)
+- **Status**: ✅ Implemented (2026-02-20)
+- **Priority**: MEDIUM
+- **Description**: Resume failed or completed executions as interactive chat conversations with full context preservation
+- **Key Features**:
+  - Store Claude Code `session_id` in execution records
+  - "Continue as Chat" button on Execution Detail page
+  - Uses `--resume {session_id}` for native Claude Code session continuity
+  - Full 150K+ token context available without copying/injection
+  - Resume banner in Chat tab showing execution context
+- **Spec**: `docs/requirements/CONTINUE_EXECUTION_AS_CHAT.md`
+
 ---
 
 ## 14. Multi-Runtime Support

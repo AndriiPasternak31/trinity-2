@@ -106,10 +106,18 @@ class ClaudeCodeRuntime(AgentRuntime):
         system_prompt: Optional[str] = None,
         timeout_seconds: int = 900,
         max_turns: Optional[int] = None,
-        execution_id: Optional[str] = None
+        execution_id: Optional[str] = None,
+        resume_session_id: Optional[str] = None
     ) -> Tuple[str, List[ExecutionLogEntry], ExecutionMetadata, str]:
-        """Execute Claude Code in headless mode for parallel tasks."""
-        return await execute_headless_task(prompt, model, allowed_tools, system_prompt, timeout_seconds, max_turns, execution_id)
+        """Execute Claude Code in headless mode for parallel tasks.
+
+        Args:
+            resume_session_id: Optional session ID to resume (EXEC-023)
+        """
+        return await execute_headless_task(
+            prompt, model, allowed_tools, system_prompt, timeout_seconds,
+            max_turns, execution_id, resume_session_id
+        )
 
 
 def parse_stream_json_output(output: str) -> tuple[str, List[ExecutionLogEntry], ExecutionMetadata]:
@@ -567,15 +575,17 @@ async def execute_headless_task(
     system_prompt: Optional[str] = None,
     timeout_seconds: int = 900,
     max_turns: Optional[int] = None,
-    execution_id: Optional[str] = None
+    execution_id: Optional[str] = None,
+    resume_session_id: Optional[str] = None
 ) -> tuple[str, List[ExecutionLogEntry], ExecutionMetadata, str]:
     """
     Execute Claude Code in headless mode for parallel task execution.
 
     Unlike execute_claude_code(), this function:
     - Does NOT acquire execution lock (parallel allowed)
-    - Does NOT use --continue flag (stateless, no conversation context)
+    - Does NOT use --continue flag (stateless, no conversation context) by default
     - Each call is independent and can run concurrently
+    - Can resume previous sessions via resume_session_id (EXEC-023)
 
     Args:
         prompt: The task to execute
@@ -585,6 +595,7 @@ async def execute_headless_task(
         timeout_seconds: Execution timeout (default 5 minutes)
         max_turns: Maximum agentic turns for runaway prevention (None = unlimited)
         execution_id: Optional execution ID to use for process registry (enables termination tracking)
+        resume_session_id: Optional Claude Code session ID to resume (EXEC-023)
 
     Returns: (response_text, execution_log, metadata, session_id)
     """
@@ -602,8 +613,13 @@ async def execute_headless_task(
         # 2. ANTHROPIC_API_KEY environment variable (API billing)
         # We don't require ANTHROPIC_API_KEY since users may be logged in with their subscription.
 
-        # Build command - NO --continue flag (stateless)
+        # Build command - NO --continue flag (stateless) unless resuming
         cmd = ["claude", "--print", "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"]
+
+        # Add --resume if resuming a previous session (EXEC-023)
+        if resume_session_id:
+            cmd.extend(["--resume", resume_session_id])
+            logger.info(f"[Headless Task] Resuming session: {resume_session_id}")
 
         # Add MCP config if .mcp.json exists (for agent-to-agent collaboration via Trinity MCP)
         mcp_config_path = Path.home() / ".mcp.json"

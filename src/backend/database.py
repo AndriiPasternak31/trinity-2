@@ -358,6 +358,22 @@ def _migrate_execution_origin_tracking(cursor, conn):
     conn.commit()
 
 
+def _migrate_execution_session_tracking(cursor, conn):
+    """Add claude_session_id column to schedule_executions table (EXEC-023).
+
+    Enables "Continue Execution as Chat" feature by storing Claude Code's
+    session_id, which can be used with --resume to continue the session.
+    """
+    cursor.execute("PRAGMA table_info(schedule_executions)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "claude_session_id" not in columns:
+        print("Adding claude_session_id column to schedule_executions for session resume...")
+        cursor.execute("ALTER TABLE schedule_executions ADD COLUMN claude_session_id TEXT")
+
+    conn.commit()
+
+
 def _migrate_agent_skills_table(cursor, conn):
     """Migrate agent_skills table if it has wrong schema (skill_id instead of skill_name)."""
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_skills'")
@@ -478,6 +494,11 @@ def init_database():
             _migrate_execution_origin_tracking(cursor, conn)
         except Exception as e:
             print(f"Migration check (execution_origin_tracking): {e}")
+
+        try:
+            _migrate_execution_session_tracking(cursor, conn)
+        except Exception as e:
+            print(f"Migration check (execution_session_tracking): {e}")
 
         # Users table
         cursor.execute("""

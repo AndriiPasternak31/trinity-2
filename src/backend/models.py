@@ -92,6 +92,7 @@ class ParallelTaskRequest(BaseModel):
     save_to_session: Optional[bool] = False  # If true, persist messages to chat_sessions (for authenticated Chat tab)
     user_message: Optional[str] = None  # Original user message (without context), used when save_to_session=True
     create_new_session: Optional[bool] = False  # If true, close existing active sessions and create a new one
+    resume_session_id: Optional[str] = None  # Claude Code session ID to resume (EXEC-023)
 
 
 # ============================================================================

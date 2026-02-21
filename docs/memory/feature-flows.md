@@ -3,6 +3,16 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
+> **Updated (2026-02-20)**: Continue Execution as Chat (EXEC-023):
+> - **New feature flow**: [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md) - Resume failed/completed executions as interactive chat with full context
+> - **Key insight**: Claude Code stores sessions at `~/.claude/projects/{path}/{session_id}.jsonl`. Using `--resume {session_id}` preserves 150K+ tokens of context.
+> - **UI entry point**: "Continue as Chat" button on ExecutionDetail.vue (visible when `claude_session_id` exists and status is not "running")
+> - **Database**: New `claude_session_id` column in `schedule_executions` table via migration
+> - **Backend**: `chat.py:730-742` extracts session_id from agent response, stores in execution record, passes `resume_session_id` to agent
+> - **Agent server**: `claude_code.py:619-622` adds `--resume {session_id}` flag when `resume_session_id` provided
+> - **Frontend**: ChatPanel.vue (lines 88-114, 199-202, 356-363, 411-420) handles resume mode with banner, clears after first message
+> - **Runtime support**: Claude Code only (Gemini CLI does not support session resume)
+>
 > **Updated (2026-02-20)**: Agent Notification Attribution Fix (NOTIF-003):
 > - **Bug**: Events page showed notifications as coming from "admin" instead of actual agent name
 > - **Root cause**: `agent_name` from agent-scoped MCP keys was not passed to `User` object in `get_current_user()`
@@ -674,6 +684,7 @@
 | **Agent Notifications** | High | [agent-notifications.md](feature-flows/agent-notifications.md) | Agent-to-platform structured notifications (NOTIF-001) - MCP `send_notification` tool, 7 REST endpoints, WebSocket broadcast, SQLite persistence. Types: alert/info/status/completion/question. Priority: low/normal/high/urgent. Features: acknowledge, dismiss, agent-specific queries, pending count. UI: see Events Page below (Created 2026-02-20) |
 | **Events Page UI** | High | [events-page.md](feature-flows/events-page.md) | Dedicated Events page for viewing/managing agent notifications (NOTIF-002) - filter by status/priority/agent/type, stats cards, bulk actions (acknowledge/dismiss), real-time WebSocket updates, NavBar badge with polling. **Components**: Events.vue, notifications.js store, NavBar badge. **Routes**: `/events` (Created 2026-02-20) |
 | **Execution Origin Tracking** | High | [AUDIT-001-execution-origin-tracking.md](feature-flows/AUDIT-001-execution-origin-tracking.md) | Track WHO triggered each execution (AUDIT-001) - captures source_user_id, source_user_email, source_agent_name, source_mcp_key_id, source_mcp_key_name. Covers manual, scheduled, MCP user, and agent-to-agent triggers. UI display on ExecutionDetail.vue, trigger type filter on TasksPanel.vue. **Backend**: `db/schedules.py`, `routers/chat.py`. **MCP**: `client.ts`, `tools/chat.ts`, `types.ts` (Created 2026-02-20) |
+| **Continue Execution as Chat** | High | [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md) | Resume failed/completed executions as interactive chat (EXEC-023) - stores `claude_session_id` in executions, "Continue as Chat" button on ExecutionDetail.vue, ChatPanel resume mode with banner, `claude --resume {session_id}` on agent. Database migration, backend pass-through, frontend resume handling with state clearing after first message. Claude Code only (Gemini CLI not supported) (Created 2026-02-20) |
 
 ---
 

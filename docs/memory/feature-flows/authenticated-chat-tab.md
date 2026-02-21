@@ -297,6 +297,7 @@ Tasks | Chat | Dashboard | Schedules | Credentials | Skills | ...
 - **[public-agent-links.md](public-agent-links.md)** - Public chat (shares components)
 - **[persistent-chat-tracking.md](persistent-chat-tracking.md)** - Session API documentation (`chat_sessions`, `chat_messages` tables)
 - **[execution-queue.md](execution-queue.md)** - Task execution flow
+- **[continue-execution-as-chat.md](continue-execution-as-chat.md)** - Resume executions as chat via `resume_session_id` (EXEC-023)
 
 ## Revision History
 

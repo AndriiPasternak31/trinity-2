@@ -679,7 +679,8 @@ async def execute_parallel_task(
             "allowed_tools": request.allowed_tools,
             "system_prompt": request.system_prompt,
             "timeout_seconds": request.timeout_seconds,
-            "execution_id": execution_id  # Database execution ID for process registry
+            "execution_id": execution_id,  # Database execution ID for process registry
+            "resume_session_id": request.resume_session_id  # Claude Code session resume (EXEC-023)
         }
 
         start_time = datetime.utcnow()
@@ -726,6 +727,9 @@ async def execute_parallel_task(
             context_used = metadata.get("input_tokens", 0) + metadata.get("output_tokens", 0)
             sanitized_resp = sanitize_response(response_data.get("response"))
 
+            # Extract Claude Code session_id for --resume support (EXEC-023)
+            claude_session_id = response_data.get("session_id") or metadata.get("session_id")
+
             db.update_execution_status(
                 execution_id=execution_id,
                 status="success",
@@ -734,7 +738,8 @@ async def execute_parallel_task(
                 context_max=metadata.get("context_window") or 200000,
                 cost=metadata.get("cost_usd"),
                 tool_calls=tool_calls_json,
-                execution_log=execution_log_json
+                execution_log=execution_log_json,
+                claude_session_id=claude_session_id
             )
 
         # Track task completion

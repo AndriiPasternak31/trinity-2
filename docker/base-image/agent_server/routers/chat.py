@@ -100,17 +100,21 @@ async def execute_task(request: ParallelTaskRequest):
 
     Unlike /api/chat, this endpoint:
     - Does NOT acquire execution lock (parallel allowed)
-    - Does NOT use --continue flag (stateless)
+    - Does NOT use --continue flag (stateless) by default
     - Each call is independent and can run concurrently
 
     Use this for:
     - Agent delegation from orchestrators
     - Batch processing without context pollution
     - Parallel task execution
+    - Resuming previous sessions with resume_session_id (EXEC-023)
 
     Note: Does NOT update conversation history or session state.
     """
-    logger.info(f"[Task] Executing parallel task: {request.message[:50]}...")
+    if request.resume_session_id:
+        logger.info(f"[Task] Resuming session {request.resume_session_id}: {request.message[:50]}...")
+    else:
+        logger.info(f"[Task] Executing parallel task: {request.message[:50]}...")
 
     # Execute via runtime adapter in headless mode (no lock, no --continue)
     runtime = get_runtime()
@@ -121,7 +125,8 @@ async def execute_task(request: ParallelTaskRequest):
         system_prompt=request.system_prompt,
         timeout_seconds=request.timeout_seconds or 900,  # Default 15 minutes for research tasks
         max_turns=request.max_turns,
-        execution_id=request.execution_id  # Use provided ID for process registry (enables termination)
+        execution_id=request.execution_id,  # Use provided ID for process registry (enables termination)
+        resume_session_id=request.resume_session_id  # Resume previous session (EXEC-023)
     )
 
     logger.info(f"[Task] Task {session_id} completed successfully")

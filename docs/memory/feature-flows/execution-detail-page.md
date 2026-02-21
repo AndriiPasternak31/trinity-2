@@ -517,6 +517,7 @@ location /api/ {
 | **Related** | [execution-log-viewer.md](execution-log-viewer.md) | Modal viewer (still available for quick view) |
 | **Related** | [parallel-headless-execution.md](parallel-headless-execution.md) | How executions are created and stored, SSE streaming details |
 | **Related** | [scheduling.md](scheduling.md) | Scheduled execution creation |
+| **Downstream** | [continue-execution-as-chat.md](continue-execution-as-chat.md) | "Continue as Chat" button navigates to Chat tab with resume context (EXEC-023) |
 
 ---
 
@@ -524,6 +525,7 @@ location /api/ {
 
 | Date | Changes |
 |------|---------|
+| 2026-02-20 | Added "Continue as Chat" button (EXEC-023) - visible when `claude_session_id` exists and status is not "running". Navigates to Chat tab with `resumeSessionId` and `executionId` query params. See [continue-execution-as-chat.md](continue-execution-as-chat.md) for full flow. |
 | 2026-02-05 | Added "Live SSE Streaming" section documenting real-time log streaming. Documented nginx configuration requirements (`proxy_buffering off`, `proxy_cache off`, `chunked_transfer_encoding on`) needed for production streaming. Added frontend fetch/ReadableStream implementation details. |
 | 2026-01-13 | Added "Live" button for running tasks in TasksPanel (lines 213-232). Green badge with animated pulsing dot navigates to Execution Detail for live monitoring. Explicit ID logic: server executions use `task.id`, local pending tasks use `task.execution_id` from process registry. |
 | 2026-01-11 | Clarified Database Execution ID format (`token_urlsafe(16)`) vs Queue Execution ID (UUID). Navigation uses Database ID from `task_execution_id` in chat response. |

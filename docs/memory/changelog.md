@@ -1,3 +1,33 @@
+### 2026-02-20 19:30:00
+✨ **Feature: Continue Execution as Chat (EXEC-023)**
+
+Implemented ability to continue any execution as an interactive chat with full context preservation using Claude Code's native `--resume` capability.
+
+**Problem Solved**: When executions fail or produce unexpected results, users previously had no way to follow up with the agent while preserving context. Now they can click "Continue as Chat" to resume the exact Claude Code session.
+
+**Implementation**:
+- **Database**: Added `claude_session_id` column to `schedule_executions` table via migration
+- **Agent Server**: Added `resume_session_id` parameter to `/api/task` endpoint, uses `claude --resume {session_id}` when provided
+- **Backend**: Captures `session_id` from agent response and stores in execution record; passes `resume_session_id` to agent
+- **Frontend**: Added "Continue as Chat" button to ExecutionDetail.vue, ChatPanel.vue handles resume mode with banner
+
+**Key Files Modified**:
+- `src/backend/database.py`: Migration for `claude_session_id` column
+- `src/backend/db_models.py`: Added `claude_session_id` to ScheduleExecution
+- `src/backend/db/schedules.py`: Store/retrieve claude_session_id
+- `src/backend/models.py`: Added `resume_session_id` to ParallelTaskRequest
+- `src/backend/routers/chat.py`: Capture session_id, pass resume_session_id to agent
+- `docker/base-image/agent_server/models.py`: Added `resume_session_id` to TaskRequest
+- `docker/base-image/agent_server/routers/chat.py`: Pass resume_session_id to runtime
+- `docker/base-image/agent_server/services/claude_code.py`: Use `--resume` flag
+- `docker/base-image/agent_server/services/runtime_adapter.py`: Updated interface
+- `docker/base-image/agent_server/services/gemini_runtime.py`: Interface compatibility (ignores resume)
+- `src/frontend/src/views/ExecutionDetail.vue`: Added "Continue as Chat" button
+- `src/frontend/src/components/ChatPanel.vue`: Resume mode with banner
+- `src/frontend/src/views/AgentDetail.vue`: Pass resume query params to ChatPanel
+
+---
+
 ### 2026-02-20 18:00:00
 🐛 **Fix: Notifications Showing Wrong Agent Name (NOTIF-003)**
 

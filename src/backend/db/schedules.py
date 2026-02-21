@@ -118,6 +118,8 @@ class ScheduleOperations:
             source_agent_name=row["source_agent_name"] if "source_agent_name" in row_keys else None,
             source_mcp_key_id=row["source_mcp_key_id"] if "source_mcp_key_id" in row_keys else None,
             source_mcp_key_name=row["source_mcp_key_name"] if "source_mcp_key_name" in row_keys else None,
+            # Session resume support (EXEC-023)
+            claude_session_id=row["claude_session_id"] if "claude_session_id" in row_keys else None,
         )
 
     @staticmethod
@@ -562,9 +564,14 @@ class ScheduleOperations:
         context_max: int = None,
         cost: float = None,
         tool_calls: str = None,
-        execution_log: str = None
+        execution_log: str = None,
+        claude_session_id: str = None
     ) -> bool:
-        """Update execution status when completed."""
+        """Update execution status when completed.
+
+        Args:
+            claude_session_id: Claude Code session ID for --resume support (EXEC-023)
+        """
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
@@ -582,7 +589,8 @@ class ScheduleOperations:
             cursor.execute("""
                 UPDATE schedule_executions
                 SET status = ?, completed_at = ?, duration_ms = ?, response = ?, error = ?,
-                    context_used = ?, context_max = ?, cost = ?, tool_calls = ?, execution_log = ?
+                    context_used = ?, context_max = ?, cost = ?, tool_calls = ?, execution_log = ?,
+                    claude_session_id = ?
                 WHERE id = ?
             """, (
                 status,
@@ -595,6 +603,7 @@ class ScheduleOperations:
                 cost,
                 tool_calls,
                 execution_log,
+                claude_session_id,
                 execution_id
             ))
             conn.commit()

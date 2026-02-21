@@ -221,6 +221,7 @@ class ParallelTaskRequest(BaseModel):
     timeout_seconds: Optional[int] = 900  # Execution timeout (15 minutes default)
     max_turns: Optional[int] = None  # Maximum agentic turns (--max-turns) for runaway prevention
     execution_id: Optional[str] = None  # Database execution ID (used for process registry if provided)
+    resume_session_id: Optional[str] = None  # Claude Code session ID for --resume (EXEC-023)
 
 
 class ParallelTaskResponse(BaseModel):

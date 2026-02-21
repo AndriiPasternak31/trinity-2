@@ -85,6 +85,34 @@
 
     <!-- Chat interface -->
     <template v-else>
+      <!-- Resume mode banner (EXEC-023) -->
+      <div
+        v-if="isResumeMode"
+        class="mx-4 mt-2 px-4 py-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between"
+      >
+        <div class="flex items-center space-x-2">
+          <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span class="text-sm text-indigo-700 dark:text-indigo-300">
+            Continuing from execution
+            <span class="font-mono text-xs bg-indigo-100 dark:bg-indigo-800 px-1.5 py-0.5 rounded">
+              {{ resumeExecutionIdLocal?.substring(0, 8) }}...
+            </span>
+            - The agent has full context from that execution.
+          </span>
+        </div>
+        <button
+          @click="dismissResumeMode"
+          class="text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300"
+          title="Dismiss"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
       <!-- Messages area -->
       <ChatMessages
         ref="messagesRef"
@@ -140,6 +168,15 @@ const props = defineProps({
   agentStatus: {
     type: String,
     default: 'stopped'
+  },
+  // Resume mode props (EXEC-023)
+  resumeSessionId: {
+    type: String,
+    default: null
+  },
+  resumeExecutionId: {
+    type: String,
+    default: null
   }
 })
 
@@ -158,6 +195,11 @@ const sessionsLoading = ref(false)
 const currentSessionId = ref(null)
 const showSessionDropdown = ref(false)
 const dropdownRef = ref(null)
+
+// Resume mode state (EXEC-023)
+const resumeSessionIdLocal = ref(null)
+const resumeExecutionIdLocal = ref(null)
+const isResumeMode = computed(() => !!resumeSessionIdLocal.value)
 
 // Computed
 const currentSessionLabel = computed(() => {
@@ -252,6 +294,15 @@ const startNewChat = () => {
   messages.value = []
   error.value = null
   showSessionDropdown.value = false
+  // Clear resume mode when starting new chat
+  resumeSessionIdLocal.value = null
+  resumeExecutionIdLocal.value = null
+}
+
+// Dismiss resume mode banner (EXEC-023)
+const dismissResumeMode = () => {
+  resumeSessionIdLocal.value = null
+  resumeExecutionIdLocal.value = null
 }
 
 // Build context from conversation history
@@ -295,16 +346,27 @@ const sendMessage = async (userMessage) => {
     // Build context with conversation history
     const contextPrompt = buildContextPrompt(userMessage)
 
-    // Send via task endpoint (headless execution for Dashboard tracking)
-    // save_to_session: true persists to chat_sessions table for session dropdown
-    // user_message: original message without context (for clean session display)
-    // create_new_session: true when no current session (new chat or first message)
-    const response = await axios.post(`/api/agents/${props.agentName}/task`, {
+    // Build request payload
+    const payload = {
       message: contextPrompt,
       save_to_session: true,
       user_message: userMessage,
       create_new_session: !currentSessionId.value
-    }, {
+    }
+
+    // EXEC-023: Include resume_session_id for first message in resume mode
+    if (resumeSessionIdLocal.value) {
+      payload.resume_session_id = resumeSessionIdLocal.value
+      // Clear resume mode after first message - subsequent messages use normal --continue
+      resumeSessionIdLocal.value = null
+      resumeExecutionIdLocal.value = null
+    }
+
+    // Send via task endpoint (headless execution for Dashboard tracking)
+    // save_to_session: true persists to chat_sessions table for session dropdown
+    // user_message: original message without context (for clean session display)
+    // create_new_session: true when no current session (new chat or first message)
+    const response = await axios.post(`/api/agents/${props.agentName}/task`, payload, {
       headers: authStore.authHeader
     })
 
@@ -345,6 +407,18 @@ watch(() => props.agentStatus, (newStatus) => {
     loadSessions()
   }
 })
+
+// Watch for resume mode props (EXEC-023)
+watch(() => props.resumeSessionId, (newSessionId) => {
+  if (newSessionId) {
+    // Start fresh for resume - don't load existing session
+    messages.value = []
+    currentSessionId.value = null
+    error.value = null
+    resumeSessionIdLocal.value = newSessionId
+    resumeExecutionIdLocal.value = props.resumeExecutionId
+  }
+}, { immediate: true })
 
 // Watch for agent name change
 watch(() => props.agentName, () => {

@@ -93,7 +93,12 @@
 
             <!-- Chat Tab Content -->
             <div v-if="activeTab === 'chat'" class="p-6">
-              <ChatPanel :agent-name="agent.name" :agent-status="agent.status" />
+              <ChatPanel
+                :agent-name="agent.name"
+                :agent-status="agent.status"
+                :resume-session-id="resumeSessionId"
+                :resume-execution-id="resumeExecutionId"
+              />
             </div>
 
             <!-- Dashboard Tab Content -->
@@ -282,6 +287,10 @@ const hasDashboard = ref(false)
 // Tags state (ORG-001)
 const agentTags = ref([])
 const allTags = ref([])
+
+// Resume mode state (EXEC-023)
+const resumeSessionId = computed(() => route.query.resumeSessionId || null)
+const resumeExecutionId = computed(() => route.query.executionId || null)
 
 // Initialize composables
 const { notification, showNotification } = useNotification()

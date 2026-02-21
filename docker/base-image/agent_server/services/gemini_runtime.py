@@ -494,7 +494,8 @@ class GeminiRuntime(AgentRuntime):
         system_prompt: Optional[str] = None,
         timeout_seconds: int = 900,
         max_turns: Optional[int] = None,
-        execution_id: Optional[str] = None
+        execution_id: Optional[str] = None,
+        resume_session_id: Optional[str] = None
     ) -> Tuple[str, List[ExecutionLogEntry], ExecutionMetadata, str]:
         """
         Execute Gemini CLI in headless mode for parallel tasks.
@@ -504,7 +505,10 @@ class GeminiRuntime(AgentRuntime):
         - Each call is independent
         - Supports tool restrictions and custom system prompts
         - Supports max_turns for runaway prevention
+
+        Note: resume_session_id is not supported by Gemini CLI (ignored).
         """
+        # Note: resume_session_id is ignored - Gemini CLI doesn't support session resume
         if not self.is_available():
             raise HTTPException(
                 status_code=503,

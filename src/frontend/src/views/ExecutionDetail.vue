@@ -56,6 +56,18 @@
               </svg>
               <span>{{ isStopping ? 'Stopping...' : 'Stop' }}</span>
             </button>
+            <!-- Continue as Chat button (EXEC-023) -->
+            <button
+              v-if="execution?.claude_session_id && execution?.status !== 'running'"
+              @click="continueAsChat"
+              class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-1"
+              title="Continue this execution as an interactive chat"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span>Continue as Chat</span>
+            </button>
             <button
               @click="copyExecutionId"
               class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -373,12 +385,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { marked } from 'marked'
 import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const agentName = computed(() => route.params.name)
@@ -656,6 +669,21 @@ function formatDate(dateStr) {
 
 function copyExecutionId() {
   navigator.clipboard.writeText(executionId.value)
+}
+
+// Continue execution as chat (EXEC-023)
+function continueAsChat() {
+  if (!execution.value?.claude_session_id) return
+
+  router.push({
+    name: 'AgentDetail',
+    params: { name: agentName.value },
+    query: {
+      tab: 'chat',
+      resumeSessionId: execution.value.claude_session_id,
+      executionId: executionId.value
+    }
+  })
 }
 
 function parseExecutionLog(log) {
