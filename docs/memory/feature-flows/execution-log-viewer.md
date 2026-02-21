@@ -6,6 +6,8 @@ The Execution Log Viewer displays Claude Code execution transcripts in a formatt
 
 **Important**: All execution types (scheduled, manual trigger, user tasks, MCP calls) now use the same log format - raw Claude Code `stream-json` output. This was standardized on 2025-01-02 (scheduler) and 2026-01-10 (chat endpoint) by ensuring all endpoints return raw format.
 
+**Performance Note (PERF-001)**: The `execution_log` field is excluded from the list endpoint (`GET /api/agents/{name}/executions`) for performance. The log viewer fetches logs via the dedicated endpoint (`GET /api/agents/{name}/executions/{id}/log`), which is unaffected by this optimization.
+
 ## User Story
 
 As an agent operator, I want to view the complete execution transcript of any task so that I can understand what Claude did, debug issues, and verify the reasoning process.
@@ -622,6 +624,7 @@ All execution types now produce logs that `parseExecutionLog()` can render:
 
 | Date | Changes |
 |------|---------|
+| 2026-02-21 | **PERF-001**: Added note that `execution_log` is excluded from list endpoint for performance. Log viewer uses dedicated `/log` endpoint which is unaffected. |
 | 2026-02-16 | **Security Fix (Credential Sanitization)**: Execution logs are now sanitized at two layers before storage. Agent-side: `sanitize_subprocess_line()` filters Claude Code output in real-time. Backend-side: `sanitize_execution_log()` provides defense-in-depth. Sensitive patterns (API keys, tokens, auth headers) are replaced with `***REDACTED***`. Updated Security Considerations section. |
 | 2026-01-23 | **Line number update**: Updated all line number references to match current implementation. View Log Button moved to lines 234-243. Modal at lines 316-432. Modal state at lines 499-503. viewExecutionLog() at lines 803-820. parseExecutionLog() at lines 839-930. Visual components at lines 357-425. Backend endpoint at lines 339-379 (using AuthorizedAgent dependency). Agent server execute_claude_code() at lines 389-546, execute_headless_task() at lines 553-766. |
 | 2026-01-10 | **Chat endpoint log fix**: Updated `/api/chat` to return raw Claude Code format. Modified `execute_claude_code()` to capture `raw_messages`. Backend now extracts both formats for activity tracking and UI. All execution types including MCP calls now produce parseable logs. |

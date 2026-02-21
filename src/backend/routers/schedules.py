@@ -106,8 +106,49 @@ class ScheduleResponse(BaseModel):
         from_attributes = True
 
 
+class ExecutionSummary(BaseModel):
+    """Lightweight execution response for list views - excludes large text fields.
+
+    Used by GET /api/agents/{name}/executions for fast list loading.
+    Full details available via GET /api/agents/{name}/executions/{id}.
+    """
+    id: str
+    schedule_id: str
+    agent_name: str
+    status: str
+    started_at: datetime
+    completed_at: Optional[datetime]
+    duration_ms: Optional[int]
+    message: str
+    triggered_by: str
+    # Observability fields (small)
+    context_used: Optional[int] = None
+    context_max: Optional[int] = None
+    cost: Optional[float] = None
+    # Origin tracking (small) - AUDIT-001
+    source_user_id: Optional[int] = None
+    source_user_email: Optional[str] = None
+    source_agent_name: Optional[str] = None
+    source_mcp_key_id: Optional[str] = None
+    source_mcp_key_name: Optional[str] = None
+    # Session resume (small) - EXEC-023
+    claude_session_id: Optional[str] = None
+
+    # EXCLUDED (large fields - fetch via /executions/{id}):
+    # - response: Optional[str]      # Full response text
+    # - error: Optional[str]         # Full error text
+    # - tool_calls: Optional[str]    # JSON array of tool calls
+    # - execution_log: Optional[str] # Full Claude Code transcript
+
+    class Config:
+        from_attributes = True
+
+
 class ExecutionResponse(BaseModel):
-    """Response model for execution data."""
+    """Full response model for execution data - includes all fields.
+
+    Used by GET /api/agents/{name}/executions/{id} for single execution details.
+    """
     id: str
     schedule_id: str
     agent_name: str
@@ -125,6 +166,14 @@ class ExecutionResponse(BaseModel):
     cost: Optional[float] = None
     tool_calls: Optional[str] = None
     execution_log: Optional[str] = None  # Full Claude Code execution transcript (JSON)
+    # Origin tracking - AUDIT-001
+    source_user_id: Optional[int] = None
+    source_user_email: Optional[str] = None
+    source_agent_name: Optional[str] = None
+    source_mcp_key_id: Optional[str] = None
+    source_mcp_key_name: Optional[str] = None
+    # Session resume - EXEC-023
+    claude_session_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -383,18 +432,27 @@ async def get_schedule_executions(
     return [ExecutionResponse(**e.model_dump()) for e in executions]
 
 
-@router.get("/{name}/executions", response_model=List[ExecutionResponse])
+@router.get("/{name}/executions", response_model=List[ExecutionSummary])
 async def get_agent_executions(
     name: AuthorizedAgent,
     limit: int = 50
 ):
-    """Get all executions for an agent across all schedules.
+    """Get execution summaries for an agent - optimized for list views.
+
+    Returns lightweight ExecutionSummary objects that exclude large text fields:
+    - response, error, tool_calls, execution_log
+
+    For full execution details including response/error, use:
+    GET /api/agents/{name}/executions/{id}
+
+    PERF-001: Task List Performance Optimization
+    Expected impact: 50-100x reduction in data transfer (10MB → 100KB)
 
     Note: The AuthorizedAgent dependency validates both agent existence (via db.get_agent_owner)
     and user access. This returns 404 if agent not found, 403 if no access, or execution list.
     """
-    executions = db.get_agent_executions(name, limit=limit)
-    return [ExecutionResponse(**e.model_dump()) for e in executions]
+    executions = db.get_agent_executions_summary(name, limit=limit)
+    return executions
 
 
 @router.get("/{name}/executions/{execution_id}", response_model=ExecutionResponse)

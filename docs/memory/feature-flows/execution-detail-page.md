@@ -295,11 +295,11 @@ async def get_execution_log(
 
 ### Response Model: ExecutionResponse
 
-**File**: `src/backend/routers/schedules.py:78-99`
+**File**: `src/backend/routers/schedules.py:78-105`
 
 ```python
 class ExecutionResponse(BaseModel):
-    """Response model for execution data."""
+    """Full response model for execution data - includes all fields."""
     id: str
     schedule_id: str
     agent_name: str
@@ -308,8 +308,8 @@ class ExecutionResponse(BaseModel):
     completed_at: Optional[datetime]
     duration_ms: Optional[int]
     message: str
-    response: Optional[str]
-    error: Optional[str]
+    response: Optional[str]           # Full response text
+    error: Optional[str]              # Full error text
     triggered_by: str  # schedule, manual, user
     # Observability fields
     context_used: Optional[int] = None
@@ -318,6 +318,8 @@ class ExecutionResponse(BaseModel):
     tool_calls: Optional[str] = None
     execution_log: Optional[str] = None  # Full Claude Code transcript (JSON)
 ```
+
+**Note (PERF-001)**: The list endpoint (`GET /api/agents/{name}/executions`) returns `ExecutionSummary` which excludes `response`, `error`, `tool_calls`, and `execution_log`. The detail endpoint (`GET /api/agents/{name}/executions/{id}`) returns the full `ExecutionResponse`.
 
 ### Authorization
 
@@ -525,6 +527,7 @@ location /api/ {
 
 | Date | Changes |
 |------|---------|
+| 2026-02-21 | **PERF-001**: Added note distinguishing `ExecutionResponse` (full, used here) from `ExecutionSummary` (lightweight, used by list endpoint). Execution Detail page continues to fetch full data via `GET /api/agents/{name}/executions/{id}`. |
 | 2026-02-20 | Added "Continue as Chat" button (EXEC-023) - visible when `claude_session_id` exists and status is not "running". Navigates to Chat tab with `resumeSessionId` and `executionId` query params. See [continue-execution-as-chat.md](continue-execution-as-chat.md) for full flow. |
 | 2026-02-05 | Added "Live SSE Streaming" section documenting real-time log streaming. Documented nginx configuration requirements (`proxy_buffering off`, `proxy_cache off`, `chunked_transfer_encoding on`) needed for production streaming. Added frontend fetch/ReadableStream implementation details. |
 | 2026-01-13 | Added "Live" button for running tasks in TasksPanel (lines 213-232). Green badge with animated pulsing dot navigates to Execution Detail for live monitoring. Explicit ID logic: server executions use `task.id`, local pending tasks use `task.execution_id` from process registry. |

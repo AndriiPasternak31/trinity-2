@@ -724,6 +724,20 @@ The Process Engine supports six step types:
 - Chat response: < 5 seconds for simple queries
 - UI responsiveness: < 100ms for interactions
 - WebSocket latency: < 500ms for status updates
+- **Task list loading: < 1 second** (PERF-001)
+
+### PERF-001: Task List Performance Optimization
+- **Status**: ✅ Implemented (2026-02-21)
+- **Requirement ID**: PERF-001
+- **Priority**: MEDIUM
+- **Description**: Optimize task loading on Agent Detail Tasks tab. Current implementation transfers full `execution_log` (100KB+ per execution) for list views that don't display it.
+- **Key Features**:
+  - Lightweight `ExecutionSummary` response model excluding heavy fields
+  - Optimized SQL query selecting only needed columns
+  - Composite index on `(agent_name, started_at DESC)`
+  - On-demand detail loading when user expands a task
+- **Achieved Impact**: 50-100x reduction in data transfer (10MB → 100KB)
+- **Spec**: `docs/requirements/TASK_LIST_PERFORMANCE.md`
 
 ### Security
 - All credentials encrypted at rest (Redis)

@@ -319,18 +319,22 @@ DELETE .../schedules/{id}         delete_schedule()                 _sync_schedu
 - `src/backend/db/schedules.py` - db.delete_schedule()
 - `src/scheduler/service.py:224-316` - _sync_schedules() detects deleted schedules
 
-### 6. View All Executions (Executions Tab)
+### 6. View All Executions (Tasks Tab)
 
-**User Action:** Click "Executions" tab on AgentDetail.vue
+**User Action:** Click "Tasks" tab on AgentDetail.vue
+
+> **PERF-001 (2026-02-21)**: List endpoint now returns `ExecutionSummary` objects that exclude large text fields (`response`, `error`, `tool_calls`, `execution_log`). Full details fetched on-demand when user expands a task row.
 
 ```
 Frontend                          Backend                           Database
 --------                          -------                           --------
-ExecutionsPanel.vue              schedules.py:283              →    database.py:1462
-GET /api/agents/{name}/           get_agent_executions()            get_agent_executions()
-executions?limit=100              AuthorizedAgent dependency         SELECT FROM schedule_executions
-                                  ↓                                  WHERE agent_name = ?
-                                  return ExecutionResponse[]         ORDER BY started_at DESC
+TasksPanel.vue                   schedules.py:435              →    db/schedules.py:655
+GET /api/agents/{name}/           get_agent_executions()            get_agent_executions_summary()
+executions?limit=100              AuthorizedAgent dependency         SELECT (specific columns)
+                                  ↓                                  FROM schedule_executions
+                                  return ExecutionSummary[]          WHERE agent_name = ?
+                                                                     ORDER BY started_at DESC
+                                                                     (uses idx_executions_agent_started)
 ```
 
 **Access Control:** Uses `AuthorizedAgent` dependency - `name: AuthorizedAgent` validates access automatically.
@@ -360,8 +364,8 @@ executions?limit=100              AuthorizedAgent dependency         SELECT FROM
 | POST | `/api/agents/{name}/schedules/{id}/disable` | Disable | schedules.py:218 | AuthorizedAgent |
 | POST | `/api/agents/{name}/schedules/{id}/trigger` | Manual trigger | schedules.py:236 | AuthorizedAgent |
 | GET | `/api/agents/{name}/schedules/{id}/executions` | Execution history | schedules.py:265 | AuthorizedAgent |
-| GET | `/api/agents/{name}/executions` | All agent executions | schedules.py:283 | AuthorizedAgent |
-| GET | `/api/agents/{name}/executions/{id}` | Get specific execution | schedules.py:293 | AuthorizedAgent |
+| GET | `/api/agents/{name}/executions` | All agent executions (summary) | schedules.py:435 | AuthorizedAgent |
+| GET | `/api/agents/{name}/executions/{id}` | Get specific execution (full) | schedules.py:462 | AuthorizedAgent |
 | GET | `/api/agents/{name}/executions/{id}/log` | Get execution log | schedules.py:309 | AuthorizedAgent |
 | GET | `/api/agents/scheduler/status` | Scheduler status (admin) | schedules.py:354 | Admin only |
 
@@ -954,6 +958,7 @@ POST /schedules  ------>  db/schedules.py:create_schedule()
 ---
 
 ## Status
+**Updated 2026-02-21** - **PERF-001 Performance Optimization**: List endpoint now returns `ExecutionSummary` (excludes large text fields). Task details fetched on-demand. See [tasks-tab.md](tasks-tab.md) for full implementation details.
 **Updated 2026-02-20** - **Configurable Timeout and Allowed Tools**: Per-schedule execution configuration - custom timeout (5m-2h) and tool restrictions. See "Per-Schedule Execution Configuration" section below.
 **Updated 2026-02-15** - **Claude Max Subscription Support**: Scheduled executions now work with Claude Max subscription authentication. If agent has OAuth session from `/login` stored in `~/.claude.json`, scheduled tasks use the subscription instead of requiring `ANTHROPIC_API_KEY`. See "Authentication" section in Schedule Execution Flow.
 **Updated 2026-02-11** - **SCHEDULER CONSOLIDATION**: Embedded scheduler removed. All references updated to dedicated scheduler (`src/scheduler/`). Manual triggers routed through scheduler. Activity tracking via internal API.

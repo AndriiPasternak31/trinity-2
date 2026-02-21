@@ -1,3 +1,44 @@
+### 2026-02-21 11:00:00
+📚 **Docs: PERF-001 Feature Flow Updates**
+
+Updated feature flow documentation to reflect Task List Performance Optimization changes.
+
+**Files Updated**:
+- `docs/memory/feature-flows/tasks-tab.md`: Added PERF-001 overview, new state variables (`taskDetailsCache`, `expandLoadingTaskId`), on-demand loading section, updated API documentation, new database index
+- `docs/memory/feature-flows/execution-detail-page.md`: Added note distinguishing `ExecutionResponse` from `ExecutionSummary`
+- `docs/memory/feature-flows/execution-log-viewer.md`: Added note that log viewer uses dedicated `/log` endpoint
+- `docs/memory/feature-flows/scheduling.md`: Updated line numbers, added PERF-001 note to View Executions flow
+- `docs/memory/feature-flows.md`: Added PERF-001 update summary, updated table entries for affected flows
+
+---
+
+### 2026-02-21 10:30:00
+⚡ **Performance: Task List Optimization (PERF-001)**
+
+Optimized the Tasks tab loading in Agent Detail page. Previously loaded full execution_log (100KB+ per execution) for all 100 tasks, causing 10MB+ transfers. Now loads lightweight summaries and fetches details on-demand when user expands a task.
+
+**Problem Solved**: Tasks tab was slow to load for agents with many executions. Network transfers were 10MB+ when only ~100KB was needed for list display.
+
+**Implementation**:
+- **Backend**: Added `ExecutionSummary` model excluding large fields (response, error, tool_calls, execution_log)
+- **Backend**: Added `get_agent_executions_summary()` DB method with optimized SELECT
+- **Backend**: Changed `GET /api/agents/{name}/executions` to return `ExecutionSummary` list
+- **Backend**: Added composite index `idx_executions_agent_started` for optimized queries
+- **Frontend**: Modified `TasksPanel.vue` to fetch response/error on-demand when expanding
+
+**Key Files Modified**:
+- `src/backend/routers/schedules.py`: Added `ExecutionSummary` model, updated endpoint
+- `src/backend/db/schedules.py`: Added `get_agent_executions_summary()` method
+- `src/backend/database.py`: Added delegation method and composite index
+- `src/frontend/src/components/TasksPanel.vue`: On-demand detail loading with cache
+
+**Performance Impact**:
+- Data transfer: ~10MB → ~100KB (50-100x reduction)
+- Load time: Now sub-second for list view
+- User experience: Expand preview still works, details load when clicked
+
+---
+
 ### 2026-02-20 19:30:00
 ✨ **Feature: Continue Execution as Chat (EXEC-023)**
 

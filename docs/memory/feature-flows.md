@@ -3,6 +3,17 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
+> **Updated (2026-02-21)**: Task List Performance Optimization (PERF-001):
+> - **Problem**: Task list loading 10+ MB of data (100KB execution_log x 100 tasks)
+> - **Solution**: List endpoint returns `ExecutionSummary` (excludes `response`, `error`, `tool_calls`, `execution_log`)
+> - **On-demand loading**: TasksPanel fetches details via `GET /api/agents/{name}/executions/{id}` when user expands a task
+> - **New database method**: `get_agent_executions_summary()` in `db/schedules.py:655-682`
+> - **New model**: `ExecutionSummary` in `routers/schedules.py:109-145`
+> - **New index**: `idx_executions_agent_started` on `(agent_name, started_at DESC)` in `database.py`
+> - **Frontend cache**: `taskDetailsCache` ref + `fetchTaskDetails()` function in TasksPanel.vue
+> - **Performance**: 50-100x data reduction (~100KB vs ~10MB for 100 executions)
+> - **Updated flows**: [tasks-tab.md](feature-flows/tasks-tab.md), [execution-detail-page.md](feature-flows/execution-detail-page.md), [execution-log-viewer.md](feature-flows/execution-log-viewer.md), [scheduling.md](feature-flows/scheduling.md)
+>
 > **Updated (2026-02-20)**: Continue Execution as Chat (EXEC-023):
 > - **New feature flow**: [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md) - Resume failed/completed executions as interactive chat with full context
 > - **Key insight**: Claude Code stores sessions at `~/.claude/projects/{path}/{session_id}.jsonl`. Using `--resume {session_id}` preserves 150K+ tokens of context.
@@ -657,9 +668,9 @@
 | **Web Terminal** | High | [web-terminal.md](feature-flows/web-terminal.md) | Browser-based xterm.js terminal for System Agent with Claude Code TUI, PTY forwarding via Docker exec, admin-only access (Implemented 2025-12-25, Req 11.5) |
 | **Email-Based Authentication** | High | [email-authentication.md](feature-flows/email-authentication.md) | Passwordless email login with 6-digit verification codes, 2-step UI with countdown timer, admin-managed whitelist, auto-whitelist on agent sharing, rate limiting and email enumeration prevention (Fully Implemented 2025-12-26, Phase 12.4) |
 | **Admin Login** | High | [admin-login.md](feature-flows/admin-login.md) | Password-based admin authentication - fixed "admin" username, bcrypt password verification, JWT with mode=admin, 7-day token expiry, localStorage persistence, requires setup completion (Created 2026-01-21) |
-| **Tasks Tab** | High | [tasks-tab.md](feature-flows/tasks-tab.md) | Unified task execution UI in Agent Detail - trigger manual tasks, monitor queue, view history, **Stop button** for running tasks, **Make Repeatable** for schedules (Updated 2026-01-12) |
-| **Execution Log Viewer** | Medium | [execution-log-viewer.md](feature-flows/execution-log-viewer.md) | Tasks panel modal for viewing Claude Code execution transcripts - all execution types (scheduled/manual/user/MCP) now produce parseable logs, **credentials sanitized before storage** (Updated 2026-02-16) |
-| **Execution Detail Page** | High | [execution-detail-page.md](feature-flows/execution-detail-page.md) | Dedicated page for execution details - metadata cards, timestamps, task input, response, full transcript. Entry points: TasksPanel **Live button** (running tasks, green pulsing badge) or icon (completed), Timeline click (Updated 2026-01-13) |
+| **Tasks Tab** | High | [tasks-tab.md](feature-flows/tasks-tab.md) | Unified task execution UI in Agent Detail - trigger manual tasks, monitor queue, view history, **Stop button** for running tasks, **Make Repeatable** for schedules. **PERF-001**: List returns `ExecutionSummary`, details fetched on-demand (Updated 2026-02-21) |
+| **Execution Log Viewer** | Medium | [execution-log-viewer.md](feature-flows/execution-log-viewer.md) | Tasks panel modal for viewing Claude Code execution transcripts - all execution types (scheduled/manual/user/MCP) now produce parseable logs, **credentials sanitized before storage**. Uses dedicated `/log` endpoint (unaffected by PERF-001) (Updated 2026-02-21) |
+| **Execution Detail Page** | High | [execution-detail-page.md](feature-flows/execution-detail-page.md) | Dedicated page for execution details - metadata cards, timestamps, task input, response, full transcript. Entry points: TasksPanel **Live button** (running tasks, green pulsing badge) or icon (completed), Timeline click. Uses full `ExecutionResponse` (not affected by PERF-001) (Updated 2026-02-21) |
 | **Container Capabilities** | Medium | [container-capabilities.md](feature-flows/container-capabilities.md) | Full capabilities mode for apt-get package installation - **2026-01-14**: Added RESTRICTED/FULL_CAPABILITIES constants for consistent security across all container creation paths. System-wide setting + per-agent API, automatic recreation on start (CFG-004) |
 | **Vector Logging** | Medium | [vector-logging.md](feature-flows/vector-logging.md) | Centralized log aggregation via Vector - captures all container stdout/stderr, routes to platform.json/agents.json, replaces audit-logger (Implemented 2025-12-31) |
 | **Autonomy Mode** | High | [autonomy-mode.md](feature-flows/autonomy-mode.md) | Agent autonomous operation toggle - enables/disables all schedules with single click - **service layer: autonomy.py**, uses AutonomyToggle component in 4 locations, owner-only access (Updated 2026-02-12) |

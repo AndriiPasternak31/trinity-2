@@ -885,6 +885,8 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_executions_schedule ON schedule_executions(schedule_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_executions_agent ON schedule_executions(agent_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_executions_status ON schedule_executions(status)")
+        # PERF-001: Composite index for Tasks list queries (agent_name + started_at DESC)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_executions_agent_started ON schedule_executions(agent_name, started_at DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_git_config_agent ON agent_git_config(agent_name)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_git_config_repo ON agent_git_config(github_repo)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_chat_sessions_agent ON chat_sessions(agent_name)")
@@ -1300,6 +1302,13 @@ class DatabaseManager:
 
     def get_agent_executions(self, agent_name: str, limit: int = 50):
         return self._schedule_ops.get_agent_executions(agent_name, limit)
+
+    def get_agent_executions_summary(self, agent_name: str, limit: int = 50):
+        """Get execution summaries for list view - excludes large text fields.
+
+        PERF-001: Task List Performance Optimization
+        """
+        return self._schedule_ops.get_agent_executions_summary(agent_name, limit)
 
     def get_execution(self, execution_id: str):
         return self._schedule_ops.get_execution(execution_id)

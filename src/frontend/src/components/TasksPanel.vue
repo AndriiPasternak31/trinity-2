@@ -210,10 +210,25 @@
                 </div>
               </div>
 
-              <!-- Expanded content: Response or Error -->
-              <div v-if="expandedTaskId === task.id && (task.response || task.error)" class="mt-3">
-                <div v-if="task.error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{ task.error }}</div>
-                <div v-else-if="task.response" class="bg-gray-100 dark:bg-gray-700 rounded p-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{ task.response }}</div>
+              <!-- Expanded content: Response or Error (loaded on demand) -->
+              <div v-if="expandedTaskId === task.id" class="mt-3">
+                <!-- Loading state -->
+                <div v-if="expandLoadingTaskId === task.id" class="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                  <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  <span>Loading details...</span>
+                </div>
+                <!-- Error/Response display (from cache or local task) -->
+                <template v-else-if="getTaskDetails(task.id)?.error || getTaskDetails(task.id)?.response || task.error || task.response">
+                  <div v-if="getTaskDetails(task.id)?.error || task.error" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-3 text-sm text-red-700 dark:text-red-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{ getTaskDetails(task.id)?.error || task.error }}</div>
+                  <div v-else-if="getTaskDetails(task.id)?.response || task.response" class="bg-gray-100 dark:bg-gray-700 rounded p-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{ getTaskDetails(task.id)?.response || task.response }}</div>
+                </template>
+                <!-- No details available -->
+                <div v-else-if="taskDetailsCache[task.id] !== undefined" class="text-sm text-gray-500 dark:text-gray-400 italic">
+                  No response or error recorded for this execution.
+                </div>
               </div>
             </div>
 
@@ -506,6 +521,8 @@ const taskLoading = ref(false)
 const releaseLoading = ref(false)
 const clearLoading = ref(false)
 const expandedTaskId = ref(null)
+const expandLoadingTaskId = ref(null) // PERF-001: Track which task is loading details
+const taskDetailsCache = ref({}) // PERF-001: Cache for task details (response/error)
 const terminatingTaskId = ref(null)
 const triggerFilter = ref('all') // Filter by triggered_by type (AUDIT-001)
 
@@ -777,9 +794,50 @@ async function copyTaskMessage(task) {
   }
 }
 
-// Toggle task expansion
-function toggleTaskExpand(taskId) {
-  expandedTaskId.value = expandedTaskId.value === taskId ? null : taskId
+// Toggle task expansion and load details on demand (PERF-001)
+async function toggleTaskExpand(taskId) {
+  // If already expanded, collapse
+  if (expandedTaskId.value === taskId) {
+    expandedTaskId.value = null
+    return
+  }
+
+  // Expand the task
+  expandedTaskId.value = taskId
+
+  // For local tasks (not persisted yet), details are already available
+  if (taskId.startsWith('local-')) {
+    return
+  }
+
+  // Check if we already have cached details for this task
+  if (taskDetailsCache.value[taskId] !== undefined) {
+    return
+  }
+
+  // Fetch details from the server
+  expandLoadingTaskId.value = taskId
+  try {
+    const response = await axios.get(`/api/agents/${props.agentName}/executions/${taskId}`, {
+      headers: authStore.authHeader
+    })
+    // Cache the response and error fields
+    taskDetailsCache.value[taskId] = {
+      response: response.data.response,
+      error: response.data.error
+    }
+  } catch (error) {
+    console.error('Failed to load task details:', error)
+    // Cache empty to avoid re-fetching on error
+    taskDetailsCache.value[taskId] = { response: null, error: null }
+  } finally {
+    expandLoadingTaskId.value = null
+  }
+}
+
+// Get cached task details (PERF-001)
+function getTaskDetails(taskId) {
+  return taskDetailsCache.value[taskId]
 }
 
 // Terminate a running task
@@ -1041,6 +1099,8 @@ watch(() => props.agentStatus, (newStatus) => {
 // Watch for agent name changes
 watch(() => props.agentName, () => {
   pendingTasks.value = [] // Clear local tasks when switching agents
+  taskDetailsCache.value = {} // Clear cached details (PERF-001)
+  expandedTaskId.value = null // Collapse any expanded task
   loadAllData()
   startPolling()
 })

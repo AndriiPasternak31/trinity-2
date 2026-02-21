@@ -633,6 +633,35 @@ class ScheduleOperations:
             """, (agent_name, limit))
             return [self._row_to_schedule_execution(row) for row in cursor.fetchall()]
 
+    def get_agent_executions_summary(self, agent_name: str, limit: int = 50) -> List[Dict]:
+        """Get execution summaries for list view - excludes large text fields.
+
+        Returns only the columns needed for the Tasks list UI, excluding:
+        - response (can be large)
+        - error (can be large)
+        - tool_calls (JSON array, can be large)
+        - execution_log (100KB+ per execution)
+
+        This provides 50-100x data reduction vs SELECT * for list views.
+        Use get_execution() for full details on a single execution.
+
+        PERF-001: Task List Performance Optimization
+        """
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT
+                    id, schedule_id, agent_name, status, started_at, completed_at,
+                    duration_ms, message, triggered_by, context_used, context_max, cost,
+                    source_user_id, source_user_email, source_agent_name,
+                    source_mcp_key_id, source_mcp_key_name, claude_session_id
+                FROM schedule_executions
+                WHERE agent_name = ?
+                ORDER BY started_at DESC
+                LIMIT ?
+            """, (agent_name, limit))
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_execution(self, execution_id: str) -> Optional[ScheduleExecution]:
         """Get a specific execution by ID."""
         with get_db_connection() as conn:

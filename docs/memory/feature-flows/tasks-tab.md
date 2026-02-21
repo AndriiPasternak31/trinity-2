@@ -4,6 +4,8 @@
 
 The Tasks tab provides a unified view for headless agent executions within the Agent Detail page. It consolidates all task executions (manual, scheduled, agent-to-agent) into a single interface with the ability to trigger new tasks directly, monitor running tasks and queue status in real-time, and re-run historical tasks.
 
+**Performance Optimization (2026-02-21)**: The list endpoint now returns lightweight `ExecutionSummary` objects (excluding large `response`, `error`, `tool_calls`, `execution_log` fields). Task details are fetched on-demand when users expand a task row. This reduces data transfer by 50-100x for agents with many executions.
+
 **Log Format Standardization (2025-01-02)**: All execution types (manual tasks, scheduled executions, manual triggers) now use the `/api/task` endpoint which returns raw Claude Code `stream-json` format. This ensures the [Execution Log Viewer](execution-log-viewer.md) can properly render all execution transcripts.
 
 ## User Story
@@ -16,7 +18,8 @@ As an agent operator, I want to view and trigger headless task executions from a
 - **UI**: `src/frontend/src/components/TasksPanel.vue` - Main component
 - **API**: `POST /api/agents/{name}/task` - Execute a parallel task (creates execution record)
 - **API**: `POST /api/agents/{name}/chat` - Agent-to-agent chat (creates execution record when `X-Source-Agent` header present) *(added 2025-12-30)*
-- **API**: `GET /api/agents/{name}/executions` - Get execution history
+- **API**: `GET /api/agents/{name}/executions` - Get execution summaries (lightweight, excludes large fields)
+- **API**: `GET /api/agents/{name}/executions/{id}` - Get full execution details (on-demand)
 - **API**: `GET /api/agents/{name}/executions/{execution_id}/log` - Get full execution log *(added 2025-12-31)*
 - **API**: `GET /api/agents/{name}/queue` - Get queue status
 - **API**: `POST /api/agents/{name}/queue/clear` - Clear queued tasks
@@ -64,7 +67,7 @@ const emit = defineEmits(['create-schedule'])
 
 ### State Management
 
-**TasksPanel.vue:449-491** - Local reactive state:
+**TasksPanel.vue:510-530** - Local reactive state:
 ```javascript
 const props = defineProps({
   agentName: { type: String, required: true },
@@ -74,13 +77,15 @@ const props = defineProps({
 })
 
 // State
-const executions = ref([])           // Server-persisted executions
+const executions = ref([])           // Server-persisted executions (ExecutionSummary - lightweight)
 const pendingTasks = ref([])         // Local tasks awaiting server response
 const queueStatus = ref(null)        // Current queue status
 const loading = ref(true)
 const newTaskMessage = ref('')       // New task input
 const taskLoading = ref(false)       // Submit in progress
 const expandedTaskId = ref(null)     // Currently expanded task
+const expandLoadingTaskId = ref(null)  // PERF-001: Track which task is loading details
+const taskDetailsCache = ref({})     // PERF-001: Cache for task details (response/error)
 const terminatingTaskId = ref(null)  // Task being terminated (new 2026-01-12)
 const runningExecutions = ref([])    // Running executions from agent (for termination)
 ```
@@ -102,13 +107,48 @@ const avgDuration = computed(() => { /* ... */ })
 
 ### API Calls
 
-**Load Executions (lines 329-338)**:
+**Load Executions (lines 329-338)** - Returns lightweight `ExecutionSummary`:
 ```javascript
 async function loadExecutions() {
+  // PERF-001: Returns ExecutionSummary (excludes response, error, tool_calls, execution_log)
   const response = await axios.get(`/api/agents/${props.agentName}/executions?limit=100`, {
     headers: authStore.authHeader
   })
   executions.value = response.data
+}
+```
+
+**Fetch Task Details on Expand (lines 805-836)** - PERF-001 on-demand loading:
+```javascript
+// PERF-001: Fetch task details when user expands a task row
+async function fetchTaskDetails(taskId) {
+  // Skip local tasks (no server record yet)
+  if (taskId.startsWith('local-')) {
+    return
+  }
+
+  // Check cache first
+  if (taskDetailsCache.value[taskId] !== undefined) {
+    return
+  }
+
+  // Fetch full details from server
+  expandLoadingTaskId.value = taskId
+  try {
+    const response = await axios.get(`/api/agents/${props.agentName}/executions/${taskId}`, {
+      headers: authStore.authHeader
+    })
+    // Cache response and error fields
+    taskDetailsCache.value[taskId] = {
+      response: response.data.response,
+      error: response.data.error
+    }
+  } catch (error) {
+    console.error('Failed to load task details:', error)
+    taskDetailsCache.value[taskId] = { response: null, error: null }
+  } finally {
+    expandLoadingTaskId.value = null
+  }
 }
 ```
 
@@ -278,21 +318,47 @@ class ParallelTaskRequest(BaseModel):
 
 #### GET /api/agents/{name}/executions
 
-**File**: `src/backend/routers/schedules.py:384-398`
+**File**: `src/backend/routers/schedules.py:435-459`
 
-Get all executions for an agent across all schedules and manual triggers.
+Get execution summaries for an agent - optimized for list views.
+
+**PERF-001 (2026-02-21)**: Returns lightweight `ExecutionSummary` objects that exclude large text fields (`response`, `error`, `tool_calls`, `execution_log`). This reduces data transfer by 50-100x for agents with many executions.
 
 ```python
-@router.get("/{name}/executions", response_model=List[ExecutionResponse])
+@router.get("/{name}/executions", response_model=List[ExecutionSummary])
 async def get_agent_executions(
-    name: str,
-    limit: int = 50,
-    current_user: User = Depends(get_current_user)
+    name: AuthorizedAgent,
+    limit: int = 50
 ):
-    if not db.can_user_access_agent(current_user.username, name):
-        raise HTTPException(status_code=403, detail="Access denied")
-    executions = db.get_agent_executions(name, limit=limit)
-    return [ExecutionResponse(**e.model_dump()) for e in executions]
+    """Get execution summaries for an agent - optimized for list views.
+
+    Returns lightweight ExecutionSummary objects that exclude large text fields:
+    - response, error, tool_calls, execution_log
+
+    For full execution details including response/error, use:
+    GET /api/agents/{name}/executions/{id}
+    """
+    executions = db.get_agent_executions_summary(name, limit=limit)
+    return executions
+```
+
+#### GET /api/agents/{name}/executions/{id}
+
+**File**: `src/backend/routers/schedules.py:462-476`
+
+Get full execution details including response, error, and execution_log. Used for on-demand loading when user expands a task row.
+
+```python
+@router.get("/{name}/executions/{execution_id}", response_model=ExecutionResponse)
+async def get_execution(
+    name: AuthorizedAgent,
+    execution_id: str
+):
+    """Get full details of a specific execution."""
+    execution = db.get_execution(execution_id)
+    if not execution or execution.agent_name != name:
+        raise HTTPException(status_code=404, detail="Execution not found")
+    return ExecutionResponse(**execution.model_dump())
 ```
 
 #### GET /api/agents/{name}/queue
@@ -469,16 +535,34 @@ def update_execution_status(
     # Update record
 ```
 
-**Get Agent Executions** (`src/backend/db/schedules.py:419-429`):
+**Get Agent Executions Summary** (`src/backend/db/schedules.py:655-682`) - PERF-001:
 ```python
-def get_agent_executions(self, agent_name: str, limit: int = 50) -> List[ScheduleExecution]:
-    """Get all executions for an agent across all schedules."""
+def get_agent_executions_summary(self, agent_name: str, limit: int = 50) -> List[dict]:
+    """Get execution summaries for list view - excludes large text fields.
+
+    Returns lightweight dicts without: response, error, tool_calls, execution_log
+    """
     cursor.execute("""
-        SELECT * FROM schedule_executions
+        SELECT
+            id, schedule_id, agent_name, status, started_at, completed_at,
+            duration_ms, message, triggered_by, context_used, context_max, cost,
+            source_user_id, source_user_email, source_agent_name,
+            source_mcp_key_id, source_mcp_key_name, claude_session_id
+        FROM schedule_executions
         WHERE agent_name = ?
         ORDER BY started_at DESC
         LIMIT ?
     """, (agent_name, limit))
+    return [dict(row) for row in cursor.fetchall()]
+```
+
+**Get Full Execution** (`src/backend/db/schedules.py:447-453`):
+```python
+def get_execution(self, execution_id: str) -> Optional[ScheduleExecution]:
+    """Get a specific execution by ID with all fields."""
+    cursor.execute("SELECT * FROM schedule_executions WHERE id = ?", (execution_id,))
+    row = cursor.fetchone()
+    return self._row_to_schedule_execution(row) if row else None
 ```
 
 **Note**: The `create_task_execution` method was added 2025-12-28 specifically for manual task persistence.
@@ -505,6 +589,14 @@ def get_agent_executions(self, agent_name: str, limit: int = 50) -> List[Schedul
 | `cost` | REAL | Cost in USD (nullable) |
 | `tool_calls` | TEXT | JSON array of tool calls (nullable) |
 | `execution_log` | TEXT | Full Claude Code execution transcript (JSON, nullable) *(added 2025-12-31)* |
+
+**Index** (PERF-001):
+```sql
+CREATE INDEX IF NOT EXISTS idx_executions_agent_started
+ON schedule_executions(agent_name, started_at DESC)
+```
+
+This composite index optimizes the `WHERE agent_name = ? ORDER BY started_at DESC` query pattern used by the list endpoint.
 
 ---
 
@@ -655,6 +747,7 @@ Tasks are tracked in the `agent_activities` table via `activity_service.track_ac
 
 | Date | Changes |
 |------|---------|
+| 2026-02-21 | **PERF-001 Performance Optimization**: List endpoint now returns `ExecutionSummary` (excludes `response`, `error`, `tool_calls`, `execution_log`). Frontend loads details on-demand when user expands task row via `GET /api/agents/{name}/executions/{id}`. Added `taskDetailsCache` and `fetchTaskDetails()` function. New composite index `idx_executions_agent_started`. Data transfer reduced 50-100x. |
 | 2026-02-20 | **Make Repeatable enhancement**: Updated test step and Related Flows to note that schedules created via "Make Repeatable" now support per-schedule timeout and allowed_tools configuration. |
 | 2026-02-18 | **UI Redesign (UI-001)**: Reordered sections - Stats (49-69) now first, then Task Input (71-101), then Task History (103-315). Stats section more compact with smaller padding. Run button height now matches textarea. Updated line numbers throughout. |
 | 2026-01-12 | **Execution Termination**: Added Stop button (lines 255-271) for running tasks, `terminateTask()` function, `loadRunningExecutions()`, execution_id matching via `enhanceWithExecutionId()`. See [execution-termination.md](execution-termination.md). |
