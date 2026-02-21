@@ -1,3 +1,35 @@
+### 2026-02-21 12:00:00
+📚 **Docs: Feature Flow Updates for EXEC-023 Bug Fix**
+
+Updated feature flow documentation to record the DatabaseManager.update_execution_status() wrapper bug fix.
+
+**Files Updated**:
+- `docs/memory/feature-flows/continue-execution-as-chat.md`: Added revision history entry for the bug fix
+- `docs/memory/feature-flows/parallel-headless-execution.md`: Added revision history entry documenting the wrapper method fix
+- `docs/memory/feature-flows/scheduling.md`: Added status note documenting the affected code path
+- `docs/memory/feature-flows/execution-queue.md`: Added revision history entry documenting the execution status update fix
+- `docs/memory/feature-flows.md`: Added index entry summarizing the bug and affected flows
+
+---
+
+### 2026-02-21 11:30:00
+🐛 **Fix: Manual Task Executions Stuck in "running" Status (EXEC-023 Regression)**
+
+Fixed critical bug where all manual task executions completed successfully on agents but failed to update their database status, leaving them stuck as "running".
+
+**Root Cause**: In commit 3544248 (EXEC-023: Continue Execution as Chat), `claude_session_id` parameter was added to `db/schedules.py:update_execution_status()` but the wrapper method in `database.py:update_execution_status()` was not updated to accept or pass through this parameter.
+
+**Error**: `TypeError: DatabaseManager.update_execution_status() got an unexpected keyword argument 'claude_session_id'`
+
+**Impact**: All manual task executions via `/task` endpoint failed to save results. Tasks executed successfully on agents but results were never persisted, and executions remained in "running" status indefinitely.
+
+**Fix**: Added `claude_session_id: str = None` parameter to `DatabaseManager.update_execution_status()` wrapper and pass-through to underlying method.
+
+**File Modified**:
+- `src/backend/database.py`: Added missing `claude_session_id` parameter to wrapper method
+
+---
+
 ### 2026-02-21 11:00:00
 📚 **Docs: PERF-001 Feature Flow Updates**
 

@@ -958,6 +958,7 @@ POST /schedules  ------>  db/schedules.py:create_schedule()
 ---
 
 ## Status
+**Updated 2026-02-21** - **Bug Fix (EXEC-023)**: Fixed `DatabaseManager.update_execution_status()` wrapper in `src/backend/database.py:1295-1299` - was missing `claude_session_id` parameter. This affected all code paths that update execution status (scheduled tasks, manual tasks, chat executions). The underlying `db/schedules.py:update_execution_status()` (lines 559-610) already supported the parameter for the "Continue Execution as Chat" feature.
 **Updated 2026-02-21** - **PERF-001 Performance Optimization**: List endpoint now returns `ExecutionSummary` (excludes large text fields). Task details fetched on-demand. See [tasks-tab.md](tasks-tab.md) for full implementation details.
 **Updated 2026-02-20** - **Configurable Timeout and Allowed Tools**: Per-schedule execution configuration - custom timeout (5m-2h) and tool restrictions. See "Per-Schedule Execution Configuration" section below.
 **Updated 2026-02-15** - **Claude Max Subscription Support**: Scheduled executions now work with Claude Max subscription authentication. If agent has OAuth session from `/login` stored in `~/.claude.json`, scheduled tasks use the subscription instead of requiring `ANTHROPIC_API_KEY`. See "Authentication" section in Schedule Execution Flow.

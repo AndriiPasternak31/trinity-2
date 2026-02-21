@@ -3,6 +3,13 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
+> **Updated (2026-02-21)**: Bug Fix - DatabaseManager.update_execution_status() wrapper (EXEC-023):
+> - **Bug**: `DatabaseManager.update_execution_status()` in `src/backend/database.py:1295-1299` was missing the `claude_session_id` parameter
+> - **Impact**: Manual task executions via `/task` endpoint failed to store session IDs, breaking "Continue Execution as Chat" feature
+> - **Root cause**: The wrapper method did not forward `claude_session_id` to `db/schedules.py:update_execution_status()` (lines 559-610)
+> - **Fix**: Added `claude_session_id: str = None` parameter to wrapper, forwarding it to the underlying method
+> - **Updated flows**: [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md), [parallel-headless-execution.md](feature-flows/parallel-headless-execution.md), [scheduling.md](feature-flows/scheduling.md), [execution-queue.md](feature-flows/execution-queue.md)
+>
 > **Updated (2026-02-21)**: Task List Performance Optimization (PERF-001):
 > - **Problem**: Task list loading 10+ MB of data (100KB execution_log x 100 tasks)
 > - **Solution**: List endpoint returns `ExecutionSummary` (excludes `response`, `error`, `tool_calls`, `execution_log`)

@@ -527,4 +527,5 @@ Claude Code may clean up old session files. If resume fails:
 
 | Date | Change |
 |------|--------|
+| 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed `DatabaseManager.update_execution_status()` wrapper in `src/backend/database.py:1295-1299` which was missing the `claude_session_id` parameter. The underlying `db/schedules.py:update_execution_status()` accepted the parameter, but the wrapper method did not forward it. This caused all manual task executions (via `/task` endpoint) to fail updating their database status with the session ID, breaking the "Continue as Chat" feature for those executions. |
 | 2026-02-20 | Initial implementation (EXEC-023) |
