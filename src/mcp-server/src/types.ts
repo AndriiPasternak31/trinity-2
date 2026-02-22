@@ -200,3 +200,29 @@ export interface ScheduleTriggerResult {
   execution_id: string;
   message?: string;
 }
+
+// Subscription Management Types (SUB-001)
+
+export interface Subscription {
+  id: string;
+  name: string;
+  subscription_type?: string;
+  rate_limit_tier?: string;
+  owner_id: number;
+  owner_email?: string;
+  created_at: string;
+  updated_at: string;
+  agent_count: number;
+}
+
+export interface SubscriptionWithAgents extends Subscription {
+  agents: string[];
+}
+
+export interface AgentAuthStatus {
+  agent_name: string;
+  auth_mode: "subscription" | "api_key" | "not_configured";
+  subscription_name?: string;
+  subscription_id?: string;
+  has_api_key: boolean;
+}

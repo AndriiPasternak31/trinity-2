@@ -924,3 +924,87 @@ def _format_duration(seconds: float) -> str:
         if minutes > 0:
             return f"{hours}h {minutes}m"
         return f"{hours}h"
+
+
+# ============================================================================
+# Fleet Auth Report (SUB-001)
+# ============================================================================
+
+@router.get("/auth-report")
+async def get_auth_report(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get authentication status report for all agents.
+
+    Shows how many agents are using:
+    - Subscription (Claude Max/Pro OAuth)
+    - API Key (Platform ANTHROPIC_API_KEY)
+    - Not configured
+
+    Useful for tracking subscription usage and migration progress.
+    """
+    agents = list_all_agents_fast()
+
+    # Track auth modes
+    subscription_agents = []
+    api_key_agents = []
+    not_configured_agents = []
+
+    # Get subscription info for all agents
+    for agent in agents:
+        agent_name = agent.name
+
+        # Skip system agent
+        owner = db.get_agent_owner(agent_name)
+        is_system = owner.get("is_system", False) if owner else False
+        if is_system:
+            continue
+
+        # Check for subscription assignment
+        subscription = db.get_agent_subscription(agent_name)
+        has_api_key = db.get_use_platform_api_key(agent_name) or False
+
+        agent_info = {
+            "name": agent_name,
+            "status": agent.status,
+            "type": agent.type,
+        }
+
+        if subscription:
+            agent_info["subscription_name"] = subscription.name
+            subscription_agents.append(agent_info)
+        elif has_api_key:
+            api_key_agents.append(agent_info)
+        else:
+            not_configured_agents.append(agent_info)
+
+    # Get subscription summary
+    subscriptions = db.list_subscriptions_with_agents()
+    subscription_summary = [
+        {
+            "name": s.name,
+            "subscription_type": s.subscription_type,
+            "agent_count": s.agent_count,
+            "agents": s.agents,
+        }
+        for s in subscriptions
+    ]
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "summary": {
+            "total_agents": len(agents) - len([a for a in agents if db.get_agent_owner(a.name) and db.get_agent_owner(a.name).get("is_system")]),
+            "using_subscription": len(subscription_agents),
+            "using_api_key": len(api_key_agents),
+            "not_configured": len(not_configured_agents),
+            "subscription_count": len(subscriptions),
+        },
+        "by_auth_mode": {
+            "subscription": subscription_agents,
+            "api_key": api_key_agents,
+            "not_configured": not_configured_agents,
+        },
+        "subscriptions": subscription_summary,
+    }

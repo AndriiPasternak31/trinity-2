@@ -154,6 +154,7 @@ The test suite covers:
 
 ### Credentials & Configuration
 - **Credentials** (test_credentials.py) - Credential management, hot reload
+- **Subscriptions** (test_subscriptions.py) - Subscription CRUD, assignment, auth status, injection, cascade delete (SUB-001) [SMOKE + Agent]
 - **Settings** (test_settings.py) - System settings, Trinity prompt, API keys management
 - **Schedules** (test_schedules.py) - Scheduled executions
 - **Execution Queue** (test_execution_queue.py) - Queue management
@@ -196,9 +197,9 @@ The test suite covers:
 
 ## Test Suite Statistics
 
-**Total Tests**: ~607 tests across 35 test files (excluding ORG-001 tests not yet implemented)
-**Smoke Tests**: ~165 tests (fast, no agent creation, includes NOTIF-001)
-**Agent-Requiring Tests**: ~390 tests
+**Total Tests**: ~625 tests across 36 test files (excluding ORG-001 tests not yet implemented)
+**Smoke Tests**: ~174 tests (fast, no agent creation, includes NOTIF-001, SUB-001)
+**Agent-Requiring Tests**: ~399 tests
 **Slow Tests**: ~55 tests (chat execution, fleet ops, system agent ops, execution termination)
 **WebSocket Tests**: ~10 tests (web terminal, execution streaming)
 **Tests Needed**: ~35 tests (ORG-001 tags ~20, system views ~15)
@@ -238,6 +239,42 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 | ORG-001 Tags pytest tests not implemented | `test_tags.py` | Medium | Manual testing complete, pytest needed |
 | ORG-001 System Views pytest tests not implemented | `test_system_views.py` | Medium | Manual testing complete, pytest needed |
 | NOTIF-001 Notifications tests implemented | `test_notifications.py` | N/A | ✅ 40 tests implemented (38 smoke, 2 agent) |
+| SUB-001 Subscriptions tests implemented | `test_subscriptions.py` | N/A | ✅ 18 tests implemented (9 smoke, 9 agent) |
+
+## Recent Test Additions (2026-02-22)
+
+| Test File | Description | Tests Added |
+|-----------|-------------|-------------|
+| `test_subscriptions.py` | Subscription Management (SUB-001) | 18 tests (9 smoke, 9 agent) |
+
+**SUB-001 Subscription Management Tests**:
+
+**Subscription CRUD (Smoke)** ✅
+- `test_list_subscriptions_empty` - List returns array
+- `test_register_subscription` - Create with credentials
+- `test_register_subscription_upsert` - Update existing by name
+- `test_register_subscription_invalid_json` - Validates credentials JSON
+- `test_register_subscription_missing_name` - Validates required fields
+- `test_list_subscriptions_with_agents` - Returns agent counts and names
+- `test_delete_subscription` - Removes subscription
+- `test_delete_subscription_nonexistent` - Returns 404
+
+**Auth Report (Smoke)** ✅
+- `test_get_auth_report` - Fleet auth status with summary and breakdown
+
+**Assignment (Agent)** ✅
+- `test_assign_subscription_to_agent` - Assigns and verifies in list
+- `test_assign_subscription_nonexistent` - Returns 404 for bad subscription
+- `test_assign_subscription_nonexistent_agent` - Returns 400 for bad agent
+- `test_clear_agent_subscription` - Removes assignment
+
+**Auth Status (Agent)** ✅
+- `test_get_auth_status_no_subscription` - Returns api_key or not_configured
+- `test_get_auth_status_with_subscription` - Returns subscription mode
+
+**Injection & Cascade (Agent)** ✅
+- `test_injection_on_assignment` - Verifies injection_result in response
+- `test_delete_subscription_clears_agents` - Cascades to agent assignments
 
 ## Recent Test Additions (2026-02-20)
 

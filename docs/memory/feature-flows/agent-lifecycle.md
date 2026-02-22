@@ -351,20 +351,30 @@ async def start_agent_internal(agent_name: str) -> dict:
 **Startup Injection Order** (After container.start()):
 1. **Trinity Meta-Prompt** (`inject_trinity_meta_prompt`) - Planning commands and `.trinity/` directory
 2. **Credentials** (`inject_assigned_credentials`) - CRED-002: Decrypt `.credentials.enc` and write files
-3. **Skills** (`inject_assigned_skills`) - Write skill files to `~/.claude/skills/{name}/SKILL.md`
+3. **Subscription** (`inject_subscription_on_start`) - SUB-001: Inject `~/.claude/.credentials.json` if subscription assigned
+4. **Skills** (`inject_assigned_skills`) - Write skill files to `~/.claude/skills/{name}/SKILL.md`
+5. **Read-Only Hooks** (`inject_read_only_hooks`) - If read-only mode enabled
 
 **Container Recreation Triggers:**
 - **Shared folder changes**: Mounts added/removed based on `shared_folder_config`
 - **API key setting changes**: `ANTHROPIC_API_KEY` added/removed based on `use_platform_api_key`
 - API key retrieval uses `get_anthropic_api_key()` from `services/settings_service.py` (line 118)
 
-**Authentication Model** (Updated 2026-02-15):
-When agent starts, Claude Code can authenticate via two methods:
-1. **OAuth session** (Claude Pro/Max subscription): User runs `/login` in web terminal after start
+**Authentication Model** (Updated 2026-02-22):
+When agent starts, Claude Code can authenticate via three methods (in priority order):
+
+1. **Subscription OAuth** (SUB-001): `~/.claude/.credentials.json` injected automatically
+   - Credentials registered centrally via `register_subscription` MCP tool
+   - Assigned to agent via `assign_subscription` tool or REST API
+   - Injected on agent start via `inject_subscription_on_start()` in lifecycle.py
+   - See [subscription-management.md](subscription-management.md) for full flow
+
+2. **OAuth session** (Claude Pro/Max subscription via manual login): User runs `/login` in web terminal after start
    - Session stored in `~/.claude.json` inside the container
    - All subsequent executions (interactive AND headless) use subscription
    - Persists across container restarts (stored in persistent volume)
-2. **API key**: `ANTHROPIC_API_KEY` environment variable injected if `use_platform_api_key=true`
+
+3. **API key**: `ANTHROPIC_API_KEY` environment variable injected if `use_platform_api_key=true`
 
 The mandatory `ANTHROPIC_API_KEY` check was removed from Claude Code execution functions, allowing headless calls (scheduled tasks, MCP triggers, parallel tasks) to work with subscription authentication.
 
@@ -865,6 +875,7 @@ await log_audit_event(
 
 | Date | Changes |
 |------|---------|
+| 2026-02-22 | **Subscription Injection on Startup (SUB-001)**: Added `inject_subscription_on_start()` to startup injection order between credentials and skills. Updated Authentication Model section to document 3 auth methods in priority order: Subscription OAuth (automatic), Manual OAuth (via /login), API key. Added cross-reference to [subscription-management.md](subscription-management.md). |
 | 2026-02-18 17:50 | **Toggle Size Consistency**: All toggles in AgentHeader.vue now use `size="sm"`: RunningStateToggle (line 41), AutonomyToggle (line 68), ReadOnlyToggle (line 77). RunningStateToggle.vue default size changed from 'md' to 'sm' (line 97). This provides visual consistency across all toggle locations (AgentHeader, Agents.vue, AgentNode.vue). |
 | 2026-02-18 | **UI-001 Redesign + Tab Restructuring**: Updated AgentHeader structure (3-row layout), RunningStateToggle now at lines 38-43 in Row 1. Default tab changed from 'info' to 'tasks' (line 275). **Logs tab and Files tab removed from visibleTabs. Terminal tab repositioned after Git tab.** New tab order (lines 504-529): Tasks, Dashboard*, Schedules, Credentials, Skills, Sharing*, Permissions*, Git*, Terminal, Folders*, Public Links*, Info. |
 | 2026-02-15 | **Claude Max subscription support**: Updated documentation to reflect that agents can now use Claude Max subscription for all executions (including headless). When "Authenticate in Terminal" is enabled and user logs in via `/login`, the OAuth session in `~/.claude.json` is used for scheduled tasks, MCP calls, and parallel tasks instead of requiring `ANTHROPIC_API_KEY`. |

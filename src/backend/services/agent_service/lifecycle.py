@@ -236,6 +236,11 @@ async def start_agent_internal(agent_name: str) -> dict:
     credentials_result = await inject_assigned_credentials(agent_name)
     credentials_status = credentials_result.get("status", "unknown")
 
+    # Inject subscription credentials if assigned (SUB-001)
+    from services.subscription_service import inject_subscription_on_start
+    subscription_result = await inject_subscription_on_start(agent_name)
+    subscription_status = subscription_result.get("status", "unknown")
+
     # Inject assigned skills from the Skills page
     skills_result = await inject_assigned_skills(agent_name)
     skills_status = skills_result.get("status", "unknown")
@@ -260,6 +265,8 @@ async def start_agent_internal(agent_name: str) -> dict:
         "trinity_result": trinity_result,
         "credentials_injection": credentials_status,
         "credentials_result": credentials_result,
+        "subscription_injection": subscription_status,
+        "subscription_result": subscription_result,
         "skills_injection": skills_status,
         "skills_result": skills_result,
         "read_only_injection": read_only_result.get("status", "unknown"),

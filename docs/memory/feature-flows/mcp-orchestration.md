@@ -1,7 +1,7 @@
 # Feature: MCP Orchestration
 
 ## Overview
-External integration layer allowing Claude Code instances to manage Trinity agents via the Model Context Protocol (MCP). Exposes 44 tools for agent lifecycle, chat, system management, credential management (CRED-002), SSH access, skills, schedule management, and tag management through a FastMCP server with Streamable HTTP transport.
+External integration layer allowing Claude Code instances to manage Trinity agents via the Model Context Protocol (MCP). Exposes 51 tools for agent lifecycle, chat, system management, credential management (CRED-002), subscription management (SUB-001), SSH access, skills, schedule management, tag management, and notifications through a FastMCP server with Streamable HTTP transport.
 
 **Important**: Agent chat via MCP (`chat_with_agent` tool) goes through the [Execution Queue System](execution-queue.md) with graceful 429 handling for busy agents.
 
@@ -1015,6 +1015,8 @@ curl http://localhost:8000/api/agents/user2-agent | jq .owner  # Should be user2
 
 | Date | Changes |
 |------|---------|
+| 2026-02-22 | **Subscription tools (SUB-001)**: Tool count updated from 45 to 51. Added 6 subscription management tools: `register_subscription`, `list_subscriptions`, `assign_subscription`, `clear_agent_subscription`, `get_agent_auth`, `delete_subscription`. See [subscription-management.md](subscription-management.md) for full documentation. |
+| 2026-02-20 | **Notification tools (NOTIF-001)**: Tool count updated from 44 to 45. Added `send_notification` tool. |
 | 2026-02-20 | **Schedule tools: Per-schedule execution config**: `create_agent_schedule` and `update_agent_schedule` now support `timeout_seconds` and `allowed_tools` parameters for per-schedule execution configuration. Added dedicated Schedule Tools section with parameter table. |
 | 2026-02-17 | **Tag tools (ORG-001 Phase 3)**: Tool count updated from 39 to 44. Added 5 tag management tools: `list_tags`, `get_agent_tags`, `tag_agent`, `untag_agent`, `set_agent_tags`. See [agent-tags.md](agent-tags.md) for full documentation. |
 | 2026-02-13 | **SSH host detection fix (cross-ref)**: The `get_agent_ssh_access` tool now returns correct host in production deployments. See [ssh-access.md](ssh-access.md) for details on the `FRONTEND_URL` domain extraction fix. |
@@ -1034,7 +1036,7 @@ curl http://localhost:8000/api/agents/user2-agent | jq .owner  # Should be user2
 ---
 
 ## Status
-Working - All 44 MCP tools functional with API key authentication, agent-to-agent access control, system agent bypass, CRED-002 credential system, tag management (ORG-001), and race condition fixed
+Working - All 51 MCP tools functional with API key authentication, agent-to-agent access control, system agent bypass, CRED-002 credential system, SUB-001 subscription management, tag management (ORG-001), NOTIF-001 notifications, and race condition fixed
 
 ---
 

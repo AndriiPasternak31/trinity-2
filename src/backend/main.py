@@ -60,6 +60,7 @@ from routers.internal import router as internal_router
 from routers.tags import router as tags_router
 from routers.system_views import router as system_views_router
 from routers.notifications import router as notifications_router, set_websocket_manager as set_notifications_ws_manager, set_filtered_websocket_manager as set_notifications_filtered_ws_manager
+from routers.subscriptions import router as subscriptions_router
 
 # Import activity service
 from services.activity_service import activity_service
@@ -317,6 +318,7 @@ app.include_router(internal_router)  # Internal agent-to-backend endpoints (no a
 app.include_router(tags_router)  # Agent Tags (ORG-001)
 app.include_router(system_views_router)  # System Views (ORG-001 Phase 2)
 app.include_router(notifications_router)  # Agent Notifications (NOTIF-001)
+app.include_router(subscriptions_router)  # Subscription Management (SUB-001)
 
 
 # WebSocket endpoint

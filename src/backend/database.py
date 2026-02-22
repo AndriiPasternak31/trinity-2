@@ -79,6 +79,11 @@ from db_models import (
     Notification,
     NotificationList,
     NotificationAcknowledge,
+    # Subscription Credential Models (SUB-001)
+    SubscriptionCredentialCreate,
+    SubscriptionCredential,
+    SubscriptionWithAgents,
+    AgentAuthStatus,
 )
 
 # Re-export connection utilities
@@ -101,6 +106,7 @@ from db.public_chat import PublicChatOperations
 from db.tags import TagOperations
 from db.system_views import SystemViewOperations
 from db.notifications import NotificationOperations
+from db.subscriptions import SubscriptionOperations
 
 
 def _migrate_agent_sharing_table(cursor, conn):
@@ -374,6 +380,45 @@ def _migrate_execution_session_tracking(cursor, conn):
     conn.commit()
 
 
+def _migrate_subscription_credentials_table(cursor, conn):
+    """Create subscription_credentials table (SUB-001: Claude Max/Pro Subscription Management).
+
+    Stores encrypted OAuth credentials from Claude Max/Pro subscriptions,
+    enabling centralized subscription management and assignment to agents.
+    """
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_credentials (
+            id TEXT PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            encrypted_credentials TEXT NOT NULL,
+            subscription_type TEXT,
+            rate_limit_tier TEXT,
+            owner_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (owner_id) REFERENCES users(id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_name ON subscription_credentials(name)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_subscriptions_owner ON subscription_credentials(owner_id)")
+    conn.commit()
+
+
+def _migrate_agent_ownership_subscription_id(cursor, conn):
+    """Add subscription_id column to agent_ownership table (SUB-001).
+
+    Links agents to their assigned subscription for Claude Max/Pro authentication.
+    """
+    cursor.execute("PRAGMA table_info(agent_ownership)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "subscription_id" not in columns:
+        print("Adding subscription_id column to agent_ownership for subscription management...")
+        cursor.execute("ALTER TABLE agent_ownership ADD COLUMN subscription_id TEXT REFERENCES subscription_credentials(id)")
+
+    conn.commit()
+
+
 def _migrate_agent_skills_table(cursor, conn):
     """Migrate agent_skills table if it has wrong schema (skill_id instead of skill_name)."""
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_skills'")
@@ -500,6 +545,16 @@ def init_database():
         except Exception as e:
             print(f"Migration check (execution_session_tracking): {e}")
 
+        try:
+            _migrate_subscription_credentials_table(cursor, conn)
+        except Exception as e:
+            print(f"Migration check (subscription_credentials): {e}")
+
+        try:
+            _migrate_agent_ownership_subscription_id(cursor, conn)
+        except Exception as e:
+            print(f"Migration check (agent_ownership subscription_id): {e}")
+
         # Users table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -531,7 +586,9 @@ def init_database():
                 cpu_limit TEXT,
                 read_only_mode INTEGER DEFAULT 0,
                 read_only_config TEXT,
-                FOREIGN KEY (owner_id) REFERENCES users(id)
+                subscription_id TEXT,
+                FOREIGN KEY (owner_id) REFERENCES users(id),
+                FOREIGN KEY (subscription_id) REFERENCES subscription_credentials(id)
             )
         """)
 
@@ -1035,6 +1092,7 @@ class DatabaseManager:
         self._tag_ops = TagOperations()
         self._system_view_ops = SystemViewOperations()
         self._notification_ops = NotificationOperations()
+        self._subscription_ops = SubscriptionOperations()
 
     # =========================================================================
     # User Management (delegated to db/users.py)
@@ -1722,6 +1780,49 @@ class DatabaseManager:
 
     def count_pending_notifications(self, agent_name=None):
         return self._notification_ops.count_pending_notifications(agent_name)
+
+    # =========================================================================
+    # Subscription Credentials (delegated to db/subscriptions.py) - SUB-001
+    # =========================================================================
+
+    def create_subscription(self, name: str, credentials_json: str, owner_id: int,
+                            subscription_type: str = None, rate_limit_tier: str = None):
+        return self._subscription_ops.create_subscription(
+            name, credentials_json, owner_id, subscription_type, rate_limit_tier
+        )
+
+    def get_subscription(self, subscription_id: str):
+        return self._subscription_ops.get_subscription(subscription_id)
+
+    def get_subscription_by_name(self, name: str):
+        return self._subscription_ops.get_subscription_by_name(name)
+
+    def get_subscription_credentials(self, subscription_id: str):
+        return self._subscription_ops.get_subscription_credentials(subscription_id)
+
+    def list_subscriptions(self, owner_id: int = None):
+        return self._subscription_ops.list_subscriptions(owner_id)
+
+    def list_subscriptions_with_agents(self, owner_id: int = None):
+        return self._subscription_ops.list_subscriptions_with_agents(owner_id)
+
+    def delete_subscription(self, subscription_id: str):
+        return self._subscription_ops.delete_subscription(subscription_id)
+
+    def assign_subscription_to_agent(self, agent_name: str, subscription_id: str):
+        return self._subscription_ops.assign_subscription_to_agent(agent_name, subscription_id)
+
+    def clear_agent_subscription(self, agent_name: str):
+        return self._subscription_ops.clear_agent_subscription(agent_name)
+
+    def get_agent_subscription(self, agent_name: str):
+        return self._subscription_ops.get_agent_subscription(agent_name)
+
+    def get_agents_by_subscription(self, subscription_id: str):
+        return self._subscription_ops.get_agents_by_subscription(subscription_id)
+
+    def get_agent_subscription_id(self, agent_name: str):
+        return self._subscription_ops.get_agent_subscription_id(agent_name)
 
 
 # Global database manager instance

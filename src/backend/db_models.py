@@ -607,3 +607,42 @@ class NotificationAcknowledge(BaseModel):
     status: str
     acknowledged_at: str
     acknowledged_by: str
+
+
+# =========================================================================
+# Subscription Credential Models (SUB-001: Claude Max/Pro Subscription Management)
+# =========================================================================
+
+class SubscriptionCredentialCreate(BaseModel):
+    """Request model for registering a subscription."""
+    name: str  # Unique name for the subscription (e.g., "eugene-max")
+    credentials_json: str  # Raw JSON from ~/.claude/.credentials.json
+    subscription_type: Optional[str] = None  # "max", "pro", etc.
+    rate_limit_tier: Optional[str] = None  # Rate limit tier if known
+
+
+class SubscriptionCredential(BaseModel):
+    """A registered Claude subscription credential."""
+    id: str
+    name: str
+    subscription_type: Optional[str] = None
+    rate_limit_tier: Optional[str] = None
+    owner_id: int
+    owner_email: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    agent_count: int = 0  # Number of agents using this subscription
+
+
+class SubscriptionWithAgents(SubscriptionCredential):
+    """Subscription with list of assigned agents."""
+    agents: List[str] = []
+
+
+class AgentAuthStatus(BaseModel):
+    """Auth status for an agent."""
+    agent_name: str
+    auth_mode: str  # "subscription", "api_key", "not_configured"
+    subscription_name: Optional[str] = None
+    subscription_id: Optional[str] = None
+    has_api_key: bool = False

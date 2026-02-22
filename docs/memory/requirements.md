@@ -715,6 +715,31 @@ The Process Engine supports six step types:
   2. MCP server header integration
   3. Frontend display and filtering
 
+### 20.3 Subscription Management (SUB-001)
+- **Status**: ✅ Implemented (2026-02-22)
+- **Requirement ID**: SUB-001
+- **Priority**: HIGH
+- **Description**: Centralized management of Claude Max/Pro subscription credentials. Register subscriptions once, assign to multiple agents, with deterministic auth mode detection.
+- **Key Features**:
+  - Subscription registry storing encrypted OAuth credentials (AES-256-GCM)
+  - MCP tools: `register_subscription`, `list_subscriptions`, `assign_subscription`, `get_agent_auth`, `delete_subscription`
+  - REST endpoints: `POST/GET/DELETE /api/subscriptions`, `PUT/DELETE/GET /api/subscriptions/agents/{name}`
+  - Automatic injection of `~/.claude/.credentials.json` on agent start
+  - Hot-injection to running agents on assignment
+  - Auth detection endpoint showing which method each agent uses
+  - Fleet auth report at `/api/ops/auth-report`
+- **Workflow**:
+  1. User authenticates locally via `claude login`
+  2. Registers subscription via MCP: `register_subscription("name", credentials_json)`
+  3. Assigns to agents: `assign_subscription("agent-name", "subscription-name")`
+  4. Trinity injects credentials; subscription takes precedence over API key
+- **Database**: `subscription_credentials` table, `subscription_id` FK on `agent_ownership`
+- **Files**:
+  - `src/backend/db/subscriptions.py` - Database operations
+  - `src/backend/routers/subscriptions.py` - REST API
+  - `src/backend/services/subscription_service.py` - Injection service
+  - `src/mcp-server/src/tools/subscriptions.ts` - MCP tools
+
 ---
 
 ## Non-Functional Requirements

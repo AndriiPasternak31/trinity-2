@@ -3,6 +3,23 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
+> **Updated (2026-02-22)**: Subscription Management (SUB-001):
+> - **New feature flow**: [subscription-management.md](feature-flows/subscription-management.md) - Centralized Claude Max/Pro subscription credential management
+> - **Key features**: Register OAuth credentials once, assign to multiple agents, auto-inject on start, hot-inject to running agents
+> - **New files**:
+>   - `src/backend/db/subscriptions.py` - Database CRUD operations (12 methods)
+>   - `src/backend/routers/subscriptions.py` - REST API (7 endpoints)
+>   - `src/backend/services/subscription_service.py` - Injection service + auth detection
+>   - `src/mcp-server/src/tools/subscriptions.ts` - MCP tools (6 tools)
+> - **Modified files**:
+>   - `src/backend/database.py:383-419` - Migration for `subscription_credentials` table and `agent_ownership.subscription_id` column
+>   - `src/backend/db_models.py:616-649` - 4 Pydantic models (SubscriptionCredentialCreate, SubscriptionCredential, SubscriptionWithAgents, AgentAuthStatus)
+>   - `src/backend/services/agent_service/lifecycle.py:239-243` - Subscription injection on agent start
+>   - `src/backend/routers/ops.py:933-1010` - `/api/ops/auth-report` endpoint for fleet-wide auth status
+>   - `src/mcp-server/src/client.ts:830-947` - 7 subscription client methods
+>   - `src/mcp-server/src/types.ts:204-228` - TypeScript interfaces
+> - **Updated flows**: [agent-lifecycle.md](feature-flows/agent-lifecycle.md) (subscription injection), [credential-injection.md](feature-flows/credential-injection.md) (relationship to CRED-002)
+>
 > **Updated (2026-02-22)**: Dashboard Schedule Stats Display:
 > - **AgentNode.vue**: Added schedule stats row (lines 138-155) showing "X/Y schedules" with "(paused)" indicator when autonomy disabled
 > - **Backend**: `/api/agents/execution-stats` extended with `schedules_total` and `schedules_enabled` fields (agents.py:176-223)

@@ -536,6 +536,7 @@ As an alternative to injecting `ANTHROPIC_API_KEY`, agents can use Claude Pro/Ma
 ## Related Flows
 
 - **Agent Lifecycle** - Credentials auto-imported on agent start
+- **Subscription Management** - SUB-001: Centralized Claude Max/Pro subscription credentials. See [subscription-management.md](subscription-management.md). Subscriptions are a separate system from CRED-002 credentials - subscriptions inject `~/.claude/.credentials.json` OAuth tokens, while CRED-002 handles `.env` and `.mcp.json` files.
 - **Template Processing** - Templates may include `.mcp.json.template` files
 - **Settings Management** - Platform API keys in system_settings table
 - **Agent Terminal** - OAuth login flow via `/login` command

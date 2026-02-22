@@ -818,4 +818,131 @@ export class TrinityClient {
     }
     return (await response.json()) as { status: string; timestamp: string };
   }
+
+  // ============================================================================
+  // Subscription Management (SUB-001)
+  // ============================================================================
+
+  /**
+   * Register a new subscription credential
+   * Admin-only. Stores encrypted OAuth credentials from Claude Max/Pro.
+   */
+  async registerSubscription(
+    name: string,
+    credentialsJson: string,
+    subscriptionType?: string,
+    rateLimitTier?: string
+  ): Promise<{
+    id: string;
+    name: string;
+    subscription_type?: string;
+    owner_email?: string;
+    created_at: string;
+  }> {
+    return this.request(
+      "POST",
+      "/api/subscriptions",
+      {
+        name,
+        credentials_json: credentialsJson,
+        subscription_type: subscriptionType,
+        rate_limit_tier: rateLimitTier,
+      }
+    );
+  }
+
+  /**
+   * List all subscriptions with agent assignments
+   */
+  async listSubscriptions(): Promise<Array<{
+    id: string;
+    name: string;
+    subscription_type?: string;
+    owner_email?: string;
+    agent_count: number;
+    agents: string[];
+  }>> {
+    return this.request("GET", "/api/subscriptions");
+  }
+
+  /**
+   * Get details for a specific subscription
+   */
+  async getSubscription(subscriptionId: string): Promise<{
+    id: string;
+    name: string;
+    subscription_type?: string;
+    owner_email?: string;
+    agent_count: number;
+    agents: string[];
+  }> {
+    return this.request(
+      "GET",
+      `/api/subscriptions/${encodeURIComponent(subscriptionId)}`
+    );
+  }
+
+  /**
+   * Delete a subscription
+   */
+  async deleteSubscription(subscriptionId: string): Promise<{
+    success: boolean;
+    message: string;
+    agents_cleared: string[];
+  }> {
+    return this.request(
+      "DELETE",
+      `/api/subscriptions/${encodeURIComponent(subscriptionId)}`
+    );
+  }
+
+  /**
+   * Assign a subscription to an agent
+   */
+  async assignSubscription(
+    agentName: string,
+    subscriptionName: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    agent_name: string;
+    subscription_name: string;
+    injection_result?: { status: string };
+  }> {
+    return this.request(
+      "PUT",
+      `/api/subscriptions/agents/${encodeURIComponent(agentName)}?subscription_name=${encodeURIComponent(subscriptionName)}`
+    );
+  }
+
+  /**
+   * Clear subscription assignment from an agent
+   */
+  async clearAgentSubscription(agentName: string): Promise<{
+    success: boolean;
+    message: string;
+    agent_name: string;
+    previous_subscription?: string;
+  }> {
+    return this.request(
+      "DELETE",
+      `/api/subscriptions/agents/${encodeURIComponent(agentName)}`
+    );
+  }
+
+  /**
+   * Get authentication status for an agent
+   */
+  async getAgentAuth(agentName: string): Promise<{
+    agent_name: string;
+    auth_mode: "subscription" | "api_key" | "not_configured";
+    subscription_name?: string;
+    subscription_id?: string;
+    has_api_key: boolean;
+  }> {
+    return this.request(
+      "GET",
+      `/api/subscriptions/agents/${encodeURIComponent(agentName)}/auth`
+    );
+  }
 }

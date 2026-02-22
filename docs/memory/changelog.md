@@ -1,3 +1,61 @@
+### 2026-02-22 14:55:00
+🧪 **Tests: Subscription Management (SUB-001)**
+
+Added automated pytest tests for subscription management feature:
+- `tests/test_subscriptions.py`: 18 tests (9 smoke, 9 agent-requiring)
+- `docs/SUBSCRIPTION_CREDENTIALS.md`: Quick reference for credential extraction and injection
+- Fixed HTTPException handling in `routers/subscriptions.py` (was converting 400 to 500)
+- Updated `.claude/agents/test-runner.md` with SUB-001 test documentation
+
+Test coverage:
+- Subscription CRUD (list, register, upsert, delete, validation)
+- Agent assignment (assign, clear, nonexistent handling)
+- Auth status detection (subscription vs api_key vs not_configured)
+- Fleet auth report
+- Credential injection on assignment
+- Cascade delete behavior
+
+---
+
+### 2026-02-22 14:00:00
+✨ **Feature: Subscription Management (SUB-001)**
+
+Implemented centralized management of Claude Max/Pro subscription credentials. Subscriptions can be registered once and assigned to multiple agents, eliminating manual per-agent authentication.
+
+**Key Insight**: Claude Code stores OAuth credentials in `~/.claude/.credentials.json`. When both API key and subscription exist, subscription takes precedence.
+
+**Backend Changes**:
+- `src/backend/db/subscriptions.py`: New - SubscriptionOperations class with CRUD and assignment methods
+- `src/backend/routers/subscriptions.py`: New - REST API endpoints for subscription management
+- `src/backend/services/subscription_service.py`: New - Injection service for writing credentials to agents
+- `src/backend/database.py`: Added migrations for `subscription_credentials` table and `subscription_id` column on `agent_ownership`
+- `src/backend/db_models.py`: Added SubscriptionCredential, SubscriptionWithAgents, AgentAuthStatus models
+- `src/backend/services/agent_service/lifecycle.py`: Integrated subscription injection into agent startup
+- `src/backend/routers/ops.py`: Added `/api/ops/auth-report` endpoint for fleet-wide auth status
+
+**MCP Tools** (6 new tools):
+- `register_subscription`: Register OAuth credentials (admin)
+- `list_subscriptions`: List all subscriptions with agents
+- `assign_subscription`: Assign subscription to an agent
+- `clear_agent_subscription`: Clear subscription from agent
+- `get_agent_auth`: Get auth mode for an agent
+- `delete_subscription`: Delete a subscription (admin)
+
+**REST Endpoints**:
+- `POST /api/subscriptions`: Register subscription
+- `GET /api/subscriptions`: List all with agent counts
+- `GET/DELETE /api/subscriptions/{id}`: Get/delete subscription
+- `PUT/DELETE /api/subscriptions/agents/{name}`: Assign/clear agent subscription
+- `GET /api/subscriptions/agents/{name}/auth`: Get auth status
+
+**Workflow**:
+1. User runs `claude login` locally
+2. Registers subscription: `register_subscription("eugene-max", cat ~/.claude/.credentials.json)`
+3. Assigns to agent: `assign_subscription("my-agent", "eugene-max")`
+4. Credentials injected on start or immediately if agent is running
+
+---
+
 ### 2026-02-22 10:30:00
 🐛 **Fix: Schedule Stats Always Shown + Added to Agents Page**
 
