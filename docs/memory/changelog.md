@@ -1,3 +1,16 @@
+### 2026-02-23 16:30:00
+🐛 **Fix: Dashboard tab blocking navigation between agents**
+
+Fixed bug where switching from an agent with a dashboard to an agent without one would show "Dashboard Error" and block tab navigation.
+
+**Root Cause**: When navigating to a different agent, `hasDashboard` was reset but `activeTab` remained on 'dashboard'. The tab bar no longer showed the Dashboard button (correct), but the content area still displayed the DashboardPanel with an error (wrong).
+
+**Fix**: Added validation in route watcher to reset `activeTab` to 'tasks' if the current tab is not in the new agent's `visibleTabs` list.
+
+**File**: `src/frontend/src/views/AgentDetail.vue:660-667`
+
+---
+
 ### 2026-02-23 15:45:00
 📝 **Docs: Updated Subscription Management feature flow (SUB-001)**
 
