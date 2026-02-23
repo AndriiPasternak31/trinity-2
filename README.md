@@ -160,7 +160,7 @@ Trinity implements four foundational capabilities that transform simple AI assis
 
 ### Agent Capabilities
 - **Multi-Runtime Support** — Choose between Claude Code (Anthropic) or Gemini CLI (Google) per agent
-- **MCP Integration** — 21 tools for external agent orchestration via Model Context Protocol
+- **MCP Integration** — 51 tools for external agent orchestration via Model Context Protocol
 - **Agent-to-Agent Communication** — Hierarchical delegation with fine-grained permission controls
 - **Persistent Memory** — File-based and database-backed memory across sessions
 - **Shared Folders** — File-based state sharing between agents via Docker volumes
@@ -174,12 +174,16 @@ Trinity implements four foundational capabilities that transform simple AI assis
 - **System Manifest Deployment** — Deploy multi-agent systems from YAML configuration
 - **Internal System Agent** — Platform orchestrator for fleet health monitoring and operations
 - **Credential Management** — Direct file injection with encrypted git storage (`.credentials.enc`)
+- **Subscription Management** — Centralized Claude Max/Pro subscription sharing across multiple agents
+- **Agent Tags & System Views** — Organize agents with tags and saved filter views for fleet management
 - **Scheduling** — Cron-based automation with dedicated scheduler service and Redis distributed locks
 - **Live Execution Streaming** — Real-time streaming of execution logs to the web UI
 - **Execution Termination** — Stop running executions gracefully via SIGINT/SIGKILL
+- **Continue as Chat** — Resume failed or completed executions as interactive chat with full context
+- **Agent Notifications** — Agents send structured notifications to platform with Events page UI
 - **Trinity Connect** — WebSocket event streaming for local Claude Code integration with MCP key authentication
 - **OpenTelemetry Metrics** — Cost, token usage, and productivity tracking
-- **Public Agent Links** — Shareable links for unauthenticated agent access
+- **Public Agent Links** — Shareable links for unauthenticated agent access with session persistence
 - **File Manager** — Browse, preview, and download agent workspace files via web UI
 - **Ephemeral SSH Access** — Generate time-limited SSH credentials (key or password) for direct agent access
 
@@ -294,7 +298,7 @@ trinity/
 │   │   └── services/
 │   │       └── process_engine/  # Process Engine (DDD architecture)
 │   ├── frontend/         # Vue.js 3 + Tailwind CSS web UI
-│   ├── mcp-server/       # Trinity MCP server (21 tools)
+│   ├── mcp-server/       # Trinity MCP server (51 tools)
 │   └── scheduler/        # Dedicated scheduler service (Redis locks)
 ├── docker/
 │   ├── base-image/       # Universal agent base image
@@ -434,9 +438,16 @@ Trinity includes an MCP server for external orchestration of agents:
 | Tool | Description |
 |------|-------------|
 | `list_templates` | List available templates |
-| `reload_credentials` | Hot-reload agent credentials |
+| `inject_credentials` | Inject credential files directly to agent |
 | `get_credential_status` | Check credential files |
 | `get_agent_ssh_access` | Generate ephemeral SSH credentials for direct terminal access |
+
+#### Additional Tool Categories
+- **Scheduling** (8 tools) — Create, list, update, delete, enable/disable schedules, trigger manually
+- **Tags** (5 tools) — List, get, set, add, remove agent tags for fleet organization
+- **Subscriptions** (6 tools) — Register and assign Claude Max/Pro subscriptions to agents
+- **Skills** (7 tools) — List, create, update, delete, assign skills to agents
+- **Notifications** (1 tool) — Send structured notifications from agents to platform
 
 ## Multi-Agent Systems
 
