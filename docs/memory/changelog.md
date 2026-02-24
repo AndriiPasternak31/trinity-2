@@ -1,3 +1,32 @@
+### 2026-02-24 14:35:00
+📦 **Refactor: Archive production deployment capability (SCOPE-001)**
+
+Separated production deployment responsibility to a dedicated deployment agent. This development agent now only handles localhost testing.
+
+**Archived to `docs/archive/deployment/`**:
+- `CLAUDE.local.md.production` - Production deployment configuration
+- `deploy.config.backup` - GCP deployment config
+- `deploy.config.example` - Deployment config template
+- `DEPLOYMENT.md.full` - Full deployment guide with production sections
+- `docker-compose.prod.yml` - Production compose file
+
+**Archived to `scripts/deploy/archive/`**:
+- `gcp-deploy.sh` - GCP deployment script
+- `gcp-firewall.sh` - GCP firewall configuration script
+
+**Archived to `.claude/skills/archive/`**:
+- `deploy-status/` - Production deployment health check skill
+
+**Updated files**:
+- `CLAUDE.md` - Removed "Production Deployment (GCP)" section, updated notes
+- `CLAUDE.local.md` - Replaced with localhost-only configuration
+- `CLAUDE.local.md.example` - Simplified to localhost-only template
+- `docs/DEPLOYMENT.md` - Reduced to local development guide only
+
+**Scope limitation**: This agent is now restricted to local development. Production deployment is handled by a separate deployment agent.
+
+---
+
 ### 2026-02-24 11:30:00
 📝 **Docs: Update README and requirements for recent features (MON-001, DASH-001)**
 
