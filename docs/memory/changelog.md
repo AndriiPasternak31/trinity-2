@@ -1,3 +1,69 @@
+### 2026-02-23 19:30:00
+✨ **Feature: Dynamic Dashboards with Historical Data (DASH-001)**
+
+Implemented dashboard history tracking, sparkline visualization, and platform metrics injection.
+
+**Phase 1 - Database & Capture**:
+- Schema: `agent_dashboard_values` table for storing widget snapshots (`src/backend/db/schema.py`)
+- Migration: Auto-create table on startup (`src/backend/db/migrations.py`)
+- Operations: `DashboardHistoryOperations` class with capture/query/stats methods (`src/backend/db/dashboard_history.py`)
+- DatabaseManager: Exposed all dashboard history operations
+
+**Phase 2 - History Enrichment**:
+- Change detection: Only capture snapshots when dashboard.yaml mtime changes
+- Widget enrichment: Inject `history` field with values array, trend, min/max/avg
+- Statistics: Trend calculation (up/down/stable based on first-half vs second-half avg)
+- Query params: `include_history`, `history_hours` (1-168), `include_platform_metrics`
+
+**Phase 3 - Platform Metrics Section**:
+- Auto-injected section with Trinity-tracked metrics
+- Widgets: Tasks (24h), Success Rate, Cost, Health, Running count
+- Single-agent execution stats: New `get_agent_execution_stats()` method
+- Opt-out: Agents can set `platform_metrics: false` in dashboard.yaml
+
+**Phase 4 - Frontend Sparklines**:
+- SparklineChart integration in metric/progress widgets
+- Trend indicators with percentage change
+- Platform metrics section styling (indigo border, "Auto" badge)
+- Color-coded sparklines (green=up, red=down, blue=stable)
+
+**Files Changed**:
+- `src/backend/db/schema.py`: Added table + indexes
+- `src/backend/db/migrations.py`: Added migration function
+- `src/backend/db/dashboard_history.py`: **New** operations class
+- `src/backend/db/schedules.py`: Added `get_agent_execution_stats()`
+- `src/backend/database.py`: Exposed dashboard history + execution stats
+- `src/backend/services/agent_service/dashboard.py`: History enrichment + platform metrics
+- `src/backend/routers/agent_dashboard.py`: Added query parameters
+- `src/frontend/src/components/DashboardPanel.vue`: Sparklines + platform section styling
+
+---
+
+### 2026-02-23 17:50:00
+📝 **Docs: Update feature flows for Health page admin-only access (MON-001)**
+
+Updated feature flow documentation to reflect admin-only access for Health/Monitoring page.
+
+**Changes**:
+- `docs/memory/feature-flows.md`: Added admin-only access note to MON-001 update header, added Agent Monitoring entry to Documented Flows table
+- `docs/memory/feature-flows/agent-monitoring.md`: Added revision history entry for admin-only change
+
+**Documentation consistency**: Verified no other feature flows reference `/monitoring` route or NavBar Health link that need updating. Admin-only pattern is now documented consistently with Settings page pattern.
+
+---
+
+### 2026-02-23 17:45:00
+🔒 **Fix: Health page admin-only visibility (MON-001)**
+
+Restricted Health/Monitoring page to admin users only, matching the intended user story ("As a Trinity platform admin...").
+
+**Changes**:
+- `NavBar.vue:25-32`: Added `v-if="isAdmin"` to Health link (matches Settings pattern)
+- `router/index.js:36-40`: Added `requiresAdmin: true` to `/monitoring` route meta
+- `agent-monitoring.md`: Updated documentation to reflect admin-only visibility
+
+---
+
 ### 2026-02-23 17:15:00
 ✨ **Feature: Agent Monitoring Service (MON-001)**
 

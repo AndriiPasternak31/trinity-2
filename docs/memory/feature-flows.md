@@ -3,9 +3,29 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
+> **Updated (2026-02-23)**: Dynamic Dashboards (DASH-001):
+> - **New feature flow**: [dynamic-dashboards.md](feature-flows/dynamic-dashboards.md) - Historical widget value tracking with sparkline visualization
+> - **Key features**: Change detection on dashboard.yaml mtime, history enrichment, platform metrics injection
+> - **New files**:
+>   - `src/backend/db/dashboard_history.py` - Dashboard history database operations
+> - **Modified files**:
+>   - `src/backend/db/schema.py:457-468` - `agent_dashboard_values` table
+>   - `src/backend/db/migrations.py:416-440` - Migration function
+>   - `src/backend/db/schedules.py:673-718` - `get_agent_execution_stats()` method
+>   - `src/backend/database.py:1030-1058` - Dashboard history delegation methods
+>   - `src/backend/services/agent_service/dashboard.py` - History enrichment + platform metrics
+>   - `src/backend/routers/agent_dashboard.py` - Query parameters (include_history, history_hours, include_platform_metrics)
+>   - `src/frontend/src/components/DashboardPanel.vue` - SparklineChart integration, platform section styling
+> - **Database tables**: `agent_dashboard_values` (stores widget snapshots)
+> - **API query params**: `include_history=true`, `history_hours=24`, `include_platform_metrics=true`
+> - **Widget enrichment**: Adds `history.values`, `history.trend`, `history.trend_percent`, `history.min/max/avg`
+> - **Platform metrics section**: Auto-appended section with Tasks (24h), Success Rate, Cost, Health
+> - **Opt-out**: Agents set `platform_metrics: false` in dashboard.yaml
+
 > **Updated (2026-02-23)**: Agent Monitoring Service (MON-001):
 > - **New feature flow**: [agent-monitoring.md](feature-flows/agent-monitoring.md) - Multi-layer health monitoring for agent fleet
 > - **Key features**: Docker/Network/Business health checks, real-time WebSocket updates, alert cooldowns, fleet dashboard
+> - **Admin-only access**: NavBar "Health" link visible only to admins (`v-if="isAdmin"`), route has `requiresAdmin: true` meta
 > - **New files**:
 >   - `src/backend/services/monitoring_service.py` - Health check service (3 layers, background task)
 >   - `src/backend/services/monitoring_alerts.py` - Alert evaluation with cooldown tracking
@@ -731,6 +751,7 @@
 | Activity Monitoring | Medium | [activity-monitoring.md](feature-flows/activity-monitoring.md) | Real-time tool execution tracking |
 | Agent Logs & Telemetry | Medium | [agent-logs-telemetry.md](feature-flows/agent-logs-telemetry.md) | Live metrics in AgentHeader - **2026-02-18**: Logs tab REMOVED from UI (API still available). Stats display shows only CPU, Memory, Uptime (network removed from UI) |
 | **Host Telemetry** | Medium | [host-telemetry.md](feature-flows/host-telemetry.md) | Host CPU/memory/disk in Dashboard header via psutil, aggregate container stats via Docker API, sparkline charts with uPlot, 5s polling - no auth required (OBS-011, OBS-012) (Created 2026-01-13) |
+| **Agent Monitoring (Health)** | High | [agent-monitoring.md](feature-flows/agent-monitoring.md) | Fleet-wide agent health monitoring with Docker/Network/Business checks - **admin-only access** (NavBar + route), Monitoring.vue page, alert cooldowns, 3 MCP tools, WebSocket real-time updates. Service: `monitoring_service.py`, `monitoring_alerts.py`. DB: `agent_health_checks`, `monitoring_alert_cooldowns` (MON-001, Created 2026-02-23) |
 | Template Processing | Medium | [template-processing.md](feature-flows/template-processing.md) | GitHub and local template handling |
 | **Templates Page** | Medium | [templates-page.md](feature-flows/templates-page.md) | `/templates` route for browsing agent templates - GitHub and local template display, metadata cards (MCP servers, credentials, resources), "Use Template" flow to CreateAgentModal (Created 2026-01-21) |
 | Agent Sharing | Medium | [agent-sharing.md](feature-flows/agent-sharing.md) | Email-based sharing, access levels - **2026-02-18**: Public Links tab consolidated into Sharing tab (SharingPanel.vue now embeds PublicLinksPanel.vue). **2026-01-30**: Added Git operations to Access Levels table (shared users can pull, not sync/init) |
@@ -778,6 +799,7 @@
 | **Agent Resource Allocation** | Medium | [agent-resource-allocation.md](feature-flows/agent-resource-allocation.md) | Per-agent memory/CPU limits - gear button in AgentHeader.vue opens ResourceModal.vue, values stored in DB, auto-restart if running, container recreation on start if mismatch (Updated 2026-01-23) |
 | **SSH Access** | Medium | [ssh-access.md](feature-flows/ssh-access.md) | Ephemeral SSH credentials via MCP tool - ED25519 keys or passwords, configurable TTL, **FRONTEND_URL domain extraction + Tailscale-aware host detection** (priority: SSH_HOST > FRONTEND_URL > Tailscale > host.docker.internal > gateway > localhost), Redis metadata with auto-expiry - **service layer: ssh_service.py** (Updated 2026-02-13: Fixed localhost bug in production) |
 | **Agent Dashboard** | Medium | [agent-dashboard.md](feature-flows/agent-dashboard.md) | Agent-defined dashboard via `dashboard.yaml` - 11 widget types (metric, status, progress, text, markdown, table, list, link, image, divider, spacer), auto-refresh, YAML validation - **Dashboard tab now conditionally hidden when agent lacks dashboard.yaml** (Updated 2026-02-12) |
+| **Dynamic Dashboards** | High | [dynamic-dashboards.md](feature-flows/dynamic-dashboards.md) | Historical widget value tracking with sparkline visualization (DASH-001) - Captures widget values on mtime change, enriches with `history.values/trend/stats`, auto-appends Platform Metrics section (Tasks/Success Rate/Cost/Health). **Query params**: `include_history`, `history_hours`, `include_platform_metrics`. **Opt-out**: `platform_metrics: false`. **DB**: `agent_dashboard_values` table. **Files**: `db/dashboard_history.py`, `services/agent_service/dashboard.py`, `DashboardPanel.vue`, `SparklineChart.vue` (Created 2026-02-23) |
 | **Platform Settings** | Medium | [platform-settings.md](feature-flows/platform-settings.md) | Admin settings page - GitHub PAT configuration and testing, ops settings (thresholds, limits), SSH access toggle, email whitelist. DB: `system_settings` table. Service: `settings_service.py` (Created 2026-01-13) |
 | **Model Selection** | Medium | [model-selection.md](feature-flows/model-selection.md) | View and change LLM model for agents - Claude (sonnet/opus/haiku) or Gemini variants, persists across session reset, validated per runtime (Created 2026-01-13, CFG-005, CFG-006) |
 | **Alerts Page** | Medium | [alerts-page.md](feature-flows/alerts-page.md) | Cost threshold alerts for process executions - NavBar badge with 60s polling, filter by status, dismiss alerts, severity levels (warning/critical), threshold types (per_execution/daily/weekly). Service: CostAlertService, DB: trinity_alerts.db (Created 2026-01-21) |

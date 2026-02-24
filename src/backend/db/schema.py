@@ -20,6 +20,7 @@ Tables are organized by feature area:
 - Tags: agent_tags
 - System Views: system_views
 - Subscriptions: subscription_credentials
+- Dashboard History: agent_dashboard_values
 """
 
 # =============================================================================
@@ -453,6 +454,24 @@ TABLES = {
             UNIQUE(agent_name, condition)
         )
     """,
+
+    # -------------------------------------------------------------------------
+    # Dashboard History Tables (DASH-001)
+    # -------------------------------------------------------------------------
+    "agent_dashboard_values": """
+        CREATE TABLE IF NOT EXISTS agent_dashboard_values (
+            id TEXT PRIMARY KEY,
+            agent_name TEXT NOT NULL,
+            widget_key TEXT NOT NULL,
+            widget_label TEXT,
+            widget_type TEXT NOT NULL,
+            value_numeric REAL,
+            value_text TEXT,
+            dashboard_mtime TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """,
 }
 
 # =============================================================================
@@ -554,6 +573,10 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_health_type ON agent_health_checks(check_type)",
     "CREATE INDEX IF NOT EXISTS idx_health_checked_at ON agent_health_checks(checked_at)",
     "CREATE INDEX IF NOT EXISTS idx_alert_cooldowns_agent ON monitoring_alert_cooldowns(agent_name)",
+
+    # Dashboard history indexes (DASH-001)
+    "CREATE INDEX IF NOT EXISTS idx_dashboard_values_agent_time ON agent_dashboard_values(agent_name, captured_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_dashboard_values_widget ON agent_dashboard_values(agent_name, widget_key, captured_at DESC)",
 ]
 
 

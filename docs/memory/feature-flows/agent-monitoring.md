@@ -218,14 +218,16 @@ class MonitoringConfig(BaseModel):
   path: '/monitoring',
   name: 'Monitoring',
   component: () => import('../views/Monitoring.vue'),
-  meta: { requiresAuth: true }
+  meta: { requiresAuth: true, requiresAdmin: true }
 }
 ```
 
-### Navigation (`src/frontend/src/components/NavBar.vue:26-31`)
+### Navigation (`src/frontend/src/components/NavBar.vue:25-32`)
+
+Admin-only visibility via `v-if="isAdmin"`:
 
 ```html
-<router-link to="/monitoring" ...>
+<router-link v-if="isAdmin" to="/monitoring" ...>
   Health
 </router-link>
 ```
@@ -847,4 +849,5 @@ Monitoring service stopped
 
 | Date | Changes |
 |------|---------|
+| 2026-02-23 | **Admin-only access restriction**: NavBar "Health" link now requires admin (`v-if="isAdmin"` at NavBar.vue:26), route meta updated to `requiresAdmin: true` (router/index.js:39). Frontend Layer section already documented this correctly. |
 | 2026-02-23 | Initial documentation for MON-001 implementation |

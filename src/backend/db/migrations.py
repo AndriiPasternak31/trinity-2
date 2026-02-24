@@ -22,6 +22,7 @@ Migration Order (as of 2026-02-22):
 15. execution_session_tracking - EXEC-023 session resume
 16. subscription_credentials - SUB-001 subscription table
 17. agent_ownership_subscription_id - SUB-001 subscription FK
+18. agent_dashboard_values - DASH-001 dashboard history table
 """
 
 
@@ -49,6 +50,7 @@ def run_all_migrations(cursor, conn):
         ("execution_session_tracking", _migrate_execution_session_tracking),
         ("subscription_credentials", _migrate_subscription_credentials_table),
         ("agent_ownership_subscription_id", _migrate_agent_ownership_subscription_id),
+        ("agent_dashboard_values", _migrate_agent_dashboard_values_table),
     ]
 
     for name, migration_fn in migrations:
@@ -413,3 +415,30 @@ def _migrate_agent_skills_table(cursor, conn):
 
         conn.commit()
         print(f"Migrated {len(existing_data)} agent_skills records")
+
+
+def _migrate_agent_dashboard_values_table(cursor, conn):
+    """Create agent_dashboard_values table for dashboard history (DASH-001).
+
+    Stores historical widget values from agent dashboards to support:
+    - Sparkline visualizations showing value trends over time
+    - Historical data analysis without agent being online
+    - Platform metrics injection with trend calculation
+    """
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agent_dashboard_values (
+            id TEXT PRIMARY KEY,
+            agent_name TEXT NOT NULL,
+            widget_key TEXT NOT NULL,
+            widget_label TEXT,
+            widget_type TEXT NOT NULL,
+            value_numeric REAL,
+            value_text TEXT,
+            dashboard_mtime TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_values_agent_time ON agent_dashboard_values(agent_name, captured_at DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_values_widget ON agent_dashboard_values(agent_name, widget_key, captured_at DESC)")
+    conn.commit()

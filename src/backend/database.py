@@ -121,6 +121,7 @@ from db.system_views import SystemViewOperations
 from db.notifications import NotificationOperations
 from db.subscriptions import SubscriptionOperations
 from db.monitoring import MonitoringOperations
+from db.dashboard_history import DashboardHistoryOperations
 
 
 def init_database():
@@ -244,6 +245,7 @@ class DatabaseManager:
         self._notification_ops = NotificationOperations()
         self._subscription_ops = SubscriptionOperations()
         self._monitoring_ops = MonitoringOperations()
+        self._dashboard_history_ops = DashboardHistoryOperations()
 
     # =========================================================================
     # User Management (delegated to db/users.py)
@@ -1023,6 +1025,34 @@ class DatabaseManager:
 
     def cleanup_alert_cooldowns(self, agent_name: str = None):
         return self._monitoring_ops.cleanup_cooldowns(agent_name)
+
+    # =========================================================================
+    # Dashboard History (delegated to db/dashboard_history.py) - DASH-001
+    # =========================================================================
+
+    def capture_dashboard_snapshot(self, agent_name: str, config: dict, dashboard_mtime: str):
+        return self._dashboard_history_ops.capture_dashboard_snapshot(agent_name, config, dashboard_mtime)
+
+    def get_widget_history(self, agent_name: str, widget_key: str, hours: int = 24, limit: int = 100):
+        return self._dashboard_history_ops.get_widget_history(agent_name, widget_key, hours, limit)
+
+    def get_all_widget_history(self, agent_name: str, hours: int = 24):
+        return self._dashboard_history_ops.get_all_widget_history(agent_name, hours)
+
+    def calculate_widget_stats(self, values: list):
+        return self._dashboard_history_ops.calculate_widget_stats(values)
+
+    def get_last_captured_mtime(self, agent_name: str):
+        return self._dashboard_history_ops.get_last_captured_mtime(agent_name)
+
+    def cleanup_old_dashboard_snapshots(self, days: int = 30):
+        return self._dashboard_history_ops.cleanup_old_snapshots(days)
+
+    def delete_agent_dashboard_history(self, agent_name: str):
+        return self._dashboard_history_ops.delete_agent_dashboard_history(agent_name)
+
+    def get_agent_execution_stats(self, agent_name: str, hours: int = 24):
+        return self._schedule_ops.get_agent_execution_stats(agent_name, hours)
 
 
 # Global database manager instance
