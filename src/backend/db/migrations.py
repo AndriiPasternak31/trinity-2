@@ -4,7 +4,7 @@ Database migrations for Trinity platform.
 Each migration function handles a specific schema change.
 Migrations are idempotent - safe to run multiple times.
 
-Migration Order (as of 2026-02-22):
+Migration Order (as of 2026-02-24):
 1. agent_sharing - Email-based sharing (from user_id)
 2. schedule_executions_observability - Context/cost/tools columns
 3. mcp_api_keys_agent_scope - Agent collaboration support
@@ -23,6 +23,7 @@ Migration Order (as of 2026-02-22):
 16. subscription_credentials - SUB-001 subscription table
 17. agent_ownership_subscription_id - SUB-001 subscription FK
 18. agent_dashboard_values - DASH-001 dashboard history table
+19. setup_completed_backfill - Auto-complete setup for existing installs
 """
 
 
@@ -51,6 +52,7 @@ def run_all_migrations(cursor, conn):
         ("subscription_credentials", _migrate_subscription_credentials_table),
         ("agent_ownership_subscription_id", _migrate_agent_ownership_subscription_id),
         ("agent_dashboard_values", _migrate_agent_dashboard_values_table),
+        ("setup_completed_backfill", _migrate_setup_completed_backfill),
     ]
 
     for name, migration_fn in migrations:
@@ -442,3 +444,42 @@ def _migrate_agent_dashboard_values_table(cursor, conn):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_values_agent_time ON agent_dashboard_values(agent_name, captured_at DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_dashboard_values_widget ON agent_dashboard_values(agent_name, widget_key, captured_at DESC)")
     conn.commit()
+
+
+def _migrate_setup_completed_backfill(cursor, conn):
+    """Backfill setup_completed=true for existing installations.
+
+    Prior to this migration, existing production deployments could have:
+    - An admin user with a password hash
+    - But no 'setup_completed' entry in system_settings
+
+    This caused the setup wizard to appear on existing installations.
+    This migration auto-completes setup for installations that already have
+    an admin user with a password set.
+    """
+    from datetime import datetime
+
+    # Check if setup_completed already exists
+    cursor.execute("SELECT value FROM system_settings WHERE key = 'setup_completed'")
+    existing = cursor.fetchone()
+
+    if existing:
+        # Already set, nothing to do
+        return
+
+    # Check if admin user exists with a password hash
+    cursor.execute("""
+        SELECT password_hash FROM users
+        WHERE username = 'admin' AND password_hash IS NOT NULL AND password_hash != ''
+    """)
+    admin_with_password = cursor.fetchone()
+
+    if admin_with_password:
+        # Admin exists with password - mark setup as completed
+        print("Backfilling setup_completed=true for existing installation with admin user...")
+        cursor.execute("""
+            INSERT OR REPLACE INTO system_settings (key, value, updated_at)
+            VALUES ('setup_completed', 'true', ?)
+        """, (datetime.utcnow().isoformat(),))
+        conn.commit()
+        print("Setup marked as completed.")
