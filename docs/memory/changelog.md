@@ -1,3 +1,16 @@
+### 2026-02-24 17:15:00
+🐛 **Fix: Vite 6.x allowedHosts for custom domains (Issue #43)**
+
+Added `allowedHosts: true` to Vite server config to allow access via custom domains. Vite 6.x introduced stricter host checking that blocked requests from any host other than localhost.
+
+**Updated**: `src/frontend/vite.config.js`
+- Added `allowedHosts: true` to server configuration
+- Trinity runs behind a reverse proxy that handles host validation
+
+**Impact**: Resolved GitHub Issue #43 (P1 bug)
+
+---
+
 ### 2026-02-24 16:00:00
 🐛 **Fix: Async Docker operations prevent event loop blocking (DOCKER-001)**
 
