@@ -3,11 +3,23 @@ name: commit
 description: Commit, push, and link to GitHub Issues
 allowed-tools: [Bash]
 user-invocable: true
+automation: manual
 ---
 
 # Commit
 
 Commit changes and link to relevant GitHub Issues.
+
+## State Dependencies
+
+| Source | Location | Read | Write | Description |
+|--------|----------|------|-------|-------------|
+| Git Status | Working directory | ✅ | | Staged/unstaged changes |
+| Git Log | `.git/` | ✅ | | Recent commit style |
+| Git Diff | Working directory | ✅ | | Changes to commit |
+| GitHub Issues | `abilityai/trinity` | ✅ | | Issue to reference |
+| Git Commit | `.git/` | | ✅ | New commit created |
+| Git Remote | Remote repository | | ✅ | Push to origin |
 
 ## Usage
 
@@ -74,3 +86,12 @@ gh issue view <N> --json state,title
 | `refactor` | Code change (no new feature/fix) |
 | `docs` | Documentation |
 | `chore` | Maintenance |
+
+## Completion Checklist
+
+- [ ] Changes staged (specific files, no secrets)
+- [ ] Commit message follows type convention
+- [ ] Issue reference included (Closes/Fixes/Refs #N)
+- [ ] Co-Authored-By line present
+- [ ] Push successful
+- [ ] Issue status verified (if applicable)

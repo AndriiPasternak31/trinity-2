@@ -3,6 +3,7 @@ name: roadmap
 description: Query GitHub Issues for roadmap priorities and status
 allowed-tools: [Bash, Read, Write]
 user-invocable: true
+automation: manual
 ---
 
 # Roadmap
@@ -112,3 +113,10 @@ gh issue create --repo abilityai/trinity \
 | `/roadmap blocked` | Blocked items |
 | `/roadmap in-progress` | Work in progress |
 | `/roadmap create <title>` | Create new issue |
+
+## Completion Checklist
+
+- [ ] Command arguments parsed correctly
+- [ ] GitHub Issues queried successfully
+- [ ] Results formatted as table
+- [ ] GitHub link provided for full view
