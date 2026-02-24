@@ -45,9 +45,9 @@ Update project documentation after making changes.
    - New API endpoints added (update counts)
    - Tech stack changed
 
-7. Update `docs/memory/roadmap.md` if:
-   - Task completed (mark with ✅ and timestamp)
-   - New tasks discovered (add to appropriate phase)
+7. Update GitHub Issues if:
+   - Task completed → close the issue
+   - New tasks discovered → create issue with priority/type labels
 
 ## Format for Changelog Entry
 

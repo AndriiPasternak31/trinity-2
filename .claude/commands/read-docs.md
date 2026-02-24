@@ -7,28 +7,33 @@ Load all project documentation into context for this session.
 1. Read these files in full (no summaries until all are loaded):
    - `docs/memory/requirements.md` - Feature requirements (SINGLE SOURCE OF TRUTH)
    - `docs/memory/architecture.md` - Current system design
-   - `docs/memory/roadmap.md` - Prioritized task queue
    - `docs/memory/feature-flows.md` - Feature flow index
    - `docs/DEPLOYMENT.md` - Production deployment guide
    - `docs/TESTING_GUIDE.md` - Testing approach and standards
 
-2. Read changelog using Bash (file is 1200+ lines, only need recent entries):
+2. Query GitHub Issues for roadmap priorities:
+   ```bash
+   gh issue list --repo abilityai/trinity --label "priority-p0" --state open --json number,title,labels
+   gh issue list --repo abilityai/trinity --label "priority-p1" --state open --json number,title,labels
+   ```
+
+3. Read changelog using Bash (file is 1200+ lines, only need recent entries):
    - Run: `head -150 docs/memory/changelog.md`
    - Do NOT use the Read tool for changelog - use Bash with head command
 
    Note: `CLAUDE.md` is loaded automatically at session start - no need to read it again.
 
-3. Understand the current project state:
+4. Understand the current project state:
    - What features are implemented?
    - What's currently in progress?
-   - What are the current priorities in the roadmap?
+   - What are the current priorities from GitHub Issues?
 
-4. Report completion:
+5. Report completion:
    ```
    Documentation loaded. Ready to work on Trinity.
 
-   Current Phase: [phase name from roadmap]
-   Top Priority: [first incomplete item from roadmap]
+   Top P0: [first P0 issue from GitHub]
+   Top P1: [first P1 issue from GitHub]
    Recent Change: [most recent changelog entry]
    ```
 

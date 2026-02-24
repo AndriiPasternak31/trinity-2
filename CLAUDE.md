@@ -71,9 +71,9 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - No creating documentation files unless explicitly requested
 
 ### 3. Follow the Roadmap
-- Check `.claude/memory/roadmap.md` for current priorities
-- Work topmost incomplete items in the queue
-- Mark items complete with timestamp: `[x] 2025-11-28 HH:MM:SS`
+- Check GitHub Issues for current priorities (`/roadmap` or `gh issue list`)
+- Work P0 issues first, then P1, by issue number (oldest first)
+- Close issues when complete
 
 ### 4. Mandatory Documentation Updates
 After **EVERY** change, update:
@@ -109,7 +109,7 @@ Follow methodology guides in `.claude/skills/`:
 |------|---------|
 | `.claude/memory/requirements.md` | **SINGLE SOURCE OF TRUTH** - All features |
 | `.claude/memory/architecture.md` | Current system design (~1000 lines max) |
-| `.claude/memory/roadmap.md` | Prioritized task queue |
+| GitHub Issues | Prioritized task queue (labels: priority-p0/p1/p2/p3) |
 | `.claude/memory/changelog.md` | Timestamped history (~500 lines) |
 | `.claude/memory/feature-flows.md` | Index of vertical slice docs |
 | `.claude/memory/project_index.json` | Machine-readable project state |
@@ -302,7 +302,7 @@ The `abilities` repo contains **all Trinity skills** bundled in the `trinity-onb
 - **Development Workflow**: `docs/DEVELOPMENT_WORKFLOW.md` ← Start here for dev process
 - **Full Architecture**: `.claude/memory/architecture.md`
 - **All Requirements**: `.claude/memory/requirements.md`
-- **Current Roadmap**: `.claude/memory/roadmap.md`
+- **Current Roadmap**: https://github.com/abilityai/trinity/issues
 - **Recent Changes**: `.claude/memory/changelog.md`
 - **Template Spec**: `docs/AGENT_TEMPLATE_SPEC.md`
 - **Deployment Guide**: `docs/DEPLOYMENT.md`

@@ -46,17 +46,17 @@ Check if `docs/memory/changelog.md` is in the changed files list.
 
 **If missing**: Flag as ❌ FAIL - "Changelog not updated"
 
-#### 2.2 Roadmap Update (CONDITIONAL)
-Check if `docs/memory/roadmap.md` is in the changed files list.
+#### 2.2 GitHub Issues Update (CONDITIONAL)
+Check if PR references a GitHub Issue (e.g., "Closes #17", "Fixes #23").
 
 **Required if**:
-- PR completes a roadmap item → item should be marked ✅ with timestamp
-- PR discovers new work → new item added to appropriate phase
+- PR completes a roadmap item → issue should be closed by PR
+- PR discovers new work → new issue created with appropriate labels
 
 **Validation**:
-- [ ] Completed items marked with `✅` and date
-- [ ] New items have proper status (⏳) and description
-- [ ] Items in correct phase/priority section
+- [ ] PR references related issue(s) in description
+- [ ] Issue has correct priority label (priority-p0/p1/p2/p3)
+- [ ] Issue has correct type label (type-feature/bug/refactor)
 
 #### 2.3 Requirements Update (CONDITIONAL)
 Check if `docs/memory/requirements.md` is in the changed files list.
