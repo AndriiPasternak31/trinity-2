@@ -1,3 +1,24 @@
+### 2026-02-24 11:30:00
+📝 **Docs: Update README and requirements for recent features (MON-001, DASH-001)**
+
+Updated documentation to reflect recent feature additions.
+
+**README.md changes**:
+- MCP tool count: 51 → 55 tools (added MON-001 monitoring tools)
+- Added "Monitoring (3 tools)" to Additional Tool Categories
+- Added "Fleet Health Monitoring" to Operations section
+- Updated Agent Dashboard description with sparklines/historical tracking
+
+**requirements.md changes**:
+- Added 12.8 Agent Monitoring Service (MON-001) - full feature spec
+- Updated 13.4 Agent Dashboard with DASH-001 enhancements
+- Updated MCP tool count: 21 → 55 tools
+
+**mcp-orchestration.md changes**:
+- Tool count: 51 → 55 (added MON-001 reference)
+
+---
+
 ### 2026-02-24 11:00:00
 🐛 **Fix: Dashboard fails with 'dict' object has no attribute 'status' (DASH-001)**
 
