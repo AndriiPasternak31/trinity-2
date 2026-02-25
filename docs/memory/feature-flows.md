@@ -3,7 +3,19 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
-> **Updated (2026-02-25)**: Slack Integration Settings Configuration (SLACK-001 Enhancement):
+> **Updated (2026-02-25)**: Tag Clouds Visualization (ORG-001 Enhancement):
+> - **New feature flow**: [tag-clouds.md](feature-flows/tag-clouds.md) - Visual grouping of agents by tags on Dashboard
+> - **Key features**: Semi-transparent colored clouds behind agent groups, 10-color deterministic palette, toggle button with localStorage persistence
+> - **New files**:
+>   - `src/frontend/src/components/TagClouds.vue` - SVG cloud rendering component
+> - **Modified files**:
+>   - `src/frontend/src/stores/network.js:308-464` - Tag-aware layout with bin-packing algorithm
+>   - `src/frontend/src/views/Dashboard.vue:117-132,306-329,561-565` - Toggle button, TagClouds integration
+> - **Layout features**: Groups agents by primary tag, tight spacing within groups, bin-packing arrangement
+> - **UI features**: Clouds transform with pan/zoom, blur filter for soft edges, optional tag labels
+> - **Related flow**: [agent-tags.md](feature-flows/agent-tags.md) - Tags system (ORG-001)
+>
+> **Previous (2026-02-25)**: Slack Integration Settings Configuration (SLACK-001 Enhancement):
 > - **Feature flow**: [slack-integration.md](feature-flows/slack-integration.md) - Added "Settings Configuration Flow" section
 > - **New capability**: Admin-configurable Slack credentials via Settings UI (no env vars required)
 > - **Configuration hierarchy**: Database settings take precedence over environment variables

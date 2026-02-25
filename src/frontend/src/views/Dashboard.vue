@@ -113,6 +113,24 @@
                 </div>
               </div>
 
+              <!-- Tag Clouds Toggle -->
+              <button
+                v-if="availableTags.length > 0"
+                @click="toggleTagClouds"
+                :class="[
+                  'flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-medium transition-all',
+                  showTagClouds
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ]"
+                title="Toggle tag grouping clouds"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+                </svg>
+                <span>Clouds</span>
+              </button>
+
               <span v-if="availableTags.length > 0" class="text-gray-300 dark:text-gray-600">|</span>
 
               <!-- Mode Toggle -->
@@ -285,6 +303,31 @@
           </defs>
         </svg>
 
+        <!-- Tag Clouds Layer (rendered in viewport coordinates) -->
+        <div
+          v-if="showTagClouds && nodes.length > 0"
+          class="vue-flow__tag-clouds"
+          :style="{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            transformOrigin: '0 0',
+            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+            pointerEvents: 'none',
+            zIndex: 0
+          }"
+        >
+          <TagClouds
+            :nodes="nodes"
+            :padding="50"
+            :cloud-opacity="0.12"
+            :blur-amount="25"
+            :cloud-border-radius="40"
+            :show-labels="true"
+            :node-height="260"
+          />
+        </div>
+
         <!-- Background -->
         <Background
           pattern-color="#cbd5e1"
@@ -425,6 +468,7 @@ import { storeToRefs } from 'pinia'
 import AgentNode from '@/components/AgentNode.vue'
 import SystemAgentNode from '@/components/SystemAgentNode.vue'
 import ObservabilityPanel from '@/components/ObservabilityPanel.vue'
+import TagClouds from '@/components/TagClouds.vue'
 import { useNotification } from '@/composables/useNotification'
 
 // Import Vue Flow styles
@@ -511,7 +555,14 @@ watch(activeFilterTags, (tags) => {
   }
 }, { immediate: true })
 
-const { fitView } = useVueFlow()
+const { fitView, viewport } = useVueFlow()
+
+// Tag clouds visibility toggle (persisted)
+const showTagClouds = ref(localStorage.getItem('trinity-show-tag-clouds') !== 'false')
+function toggleTagClouds() {
+  showTagClouds.value = !showTagClouds.value
+  localStorage.setItem('trinity-show-tag-clouds', showTagClouds.value)
+}
 
 // Computed stats
 const runningCount = computed(() => {
