@@ -89,7 +89,8 @@ export function useFormatters() {
   }
 
   /**
-   * Format bytes to human readable (e.g., 1024 -> "1.0 KB")
+   * Format bytes to human readable (e.g., 1024 -> "1 KB")
+   * Uses whole numbers for stable UI display (no decimals)
    */
   const formatBytes = (bytes) => {
     if (!bytes && bytes !== 0) return '0 B'
@@ -100,7 +101,7 @@ export function useFormatters() {
       value /= 1024
       unitIndex++
     }
-    return `${value.toFixed(unitIndex > 0 ? 1 : 0)} ${units[unitIndex]}`
+    return `${Math.round(value)} ${units[unitIndex]}`
   }
 
   /**
