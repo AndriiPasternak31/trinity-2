@@ -3,6 +3,13 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 
+> **Updated (2026-02-27)**: Chat Message Ordering Fix (CHAT-002):
+> - **Bug**: Messages appeared in incorrect visual positions due to flex spacer race conditions
+> - **Root cause**: `ChatMessages.vue` used `<div class="flex-1">` spacer to push content to bottom, which competed with nested flex containers
+> - **Fix**: Replaced spacer technique with `min-h-full flex flex-col justify-end` pattern
+> - **File changed**: `src/frontend/src/components/chat/ChatMessages.vue` (lines 2-4)
+> - **Affected flows**: [authenticated-chat-tab.md](feature-flows/authenticated-chat-tab.md), [public-agent-links.md](feature-flows/public-agent-links.md)
+
 > **Updated (2026-02-25)**: Tag Clouds Visualization (ORG-001 Enhancement):
 > - **New feature flow**: [tag-clouds.md](feature-flows/tag-clouds.md) - Visual grouping of agents by tags on Dashboard
 > - **Key features**: Semi-transparent colored clouds behind agent groups, 10-color deterministic palette, toggle button with localStorage persistence

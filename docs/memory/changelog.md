@@ -1,3 +1,24 @@
+### 2026-02-27 10:30:00
+🐛 **Fix: Chat message ordering bug (CHAT-002)**
+
+Fixed chat message ordering issue where messages appeared in incorrect visual positions. The flex spacer technique used for bottom-aligned chat (iMessage style) caused race conditions between spacer resizing and message rendering.
+
+**Root Cause:**
+- `ChatMessages.vue` used a `<div class="flex-1"></div>` spacer to push content to the bottom
+- This interacted poorly with nested flex containers and auto-scroll timing
+- Messages could appear visually misaligned during initial render
+
+**Solution:**
+- Replaced fragile spacer technique with `min-h-full flex flex-col justify-end` pattern
+- This provides reliable bottom-alignment without competing flex-grow behaviors
+
+**Updated Files:**
+- `src/frontend/src/components/chat/ChatMessages.vue` - Replaced spacer with min-height + justify-end
+
+**Impact**: Fixes message ordering in both authenticated Chat tab and PublicChat.
+
+---
+
 ### 2026-02-25 15:10:00
 🔧 **Enhancement: Slack Settings in Admin UI (SLACK-001)**
 

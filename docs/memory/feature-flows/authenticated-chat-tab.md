@@ -202,7 +202,7 @@ src/frontend/src/components/chat/
 - Links open in new tab with `target="_blank"`
 
 **ChatMessages.vue**
-- Bottom-aligned layout using flexbox spacer technique (line 4: `<div class="flex-1"></div>`)
+- Bottom-aligned layout using `min-h-full flex flex-col justify-end` (lines 2-4)
 - Auto-scroll on new messages via `watch` on `messages.length`
 - Exposes `scrollToBottom()` method for parent components
 - Named slot `#empty` for custom empty state
@@ -357,6 +357,7 @@ See [continue-execution-as-chat.md](continue-execution-as-chat.md) for complete 
 
 | Date | Change |
 |------|--------|
+| 2026-02-27 | **Bug Fix (CHAT-002)**: Fixed chat message ordering issue. Replaced fragile flex spacer technique (`<div class="flex-1">` pushing content down) with `min-h-full flex flex-col justify-end` pattern in `ChatMessages.vue`. This provides reliable bottom-alignment without race conditions between spacer resizing and message rendering. |
 | 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed resume mode context lost after first message. Since `/task` is stateless (no `--continue`), clearing `resumeSessionIdLocal` after first message caused subsequent messages to lose context. Fix: (1) Added `resumeBannerDismissed` flag for banner-only dismissal, (2) Keep `resumeSessionIdLocal` for ALL messages, (3) `dismissResumeMode()` only hides banner (session ID persists), (4) Clear resume mode only on "New Chat" or session switch. See lines 199-204, 314-319, 370-377. |
 | 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed session auto-select overriding resume mode. Added `!isResumeMode.value` condition at line 253 in `loadSessions()`. Without this fix, `onMounted` -> `loadSessions()` would select an existing session even when ChatPanel was entered via "Continue as Chat" button, breaking the resume flow. |
 | 2026-02-20 | Fixed session persistence - `/task` now saves to `chat_sessions` when `save_to_session=true`. Added `create_new_session` for "New Chat" button. |
