@@ -4,7 +4,6 @@ Skills listing endpoint for agent playbooks.
 Scans .claude/skills/ directory for SKILL.md files, parses YAML frontmatter,
 and returns skill metadata for the Playbooks tab in the Trinity UI.
 """
-import os
 import re
 import logging
 from pathlib import Path
@@ -46,52 +45,32 @@ def parse_yaml_frontmatter(content: str) -> Dict[str, Any]:
     description: Does something
     ---
     """
+    # Strip BOM (byte order mark) if present - common cause of parse failures
+    if content.startswith('\ufeff'):
+        content = content[1:]
+
+    # Normalize line endings (CRLF -> LF)
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+
     # Match YAML frontmatter at the start of the file
-    pattern = r'^---\s*\n(.*?)\n---'
+    # Allow optional whitespace around --- delimiters
+    pattern = r'^---[ \t]*\n(.*?)\n[ \t]*---'
     match = re.match(pattern, content, re.DOTALL)
 
     if not match:
+        logger.debug(f"No frontmatter found. Content starts with: {repr(content[:50])}")
         return {}
 
     try:
         import yaml
         frontmatter = yaml.safe_load(match.group(1))
-        return frontmatter if isinstance(frontmatter, dict) else {}
+        if not isinstance(frontmatter, dict):
+            logger.warning(f"Frontmatter is not a dict: {type(frontmatter)}")
+            return {}
+        return frontmatter
     except Exception as e:
         logger.warning(f"Failed to parse YAML frontmatter: {e}")
         return {}
-
-
-def extract_description_from_body(content: str) -> Optional[str]:
-    """
-    Extract description from the first paragraph after frontmatter.
-    Falls back to first non-empty line if no clear paragraph.
-    """
-    # Remove frontmatter
-    pattern = r'^---\s*\n.*?\n---\s*\n?'
-    body = re.sub(pattern, '', content, flags=re.DOTALL)
-
-    # Get first non-empty paragraph (skip headers)
-    lines = body.strip().split('\n')
-    description_lines = []
-
-    for line in lines:
-        stripped = line.strip()
-        # Skip empty lines and headers
-        if not stripped or stripped.startswith('#'):
-            if description_lines:
-                break
-            continue
-        description_lines.append(stripped)
-
-    if description_lines:
-        description = ' '.join(description_lines)
-        # Truncate at ~200 chars on word boundary
-        if len(description) > 200:
-            description = description[:197].rsplit(' ', 1)[0] + '...'
-        return description
-
-    return None
 
 
 def scan_skills_directory(skills_dir: Path) -> List[SkillInfo]:
@@ -118,13 +97,13 @@ def scan_skills_directory(skills_dir: Path) -> List[SkillInfo]:
             content = skill_md.read_text(encoding='utf-8')
             frontmatter = parse_yaml_frontmatter(content)
 
-            # Extract skill info
+            # Extract skill info from frontmatter only
             name = frontmatter.get('name', entry.name)
             description = frontmatter.get('description')
 
-            # Try to extract description from body if not in frontmatter
+            # Log if description is missing for debugging
             if not description:
-                description = extract_description_from_body(content)
+                logger.debug(f"Skill '{name}' has no description in frontmatter")
 
             # Parse boolean fields properly
             user_invocable_raw = frontmatter.get('user-invocable', True)
