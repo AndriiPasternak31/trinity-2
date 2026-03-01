@@ -774,10 +774,100 @@ async def test_execute_schedule_skips_if_locked(self, db_with_data, mock_lock_ma
 | Schedule disabled | Log info, return | Execution skipped |
 | Autonomy disabled | Log info, return | Execution skipped |
 | Lock not acquired | Log info, return | Execution skipped (another running) |
+| **Max instances reached** | Create skipped execution, publish event | **Recorded with status='skipped'** (Issue #46) |
 | Agent not reachable | Update status=failed, publish event | Error recorded |
 | Agent timeout | Update status=failed, publish event | Error recorded |
 | Agent error response | Update status=failed, publish event | Error recorded |
 | Redis publish fails | Log error, continue | Execution still succeeds |
+
+---
+
+## Flow 9: Skipped Execution Recording (Issue #46)
+
+**Purpose**: Record executions that are dropped due to APScheduler's max_instances=1 constraint
+
+**Trigger**: APScheduler fires `EVENT_JOB_MAX_INSTANCES` when a scheduled job is skipped because the previous execution is still running
+
+```
+APScheduler                     service.py:408                  database.py:233
+EVENT_JOB_MAX_INSTANCES  -->    _on_job_max_instances()  -->    create_skipped_execution()
+|                               |                               |
+v                               v                               v
+Job skipped because             Parse job_id to get             INSERT schedule_executions
+max_instances=1 reached         schedule_id                     status='skipped'
+                                |                               duration_ms=0
+                                v                               error=skip_reason
+                                _record_skipped_agent_schedule()
+                                or _record_skipped_process_schedule()
+                                |
+                                v
+                                Publish event
+                                "schedule_execution_skipped"
+```
+
+**Event Listener Setup** (`service.py:initialize()`):
+```python
+# Add listener for skipped executions (max_instances reached)
+self.scheduler.add_listener(
+    self._on_job_max_instances,
+    EVENT_JOB_MAX_INSTANCES
+)
+```
+
+**Handler Implementation** (`service.py:408-471`):
+```python
+def _on_job_max_instances(self, event: JobExecutionEvent):
+    """
+    Handle EVENT_JOB_MAX_INSTANCES - triggered when a job is skipped because
+    the previous execution is still running (max_instances=1 reached).
+    """
+    job_id = event.job_id
+    logger.warning(f"Job {job_id} skipped: previous execution still running")
+
+    # Extract schedule_id from job_id
+    if job_id.startswith("schedule_"):
+        schedule_id = job_id[len("schedule_"):]
+        self._record_skipped_agent_schedule(schedule_id)
+    elif job_id.startswith("process_schedule_"):
+        schedule_id = job_id[len("process_schedule_"):]
+        self._record_skipped_process_schedule(schedule_id)
+```
+
+**Database Record** (`database.py:233-290`):
+```python
+def create_skipped_execution(
+    self,
+    schedule_id: str,
+    agent_name: str,
+    message: str,
+    triggered_by: str = "schedule",
+    skip_reason: str = None
+) -> Optional[ScheduleExecution]:
+    """Create a skipped execution record for audit trail."""
+    now = datetime.utcnow().isoformat()
+    execution_id = self.generate_id()
+
+    cursor.execute("""
+        INSERT INTO schedule_executions (
+            id, schedule_id, agent_name, status, started_at, completed_at,
+            duration_ms, message, triggered_by, error
+        ) VALUES (?, ?, ?, 'skipped', ?, ?, 0, ?, ?, ?)
+    """, (execution_id, schedule_id, agent_name, now, now, message, triggered_by, skip_reason))
+```
+
+**WebSocket Event**:
+```json
+{
+  "type": "schedule_execution_skipped",
+  "agent": "my-agent",
+  "schedule_id": "abc123",
+  "execution_id": "exec-456",
+  "schedule_name": "Daily Report",
+  "reason": "Previous execution still running"
+}
+```
+
+**UI Display**: Skipped executions appear in execution history with purple status badge and can be filtered in ExecutionList view.
 
 ---
 
@@ -1146,6 +1236,7 @@ No immediate notification is needed from the backend.
 
 | Date | Change |
 |------|--------|
+| 2026-03-01 | **Skipped Execution Recording (Issue #46)**: Added APScheduler event listener for `EVENT_JOB_MAX_INSTANCES`. Skipped executions are now recorded in database with `status='skipped'` instead of being silently dropped. Added `create_skipped_execution()` and `create_skipped_process_schedule_execution()` database methods. WebSocket event `schedule_execution_skipped` broadcast for real-time UI. Frontend displays skipped status with purple styling. |
 | 2026-02-21 | **Session ID Capture (EXEC-023)**: Added `claude_session_id` capture for "Continue as Chat" support. `AgentTaskMetrics` now includes `session_id` field. `_parse_task_response()` extracts from agent response. `update_execution_status()` stores in database. Scheduled executions now support "Continue as Chat" like manual executions. |
 | 2026-02-20 | **Per-Schedule Execution Configuration**: AgentClient.task() now accepts `allowed_tools` parameter. Schedules can specify custom timeout (5m-2h) and tool restrictions. See scheduling.md for full documentation. |
 | 2026-02-11 | **Scheduler Consolidation**: Removed embedded scheduler, routed manual triggers through dedicated scheduler, added activity tracking via internal API. Fixes Timeline dashboard missing cron executions. |

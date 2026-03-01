@@ -230,6 +230,68 @@ class SchedulerDatabase:
                 triggered_by=triggered_by
             )
 
+    def create_skipped_execution(
+        self,
+        schedule_id: str,
+        agent_name: str,
+        message: str,
+        triggered_by: str = "schedule",
+        skip_reason: str = None
+    ) -> Optional[ScheduleExecution]:
+        """
+        Create an execution record for a skipped scheduled task.
+
+        This is called when APScheduler fires EVENT_JOB_MAX_INSTANCES,
+        indicating that a scheduled job was dropped because the previous
+        execution is still running.
+
+        Args:
+            schedule_id: ID of the schedule that was skipped
+            agent_name: Name of the agent
+            message: The scheduled message that would have been sent
+            triggered_by: Source of the trigger (always "schedule" for skipped)
+            skip_reason: Human-readable reason for the skip
+
+        Returns:
+            ScheduleExecution with status='skipped', or None on failure
+        """
+        execution_id = self._generate_id()
+        now = datetime.utcnow().isoformat()
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO schedule_executions (
+                    id, schedule_id, agent_name, status, started_at, completed_at,
+                    duration_ms, message, triggered_by, error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                execution_id,
+                schedule_id,
+                agent_name,
+                "skipped",
+                now,
+                now,  # completed_at = started_at for skipped
+                0,    # duration_ms = 0 for skipped
+                message,
+                triggered_by,
+                skip_reason
+            ))
+            conn.commit()
+
+            return ScheduleExecution(
+                id=execution_id,
+                schedule_id=schedule_id,
+                agent_name=agent_name,
+                status="skipped",
+                started_at=datetime.fromisoformat(now),
+                completed_at=datetime.fromisoformat(now),
+                duration_ms=0,
+                message=message,
+                triggered_by=triggered_by,
+                error=skip_reason
+            )
+
     def update_execution_status(
         self,
         execution_id: str,
@@ -570,6 +632,69 @@ class SchedulerDatabase:
                 status="running",
                 started_at=datetime.fromisoformat(now),
                 triggered_by=triggered_by
+            )
+
+    def create_skipped_process_schedule_execution(
+        self,
+        schedule_id: str,
+        process_id: str,
+        process_name: str,
+        triggered_by: str = "schedule",
+        skip_reason: str = None
+    ) -> Optional[ProcessScheduleExecution]:
+        """
+        Create an execution record for a skipped process schedule.
+
+        This is called when APScheduler fires EVENT_JOB_MAX_INSTANCES,
+        indicating that a scheduled process was dropped because the previous
+        execution is still running.
+
+        Args:
+            schedule_id: ID of the process schedule that was skipped
+            process_id: ID of the process definition
+            process_name: Name of the process
+            triggered_by: Source of the trigger (always "schedule" for skipped)
+            skip_reason: Human-readable reason for the skip
+
+        Returns:
+            ProcessScheduleExecution with status='skipped', or None on failure
+        """
+        execution_id = self._generate_id()
+        now = datetime.utcnow().isoformat()
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO process_schedule_executions (
+                    id, schedule_id, process_id, process_name, status,
+                    started_at, completed_at, duration_ms, triggered_by, error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                execution_id,
+                schedule_id,
+                process_id,
+                process_name,
+                "skipped",
+                now,
+                now,  # completed_at = started_at for skipped
+                0,    # duration_ms = 0 for skipped
+                triggered_by,
+                skip_reason
+            ))
+            conn.commit()
+
+            return ProcessScheduleExecution(
+                id=execution_id,
+                schedule_id=schedule_id,
+                process_id=process_id,
+                process_name=process_name,
+                execution_id=None,
+                status="skipped",
+                started_at=datetime.fromisoformat(now),
+                completed_at=datetime.fromisoformat(now),
+                duration_ms=0,
+                triggered_by=triggered_by,
+                error=skip_reason
             )
 
     def update_process_schedule_execution(

@@ -125,7 +125,13 @@ def initialized_db(temp_db_path: str) -> Generator[str, None, None]:
             context_max INTEGER,
             cost REAL,
             tool_calls TEXT,
-            execution_log TEXT
+            execution_log TEXT,
+            claude_session_id TEXT,
+            source_user_id INTEGER,
+            source_user_email TEXT,
+            source_agent_name TEXT,
+            source_mcp_key_id TEXT,
+            source_mcp_key_name TEXT
         )
     """)
 

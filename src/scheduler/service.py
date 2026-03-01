@@ -14,6 +14,7 @@ from typing import Dict, Optional, List, Callable
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.events import EVENT_JOB_MAX_INSTANCES, JobExecutionEvent
 from croniter import croniter
 import pytz
 import redis
@@ -114,6 +115,13 @@ class SchedulerService:
                 process_schedule.enabled,
                 process_schedule.updated_at.isoformat() if process_schedule.updated_at else None
             )
+
+        # Add listener for skipped executions (max_instances reached)
+        # This records when a scheduled job is dropped because previous execution is still running
+        self.scheduler.add_listener(
+            self._on_job_max_instances,
+            EVENT_JOB_MAX_INSTANCES
+        )
 
         # Start the scheduler
         self.scheduler.start()
@@ -392,6 +400,115 @@ class SchedulerService:
                     self._add_process_job(schedule)
 
                 self._process_schedule_snapshot[schedule_id] = new_state
+
+    # =========================================================================
+    # Skipped Execution Tracking (Issue #46)
+    # =========================================================================
+
+    def _on_job_max_instances(self, event: JobExecutionEvent):
+        """
+        Handle EVENT_JOB_MAX_INSTANCES - triggered when a job is skipped because
+        the previous execution is still running (max_instances=1 reached).
+
+        This ensures we have an audit trail for skipped scheduled executions
+        instead of silently dropping them with only a log warning.
+
+        Args:
+            event: APScheduler JobExecutionEvent with job_id
+        """
+        job_id = event.job_id
+        logger.warning(f"Job {job_id} skipped: previous execution still running (max_instances reached)")
+
+        # Extract schedule_id from job_id (format: "schedule_{schedule_id}" or "process_schedule_{schedule_id}")
+        if job_id.startswith("schedule_"):
+            schedule_id = job_id[len("schedule_"):]
+            self._record_skipped_agent_schedule(schedule_id)
+        elif job_id.startswith("process_schedule_"):
+            schedule_id = job_id[len("process_schedule_"):]
+            self._record_skipped_process_schedule(schedule_id)
+        else:
+            logger.warning(f"Unknown job_id format for skipped job: {job_id}")
+
+    def _record_skipped_agent_schedule(self, schedule_id: str):
+        """
+        Record a skipped agent schedule execution in the database.
+
+        Creates an execution record with status='skipped' so it appears in
+        the execution history and provides an audit trail.
+        """
+        try:
+            schedule = self.db.get_schedule(schedule_id)
+            if not schedule:
+                logger.error(f"Cannot record skipped execution: schedule {schedule_id} not found")
+                return
+
+            # Create execution record with 'skipped' status
+            execution = self.db.create_skipped_execution(
+                schedule_id=schedule.id,
+                agent_name=schedule.agent_name,
+                message=schedule.message,
+                triggered_by="schedule",
+                skip_reason="Previous execution still running (max_instances reached)"
+            )
+
+            if execution:
+                logger.info(f"Recorded skipped execution {execution.id} for schedule {schedule.name}")
+
+                # Publish event for WebSocket notification
+                asyncio.create_task(self._publish_event({
+                    "type": "schedule_execution_skipped",
+                    "agent": schedule.agent_name,
+                    "schedule_id": schedule.id,
+                    "execution_id": execution.id,
+                    "schedule_name": schedule.name,
+                    "reason": "Previous execution still running"
+                }))
+            else:
+                logger.error(f"Failed to create skipped execution record for schedule {schedule_id}")
+
+        except Exception as e:
+            logger.error(f"Error recording skipped execution for schedule {schedule_id}: {e}")
+
+    def _record_skipped_process_schedule(self, schedule_id: str):
+        """
+        Record a skipped process schedule execution in the database.
+
+        Creates an execution record with status='skipped' so it appears in
+        the execution history and provides an audit trail.
+        """
+        try:
+            schedule = self.db.get_process_schedule(schedule_id)
+            if not schedule:
+                logger.error(f"Cannot record skipped execution: process schedule {schedule_id} not found")
+                return
+
+            # Create execution record with 'skipped' status
+            execution = self.db.create_skipped_process_schedule_execution(
+                schedule_id=schedule.id,
+                process_id=schedule.process_id,
+                process_name=schedule.process_name,
+                triggered_by="schedule",
+                skip_reason="Previous execution still running (max_instances reached)"
+            )
+
+            if execution:
+                logger.info(f"Recorded skipped process execution {execution.id} for {schedule.process_name}/{schedule.trigger_id}")
+
+                # Publish event for WebSocket notification
+                asyncio.create_task(self._publish_event({
+                    "type": "process_schedule_execution_skipped",
+                    "process_id": schedule.process_id,
+                    "process_name": schedule.process_name,
+                    "schedule_id": schedule.id,
+                    "trigger_id": schedule.trigger_id,
+                    "execution_id": execution.id,
+                    "reason": "Previous execution still running"
+                }))
+            else:
+                logger.error(f"Failed to create skipped execution record for process schedule {schedule_id}")
+
+        except Exception as e:
+            logger.error(f"Error recording skipped execution for process schedule {schedule_id}: {e}")
 
     # =========================================================================
     # Schedule Execution

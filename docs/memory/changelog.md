@@ -1,3 +1,33 @@
+### 2026-03-01 14:00:00
+🐛 **Fix: Record Skipped Scheduled Executions (Issue #46)**
+
+When APScheduler's `max_instances=1` constraint causes a scheduled job to be skipped (because the previous execution is still running at trigger time), the execution is now recorded in the database with `status='skipped'` instead of being silently dropped.
+
+**Key Features:**
+- Added `SKIPPED` status to `ExecutionStatus` enum
+- Added APScheduler event listener for `EVENT_JOB_MAX_INSTANCES`
+- Added `create_skipped_execution()` and `create_skipped_process_schedule_execution()` database methods
+- Records include skip reason for audit trail
+- WebSocket event `schedule_execution_skipped` published for real-time UI notifications
+- Frontend displays skipped status with purple styling
+
+**Created/Updated Files:**
+- `src/scheduler/models.py:20` - Added `SKIPPED` status to `ExecutionStatus` enum
+- `src/scheduler/service.py:408-511` - Added event listener and handler methods
+- `src/scheduler/database.py:233-290,650-700` - Added database methods for skipped executions
+- `src/frontend/src/components/TasksPanel.vue` - Added purple styling for skipped status
+- `src/frontend/src/components/SchedulesPanel.vue` - Added skipped status display
+- `src/frontend/src/views/ExecutionDetail.vue` - Added skipped status styling
+- `src/frontend/src/views/ExecutionList.vue` - Added skipped status filter and display
+- `src/frontend/src/views/ProcessExecutionDetail.vue` - Added skipped status handling
+
+**Tests:**
+- `tests/scheduler_tests/test_skipped_executions.py` - 12 tests (8 pass locally, 4 require Docker)
+
+**Impact:** Operators now have visibility into scheduled executions that were dropped due to max_instances constraints, providing better audit trails and debugging capability.
+
+---
+
 ### 2026-03-01 12:00:00
 🐛 **Fix: Slack Integration Missing Access Check Method (Issue #48)**
 - Fixed `AttributeError: 'DatabaseManager' object has no attribute 'get_user_agent_access_level'`

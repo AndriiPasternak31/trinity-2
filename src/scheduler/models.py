@@ -17,6 +17,7 @@ class ExecutionStatus(str, Enum):
     SUCCESS = "success"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    SKIPPED = "skipped"  # Added for Issue #46 - records when execution was dropped
 
 
 class TriggerSource(str, Enum):

@@ -5,6 +5,13 @@
       "feature": "RENAME-001",
       "added": "2026-03-01",
       "categories": ["backend", "api", "agents"]
+    },
+    {
+      "file": "scheduler_tests/test_skipped_executions.py",
+      "feature": "Issue #46",
+      "added": "2026-03-01",
+      "categories": ["scheduler", "database", "executions"],
+      "description": "Tests for recording skipped scheduled executions when max_instances=1 reached"
     }
   ]
 }

@@ -365,7 +365,7 @@
                 <span
                   :class="[
                     'w-2 h-2 rounded-full flex-shrink-0',
-                    exec.status === 'success' ? 'bg-green-500' : exec.status === 'failed' ? 'bg-red-500' : exec.status === 'running' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-400'
+                    exec.status === 'success' ? 'bg-green-500' : exec.status === 'failed' ? 'bg-red-500' : exec.status === 'running' ? 'bg-yellow-500 animate-pulse' : exec.status === 'skipped' ? 'bg-purple-500' : 'bg-gray-400'
                   ]"
                 ></span>
                 <span class="text-gray-600 dark:text-gray-400">{{ formatDateTime(exec.started_at) }}</span>
@@ -398,7 +398,7 @@
                 <span
                   :class="[
                     'font-medium',
-                    exec.status === 'success' ? 'text-green-600' : exec.status === 'failed' ? 'text-red-600' : 'text-yellow-600'
+                    exec.status === 'success' ? 'text-green-600' : exec.status === 'failed' ? 'text-red-600' : exec.status === 'skipped' ? 'text-purple-600' : 'text-yellow-600'
                   ]"
                 >
                   {{ exec.status }}

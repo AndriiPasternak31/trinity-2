@@ -140,7 +140,7 @@ class ScheduleExecution(BaseModel):
     id: str
     schedule_id: str
     agent_name: str
-    status: str  # "pending", "running", "success", "failed"
+    status: str  # "pending", "running", "success", "failed", "skipped"
     started_at: datetime
     completed_at: Optional[datetime] = None
     duration_ms: Optional[int] = None

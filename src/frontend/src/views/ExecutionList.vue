@@ -60,6 +60,7 @@
                 <option value="completed">✅ Completed</option>
                 <option value="failed">❌ Failed</option>
                 <option value="cancelled">⛔ Cancelled</option>
+                <option value="skipped">⏭️ Skipped</option>
               </select>
             </div>
 
@@ -355,6 +356,7 @@ function getStatusIcon(status) {
     cancelled: '⛔',
     paused: '⏸️',
     awaiting_approval: '🔔',
+    skipped: '⏭️',
   }
   return icons[status] || '❓'
 }
@@ -368,6 +370,7 @@ function getStatusClasses(status) {
     cancelled: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300',
     paused: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
     awaiting_approval: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300',
+    skipped: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
   }
   return classes[status] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
 }

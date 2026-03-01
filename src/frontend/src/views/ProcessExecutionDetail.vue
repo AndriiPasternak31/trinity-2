@@ -694,6 +694,7 @@ function getStatusIcon(status) {
     cancelled: '⛔',
     paused: '⏸️',
     awaiting_approval: '🔔',  // Alert bell for approval
+    skipped: '⏭️',
   }
   return icons[status] || '❓'
 }
@@ -707,6 +708,7 @@ function getStatusClasses(status) {
     cancelled: 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300',
     paused: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
     awaiting_approval: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 animate-pulse',  // Amber with pulse
+    skipped: 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300',
   }
   return classes[status] || 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
 }
@@ -721,6 +723,7 @@ function getStatusExplanation(status) {
     cancelled: 'Execution was manually cancelled before completion.',
     paused: 'Awaiting human approval. Check the Approvals page to continue.',
     awaiting_approval: 'A step requires your approval before continuing. Go to Approvals to review.',
+    skipped: 'Execution was skipped because the previous execution was still running at trigger time.',
   }
   return explanations[status] || 'Unknown status'
 }
