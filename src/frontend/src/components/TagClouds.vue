@@ -97,7 +97,7 @@ const props = defineProps({
   },
   nodeHeight: {
     type: Number,
-    default: 180
+    default: 270
   }
 })
 

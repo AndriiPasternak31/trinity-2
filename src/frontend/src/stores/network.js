@@ -332,11 +332,11 @@ export const useNetworkStore = defineStore('network', () => {
       }
     })
 
-    // Layout configuration - tighter spacing within groups
+    // Layout configuration - equidistant spacing within groups, more between groups
     const nodeWidth = 320
-    const nodeHeight = 200
-    const withinGroupPadding = 30   // Tight padding within a group
-    const betweenGroupPadding = 150 // Space between different groups
+    const nodeHeight = 270           // Actual rendered card height (~180px min + button + padding)
+    const withinGroupPadding = 40    // Equal spacing within a group (both horizontal and vertical)
+    const betweenGroupPadding = 100  // Extra space between different groups
     const offsetX = 100
     const offsetY = systemAgent ? 280 : 100
 
