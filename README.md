@@ -80,7 +80,7 @@ The plugin analyzes your agent, creates required configuration files, pushes to 
 2. Choose a template:
    - **Blank** — Start fresh, define behavior via chat
    - **Built-in templates** — Pre-configured for common use cases
-   - **GitHub template** — `github:org/repo` for custom templates
+   - **GitHub template** — `github:org/repo` (or `github:org/repo@branch`) for custom templates
 3. Configure credentials and start chatting
 
 ### 3. Deploy a Multi-Agent System
@@ -164,9 +164,11 @@ Trinity implements four foundational capabilities that transform simple AI assis
 - **Agent-to-Agent Communication** — Hierarchical delegation with fine-grained permission controls
 - **Persistent Memory** — File-based and database-backed memory across sessions
 - **Shared Folders** — File-based state sharing between agents via Docker volumes
+- **Model Selection** — Choose which Claude model (Opus, Sonnet, Haiku) per task or schedule
 - **Parallel Task Execution** — Stateless parallel tasks for orchestrator-worker patterns
 - **Agent Dashboard** — Custom dashboards defined via `dashboard.yaml` with 11 widget types, historical tracking, and sparkline visualization
 - **Full Capabilities Mode** — Optional elevated permissions for agents that need `apt-get`, `sudo`, etc.
+- **Playbooks Tab** — Browse and invoke agent skills (`.claude/skills/`) directly from the UI
 - **Read-Only Mode** — Protect source code from modification while allowing output to designated directories
 - **Runaway Prevention** — `max_turns` parameter limits agent execution depth
 
@@ -184,7 +186,7 @@ Trinity implements four foundational capabilities that transform simple AI assis
 - **Agent Notifications** — Agents send structured notifications to platform with Events page UI
 - **Trinity Connect** — WebSocket event streaming for local Claude Code integration with MCP key authentication
 - **OpenTelemetry Metrics** — Cost, token usage, and productivity tracking
-- **Public Agent Links** — Shareable links for unauthenticated agent access with session persistence
+- **Public Agent Links** — Shareable links for unauthenticated agent access with session persistence and Slack integration
 - **File Manager** — Browse, preview, and download agent workspace files via web UI
 - **Ephemeral SSH Access** — Generate time-limited SSH credentials (key or password) for direct agent access
 
