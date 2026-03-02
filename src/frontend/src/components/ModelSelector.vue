@@ -8,7 +8,7 @@
         :value="modelValue"
         @input="onInput"
         @focus="showDropdown = true"
-        @keydown.escape="showDropdown = false"
+        @keydown.escape="showDropdown = false; isTyping = false"
         @keydown.down.prevent="highlightNext"
         @keydown.up.prevent="highlightPrev"
         @keydown.enter.prevent="selectHighlighted"
@@ -82,17 +82,20 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const PRESET_MODELS = [
-  { value: 'claude-opus-4-5', label: 'Claude Opus 4.5', note: 'Default' },
-  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', note: 'Latest, most capable' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', note: 'Default — latest, most capable' },
   { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', note: 'Fast + smart' },
-  { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', note: 'Previous gen, fast' },
-  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', note: 'Fastest, cheapest' }
+  { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', note: 'Previous gen flagship' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', note: 'Previous gen, fast' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', note: 'Fastest, cheapest' },
+  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4', note: 'Legacy' },
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', note: 'Legacy' }
 ]
 
 const showDropdown = ref(false)
 const highlightedIndex = ref(-1)
 const containerRef = ref(null)
 const inputRef = ref(null)
+const isTyping = ref(false)
 
 const inputClass = computed(() => {
   const base = 'w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-8'
@@ -102,7 +105,7 @@ const inputClass = computed(() => {
 })
 
 const filteredModels = computed(() => {
-  if (!props.modelValue) return PRESET_MODELS
+  if (!isTyping.value || !props.modelValue) return PRESET_MODELS
   const query = props.modelValue.toLowerCase()
   const filtered = PRESET_MODELS.filter(m =>
     m.value.toLowerCase().includes(query) || m.label.toLowerCase().includes(query)
@@ -111,12 +114,14 @@ const filteredModels = computed(() => {
 })
 
 function onInput(event) {
+  isTyping.value = true
   emit('update:modelValue', event.target.value)
   showDropdown.value = true
   highlightedIndex.value = -1
 }
 
 function selectModel(value) {
+  isTyping.value = false
   emit('update:modelValue', value)
   showDropdown.value = false
   highlightedIndex.value = -1
@@ -152,6 +157,7 @@ function selectHighlighted() {
 function handleClickOutside(event) {
   if (containerRef.value && !containerRef.value.contains(event.target)) {
     showDropdown.value = false
+    isTyping.value = false
   }
 }
 

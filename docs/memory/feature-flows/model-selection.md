@@ -41,7 +41,7 @@ The `model_used` field is recorded on every execution for audit and cost trackin
 
 ## Shared Component: ModelSelector
 
-**File**: `src/frontend/src/components/ModelSelector.vue` (NEW - 165 lines)
+**File**: `src/frontend/src/components/ModelSelector.vue` (172 lines)
 
 A reusable combobox component that provides preset model options with free-text input support.
 
@@ -54,23 +54,54 @@ A reusable combobox component that provides preset model options with free-text 
 | `placeholder` | String | `'Select or type a model...'` | Input placeholder |
 | `compact` | Boolean | `false` | Smaller input styling for inline use |
 
-### Preset Models (line 84-90)
+### Preset Models (lines 84-92)
+
+Uses full Anthropic API model IDs with snapshot dates for deterministic version pinning:
 
 ```javascript
 const PRESET_MODELS = [
-  { value: 'claude-opus-4-5', label: 'Claude Opus 4.5', note: 'Default' },
-  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', note: 'Latest, most capable' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6', note: 'Default — latest, most capable' },
   { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', note: 'Fast + smart' },
-  { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', note: 'Previous gen, fast' },
-  { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', note: 'Fastest, cheapest' }
+  { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5', note: 'Previous gen flagship' },
+  { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', note: 'Previous gen, fast' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', note: 'Fastest, cheapest' },
+  { value: 'claude-opus-4-20250514', label: 'Claude Opus 4', note: 'Legacy' },
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', note: 'Legacy' }
 ]
 ```
 
+### Dropdown Filtering with `isTyping` Flag (lines 98, 107-114, 116-121)
+
+The dropdown filters presets **only when the user is actively typing** (free-text input), not when opening via the chevron button. This is controlled by the `isTyping` ref:
+
+```javascript
+const isTyping = ref(false)
+
+const filteredModels = computed(() => {
+  if (!isTyping.value || !props.modelValue) return PRESET_MODELS
+  const query = props.modelValue.toLowerCase()
+  const filtered = PRESET_MODELS.filter(m =>
+    m.value.toLowerCase().includes(query) || m.label.toLowerCase().includes(query)
+  )
+  return filtered.length > 0 ? filtered : PRESET_MODELS
+})
+
+function onInput(event) {
+  isTyping.value = true   // only set when user types
+  emit('update:modelValue', event.target.value)
+  showDropdown.value = true
+  highlightedIndex.value = -1
+}
+```
+
+`isTyping` is reset to `false` on: `selectModel()` (line 124), `handleClickOutside()` (line 160), and `Escape` keydown (line 11).
+
 ### Features
-- Dropdown with preset models, filtered by text input
+- Dropdown with preset models, filtered by text input only when typing
+- Chevron button opens full unfiltered dropdown
 - Keyboard navigation (Up/Down/Enter/Escape)
 - Free-text input for any model string (not limited to presets)
-- Click-outside to close dropdown
+- Click-outside to close dropdown and reset typing state
 - Checkmark indicator on currently selected model
 
 ---
@@ -92,7 +123,7 @@ const PRESET_MODELS = [
 **localStorage Persistence** (lines 538-542):
 ```javascript
 const taskModelKey = computed(() => `trinity-task-model-${props.agentName}`)
-const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-opus-4-5')
+const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-opus-4-6')
 watch(selectedModel, (val) => {
   localStorage.setItem(taskModelKey.value, val)
 })
@@ -182,9 +213,9 @@ POST /api/agents/{name}/task  execute_parallel_task()
 |---------|------|---------|
 | ModelSelector in form | 85 | `<ModelSelector v-model="formData.model" />` |
 | Import | 563 | `import ModelSelector from './ModelSelector.vue'` |
-| formData default | 625 | `model: 'claude-opus-4-5'` |
-| Reset form | 751 | `model: 'claude-opus-4-5'` |
-| Edit form | 767 | `model: schedule.model \|\| 'claude-opus-4-5'` |
+| formData default | 625 | `model: 'claude-opus-4-6'` |
+| Reset form | 751 | `model: 'claude-opus-4-6'` |
+| Edit form | 767 | `model: schedule.model \|\| 'claude-opus-4-6'` |
 | Badge in list | 261-265 | Shows model icon+name if `schedule.model` is set |
 | Execution detail | 391 | Shows `exec.model_used` in execution history |
 | Execution modal | 480 | Shows `selectedExecution.model_used \|\| 'default'` |
@@ -200,7 +231,7 @@ const formData = ref({
   enabled: true,
   timeout_seconds: 900,
   allowed_tools: null,
-  model: 'claude-opus-4-5'  // MODEL-001
+  model: 'claude-opus-4-6'  // MODEL-001
 })
 ```
 
@@ -255,9 +286,37 @@ def _migrate_schedule_model_selection(cursor, conn):
 | `_row_to_schedule_execution()` | 125 | `model_used=row["model_used"] if "model_used" in row_keys else None` |
 | `create_schedule()` | 188, 205, 224 | Writes `schedule_data.model` to INSERT and returns it |
 | `update_schedule()` | 296 | `"model"` in `allowed_fields` for dynamic SET |
-| `create_task_execution()` | 447, 471, 486, 503 | Accepts and writes `model_used` parameter |
-| `create_schedule_execution()` | 517, 534, 549, 566 | Accepts and writes `model_used` parameter |
+| `create_task_execution()` | 437, 471, 486, 503 | Accepts and writes `model_used` parameter |
+| `create_schedule_execution()` | 506, 534, 549, 566 | Accepts and writes `model_used` parameter |
 | `get_agent_executions_summary()` | 669 | Includes `model_used` in SELECT columns |
+
+### DatabaseManager Proxy
+
+**File**: `src/backend/database.py:486-507`
+
+`DatabaseManager.create_task_execution()` is a facade method that delegates to `ScheduleOps.create_task_execution()`. The proxy accepts `model_used: str = None` (line 496) and forwards it to the underlying implementation:
+
+```python
+def create_task_execution(
+    self,
+    agent_name: str,
+    message: str,
+    triggered_by: str = "manual",
+    source_user_id: int = None,
+    source_user_email: str = None,
+    source_agent_name: str = None,
+    source_mcp_key_id: str = None,
+    source_mcp_key_name: str = None,
+    model_used: str = None,           # MODEL-001 fix: was missing, added
+):
+    return self._schedule_ops.create_task_execution(
+        agent_name, message, triggered_by,
+        ...,
+        model_used=model_used,        # Now forwarded correctly
+    )
+```
+
+**Bug fixed**: Previously the proxy signature lacked `model_used`, so callers passing `model_used=request.model` would crash with `TypeError: got an unexpected keyword argument 'model_used'` on every task submission that specified a model.
 
 ### Scheduler Service
 
@@ -410,11 +469,15 @@ ALTER TABLE schedule_executions ADD COLUMN model_used TEXT;
 
 | Model ID | Label | Notes |
 |-----------|-------|-------|
-| `claude-opus-4-5` | Claude Opus 4.5 | Default |
-| `claude-opus-4-6` | Claude Opus 4.6 | Latest, most capable |
+| `claude-opus-4-6` | Claude Opus 4.6 | Default — latest, most capable |
 | `claude-sonnet-4-6` | Claude Sonnet 4.6 | Fast + smart |
-| `claude-sonnet-4-5` | Claude Sonnet 4.5 | Previous gen, fast |
-| `claude-haiku-4-5` | Claude Haiku 4.5 | Fastest, cheapest |
+| `claude-opus-4-5-20251101` | Claude Opus 4.5 | Previous gen flagship |
+| `claude-sonnet-4-5-20250929` | Claude Sonnet 4.5 | Previous gen, fast |
+| `claude-haiku-4-5-20251001` | Claude Haiku 4.5 | Fastest, cheapest |
+| `claude-opus-4-20250514` | Claude Opus 4 | Legacy |
+| `claude-sonnet-4-20250514` | Claude Sonnet 4 | Legacy |
+
+Previous-generation and legacy models use full Anthropic API IDs with snapshot dates (e.g., `claude-opus-4-5-20251101`) for deterministic version pinning. Current-generation models (`claude-opus-4-6`, `claude-sonnet-4-6`) use short IDs that resolve to the latest snapshot.
 
 Also accepts model aliases (`sonnet`, `opus`, `haiku`) and 1M context variants (`sonnet[1m]`, etc.).
 
@@ -437,6 +500,14 @@ Also accepts model aliases (`sonnet`, `opus`, `haiku`) and 1M context variants (
 | Invalid Claude model | 400 | "Invalid Claude model: {model}. Use aliases (sonnet, opus, haiku) or full model names." |
 | Invalid Gemini model | 400 | "Invalid Gemini model: {model}. Use: gemini-2.5-pro, gemini-2.5-flash, etc." |
 | Agent server unreachable | 503 | "Failed to get/set model" |
+
+### Known Issues (Resolved)
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Task submission crashes with `TypeError: got an unexpected keyword argument 'model_used'` | `DatabaseManager.create_task_execution()` proxy in `database.py` was missing `model_used` parameter, while the underlying `ScheduleOps.create_task_execution()` in `db/schedules.py` already had it | Added `model_used: str = None` to proxy signature and forwarded it (line 496, 506) |
+| Dropdown shows filtered results when opening via chevron button | `filteredModels` computed was always filtering based on input value, even when user clicked the chevron | Added `isTyping` ref; filtering only applies when `isTyping.value` is true (set by `onInput`, cleared by `selectModel`/`handleClickOutside`/Escape) |
+| Preset model IDs did not match Anthropic API (e.g., `claude-opus-4-5` vs `claude-opus-4-5-20251101`) | Short IDs used for previous-gen models are not valid API identifiers | Updated to full snapshot-dated IDs for all models except current-gen (`claude-opus-4-6`, `claude-sonnet-4-6`) |
 
 ---
 
@@ -510,5 +581,6 @@ Also accepts model aliases (`sonnet`, `opus`, `haiku`) and 1M context variants (
 
 | Date | Change |
 |------|--------|
+| 2026-03-02 | **MODEL-001 bug fixes**: (1) ModelSelector `PRESET_MODELS` updated to correct Anthropic API IDs with snapshot dates (`claude-opus-4-5-20251101`, `claude-sonnet-4-5-20250929`, `claude-haiku-4-5-20251001`) plus legacy models. (2) Added `isTyping` flag so dropdown filtering only applies during free-text input, not when opening via chevron. (3) Fixed `DatabaseManager.create_task_execution()` proxy missing `model_used` parameter -- was crashing all task submissions with model selection. (4) Default model changed from `claude-opus-4-5` to `claude-opus-4-6` in TasksPanel.vue and SchedulesPanel.vue. |
 | 2026-03-02 | **MODEL-001**: Added model selection for Tasks and Schedules. New ModelSelector.vue component, database migration #22 (`model` on agent_schedules, `model_used` on schedule_executions), full-stack integration through backend, scheduler service, and agent server. |
 | 2026-01-13 | Initial documentation created (terminal model only: CFG-005/CFG-006) |

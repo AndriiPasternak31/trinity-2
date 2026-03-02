@@ -1,3 +1,19 @@
+### 2026-03-02 17:00:00
+🐛 **Fix: Model Selector Dropdown Shows Only 1 Item (MODEL-001)**
+
+Fixed model selector showing only the currently selected model instead of all options. Updated model list with correct Anthropic API model IDs and full model range.
+
+**Root cause:** `filteredModels` computed property always filtered by the current input value, even when the dropdown was opened via button click. With `claude-opus-4-5` selected, only that exact match appeared.
+
+**Changes:**
+- `ModelSelector.vue` — Added `isTyping` state to distinguish typing from dropdown toggle; filtering only applies while user is actively typing
+- `ModelSelector.vue` — Updated preset models to use correct Anthropic snapshot IDs (e.g. `claude-opus-4-5-20251101`) and added Claude Opus 4 and Sonnet 4 legacy models
+- `TasksPanel.vue` — Default model changed from `claude-opus-4-5` to `claude-opus-4-6`
+- `SchedulesPanel.vue` — Default model changed from `claude-opus-4-5` to `claude-opus-4-6`
+- `database.py` — Added missing `model_used` parameter to `DatabaseManager.create_task_execution()` proxy (was causing `unexpected keyword argument` crash on task submission)
+
+---
+
 ### 2026-03-02 16:00:00
 🐛 **Fix: Subscription Credentials Lost — Silent Execution Failures (#57)**
 
