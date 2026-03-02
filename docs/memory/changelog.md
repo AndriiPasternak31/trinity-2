@@ -1,3 +1,29 @@
+### 2026-03-02 16:00:00
+🐛 **Fix: Subscription Credentials Lost — Silent Execution Failures (#57)**
+
+Addresses subscription credential loss causing silent execution failures. Adds credential health monitoring, auto-remediation, and better error surfacing.
+
+**Changes:**
+- `BusinessHealthCheck` model gains `credential_status` field (null/"ok"/"missing")
+- `check_business_health()` now verifies `.credentials.json` presence for agents with subscriptions
+- `perform_health_check()` auto-remediates missing credentials via re-injection before aggregation
+- New `alert_subscription_credentials_missing()` alert (high priority, 600s cooldown)
+- Subscription assignment endpoint no longer swallows injection failures silently
+- `inject_subscription_to_agent()` default retries increased from 3 to 5
+- Scheduler error handler detects auth-specific failures and prefixes with `[AUTH_ERROR]`
+- Agent credential status endpoint now includes `.claude/.credentials.json` in file checks
+
+**Key Files:**
+- `src/backend/db_models.py` — `credential_status` field on `BusinessHealthCheck`
+- `src/backend/services/monitoring_service.py` — credential check, auto-remediation, alert trigger
+- `src/backend/services/monitoring_alerts.py` — `alert_subscription_credentials_missing()`
+- `src/backend/routers/subscriptions.py` — error propagation fix
+- `src/backend/services/subscription_service.py` — retry count increase
+- `src/scheduler/service.py` — auth error detection and categorization
+- `docker/base-image/agent_server/routers/credentials.py` — added `.claude/.credentials.json` to status check
+
+---
+
 ### 2026-03-02 13:50:00
 ✨ **Feature: Model Selection for Tasks & Schedules (MODEL-001)**
 

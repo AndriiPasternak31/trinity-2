@@ -644,6 +644,8 @@ class SchedulerService:
         except AgentNotReachableError as e:
             error_msg = f"Agent not reachable: {str(e)}"
             logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
+            # Agent unreachable could indicate container credential issues
+            # if subscription was expected but agent can't authenticate
 
             self.db.update_execution_status(
                 execution_id=execution.id,
@@ -670,7 +672,23 @@ class SchedulerService:
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
+
+            # Detect auth-specific failures for better error surfacing
+            auth_indicators = [
+                "credit balance", "unauthorized", "authentication",
+                "credentials", "forbidden", "401", "403",
+                "oauth", "token expired", "not authenticated"
+            ]
+            error_lower = error_msg.lower()
+            is_auth_failure = any(ind in error_lower for ind in auth_indicators)
+
+            if is_auth_failure:
+                error_msg = f"[AUTH_ERROR] {error_msg}"
+                logger.error(
+                    f"Schedule {schedule.name} execution failed due to authentication error: {error_msg}"
+                )
+            else:
+                logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
 
             self.db.update_execution_status(
                 execution_id=execution.id,
@@ -683,7 +701,10 @@ class SchedulerService:
                 activity_id=activity_id,
                 status="failed",
                 error=error_msg,
-                details={"related_execution_id": execution.id}
+                details={
+                    "related_execution_id": execution.id,
+                    **({"failure_category": "auth"} if is_auth_failure else {})
+                }
             )
 
             await self._publish_event({

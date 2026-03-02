@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 async def inject_subscription_to_agent(
     agent_name: str,
     subscription_id: str,
-    max_retries: int = 3,
+    max_retries: int = 5,
     retry_delay: float = 2.0
 ) -> dict:
     """

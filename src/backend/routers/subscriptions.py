@@ -209,12 +209,14 @@ async def assign_subscription_to_agent(
         )
 
         # Try to inject credentials if agent is running
-        injection_result = None
-        try:
-            from services.subscription_service import inject_subscription_to_agent
-            injection_result = await inject_subscription_to_agent(agent_name, subscription.id)
-        except Exception as e:
-            logger.warning(f"Could not inject subscription to running agent: {e}")
+        from services.subscription_service import inject_subscription_to_agent
+        injection_result = await inject_subscription_to_agent(agent_name, subscription.id)
+
+        if injection_result.get("status") == "failed":
+            logger.error(
+                f"Subscription injection failed for agent '{agent_name}': "
+                f"{injection_result.get('error', 'unknown')}"
+            )
 
         return {
             "success": True,

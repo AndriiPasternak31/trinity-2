@@ -255,14 +255,43 @@ async def check_business_health(
     # This would require querying the activities table, simplified here
     # TODO: Implement actual error rate calculation from agent_activities
 
+    # Check subscription credential presence (SUB-001/MON-001)
+    credential_status = None
+    subscription_id = db.get_agent_subscription_id(agent_name)
+    if subscription_id:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                cred_response = await client.get(
+                    f"http://agent-{agent_name}:8000/api/credentials/status"
+                )
+                if cred_response.status_code == 200:
+                    cred_data = cred_response.json()
+                    files = cred_data.get("files", {})
+                    has_cred_file = files.get(
+                        ".claude/.credentials.json", {}
+                    ).get("exists", False)
+                    credential_status = "ok" if has_cred_file else "missing"
+                else:
+                    credential_status = "missing"
+        except Exception:
+            # Agent unreachable — can't verify credentials
+            pass
+
     # Determine status based on checks
     status = "healthy"
+    issues = []
     if runtime_available is False or claude_available is False:
         status = "unhealthy"
     elif context_percent and context_percent > 95:
         status = "degraded"
     elif stuck_execution_count > 0:
         status = "degraded"
+
+    # Credential missing degrades health
+    if credential_status == "missing":
+        if status == "healthy":
+            status = "degraded"
+        issues.append("Subscription credentials missing")
 
     return BusinessHealthCheck(
         agent_name=agent_name,
@@ -273,6 +302,7 @@ async def check_business_health(
         active_execution_count=active_execution_count,
         stuck_execution_count=stuck_execution_count,
         recent_error_rate=recent_error_rate,
+        credential_status=credential_status,
         checked_at=now
     )
 
@@ -340,6 +370,10 @@ def aggregate_health(
         issues.append(f"{business.stuck_execution_count} stuck execution(s)")
         return AgentHealthStatus.DEGRADED, issues
 
+    if business.credential_status == "missing":
+        issues.append("Subscription credentials missing")
+        return AgentHealthStatus.DEGRADED, issues
+
     # Warning-level issues (still healthy but with warnings)
     if docker.cpu_percent is not None and docker.cpu_percent > config.cpu_warning_percent:
         issues.append(f"Elevated CPU usage ({docker.cpu_percent:.1f}%)")
@@ -386,6 +420,24 @@ async def perform_health_check(
         check_business_health(agent_name, config.http_timeout)
     )
 
+    # Auto-remediate missing subscription credentials (SUB-001/MON-001)
+    if business_check.credential_status == "missing":
+        try:
+            from services.subscription_service import inject_subscription_on_start
+            reinject_result = await inject_subscription_on_start(agent_name)
+            if reinject_result.get("status") == "success":
+                business_check.credential_status = "ok"
+                # Remove the issue since we self-healed
+                business_check.status = "healthy"
+                print(f"Auto-remediated missing credentials for agent {agent_name}")
+            else:
+                print(
+                    f"Auto-remediation failed for agent {agent_name}: "
+                    f"{reinject_result.get('error', reinject_result.get('reason', 'unknown'))}"
+                )
+        except Exception as e:
+            print(f"Auto-remediation error for agent {agent_name}: {e}")
+
     # Aggregate results
     status, issues = aggregate_health(docker_check, network_check, business_check, config)
     now = utc_now_iso()
@@ -429,6 +481,7 @@ async def perform_health_check(
                 "context_percent": business_check.context_percent,
                 "active_executions": business_check.active_execution_count,
                 "error_rate": business_check.recent_error_rate,
+                "credential_status": business_check.credential_status,
             }
         )
 
@@ -500,6 +553,13 @@ async def perform_health_check(
             if docker_check.memory_percent and docker_check.memory_percent > config.memory_critical_percent:
                 await alert_service.alert_resource_critical(
                     agent_name, "memory", docker_check.memory_percent
+                )
+
+            if business_check.credential_status == "missing":
+                subscription = db.get_agent_subscription(agent_name)
+                subscription_name = subscription.name if subscription else "unknown"
+                await alert_service.alert_subscription_credentials_missing(
+                    agent_name, subscription_name
                 )
         except Exception as e:
             print(f"Failed to send monitoring alert: {e}")

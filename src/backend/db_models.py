@@ -707,6 +707,7 @@ class BusinessHealthCheck(BaseModel):
     active_execution_count: int = 0
     stuck_execution_count: int = 0
     recent_error_rate: float = 0.0  # 0.0 - 1.0
+    credential_status: Optional[str] = None  # null, "ok", "missing" (SUB-001/MON-001)
     checked_at: str
 
 

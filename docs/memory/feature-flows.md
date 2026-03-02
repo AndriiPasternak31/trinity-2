@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-02 | MON-001/SUB-001 | Subscription credential health monitoring and auto-remediation | [subscription-credential-health.md](feature-flows/subscription-credential-health.md) |
 | 2026-03-02 | MODEL-001 | Model selection for tasks and schedules | [model-selection.md](feature-flows/model-selection.md) |
 | 2026-03-02 | FILTER-001 | Dashboard filter persistence (time range, quick tags) | [dashboard-timeline-view.md](feature-flows/dashboard-timeline-view.md) |
 | 2026-03-01 | RENAME-001 | Agent rename via UI pencil icon, MCP tool, or REST API | [agent-rename.md](feature-flows/agent-rename.md) |
@@ -62,6 +63,7 @@
 | Activity Stream | [activity-stream.md](feature-flows/activity-stream.md) | Centralized persistent activity tracking |
 | Activity Monitoring | [activity-monitoring.md](feature-flows/activity-monitoring.md) | Real-time tool execution tracking |
 | Agent Monitoring (Health) | [agent-monitoring.md](feature-flows/agent-monitoring.md) | Fleet-wide health checks (MON-001) |
+| Subscription Credential Health | [subscription-credential-health.md](feature-flows/subscription-credential-health.md) | Credential health monitoring, auto-remediation, alerts |
 | Host Telemetry | [host-telemetry.md](feature-flows/host-telemetry.md) | Host CPU/memory/disk in Dashboard header |
 | Agent Logs & Telemetry | [agent-logs-telemetry.md](feature-flows/agent-logs-telemetry.md) | Live metrics in AgentHeader |
 | Agent Dashboard | [agent-dashboard.md](feature-flows/agent-dashboard.md) | Agent-defined dashboard via dashboard.yaml |
