@@ -26,7 +26,6 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   CpuChipIcon,
-  FolderIcon,
   DocumentDuplicateIcon,
 } from '@heroicons/vue/24/outline'
 
@@ -37,11 +36,6 @@ const navItems = [
     path: '/agents',
     label: 'Agents',
     icon: CpuChipIcon,
-  },
-  {
-    path: '/files',
-    label: 'Files',
-    icon: FolderIcon,
   },
   {
     path: '/templates',

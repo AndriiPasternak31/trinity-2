@@ -230,8 +230,7 @@ const isAdmin = computed(() => userRole.value === 'admin')
 const route = router.currentRoute
 const isAgentSection = computed(() => {
   const path = route.value.path
-  return path.startsWith('/agents') ||
-         path === '/files'
+  return path.startsWith('/agents')
 })
 
 // Check if currently in process section (for highlighting nav)

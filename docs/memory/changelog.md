@@ -1,3 +1,22 @@
+### 2026-03-03 16:00:00
+📁 **UI: Per-agent Files tab replacing standalone Files page (Issue #51)**
+
+Moved file management from standalone `/files` page into per-agent Files tab in Agent Detail:
+
+- **Rewrote `FilesPanel.vue`**: Full two-panel file manager (tree + preview) using same `file-manager/FileTreeNode.vue` and `file-manager/FilePreview.vue` components as the standalone page
+- **Added Files tab to AgentDetail.vue**: Now visible in `visibleTabs` alongside Terminal and Git
+- **Removed `/files` route**: Route removed from router, nav link removed from AgentSubNav
+- **Cleaned up NavBar**: Removed `/files` from `isAgentSection` computed
+
+**Key Files:**
+- `src/frontend/src/components/FilesPanel.vue` — Rewritten with full file manager functionality
+- `src/frontend/src/views/AgentDetail.vue` — Added 'files' to visibleTabs
+- `src/frontend/src/router/index.js` — Removed /files route
+- `src/frontend/src/components/AgentSubNav.vue` — Removed Files nav link
+- `src/frontend/src/components/NavBar.vue` — Cleaned up isAgentSection
+
+---
+
 ### 2026-03-03 15:00:00
 🔧 **UI: Add Templates to main navigation & streamline Agent Detail layout (Issues #52, #53)**
 

@@ -383,15 +383,16 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 
 ## 13. Content & File Management
 
-### 13.1 File Browser
-- **Status**: ✅ Implemented
-- **Description**: Browse and download workspace files in AgentDetail Files tab
+### 13.1 Per-Agent File Manager
+- **Status**: ✅ Implemented (Updated 2026-03-03, Issue #51)
+- **Description**: Full-featured file manager in AgentDetail Files tab with two-panel layout (tree + preview)
+- **Key Features**: Tree view with search, image/video/audio/PDF/text preview, inline text editing, delete with protected path warnings, show hidden files toggle
+- **Components**: Reuses `file-manager/FileTreeNode.vue` and `file-manager/FilePreview.vue`
 - **Flow**: `docs/memory/feature-flows/file-browser.md`
 
-### 13.2 File Manager Page
-- **Status**: ✅ Implemented (2025-12-27)
-- **Description**: Dedicated `/files` page with two-panel layout and rich previews
-- **Key Features**: Agent selector, tree view, image/video/audio/PDF preview, delete with protected path warnings
+### 13.2 File Manager Page (Standalone - Deprecated)
+- **Status**: 🗄️ Deprecated (2026-03-03, Issue #51)
+- **Description**: Former dedicated `/files` page replaced by per-agent Files tab. Route removed, component preserved.
 - **Flow**: `docs/memory/feature-flows/file-manager.md`
 
 ### 13.3 Content Folder Convention

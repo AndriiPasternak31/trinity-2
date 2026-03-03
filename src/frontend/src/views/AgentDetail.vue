@@ -576,11 +576,12 @@ const visibleTabs = computed(() => {
     tabs.push({ id: 'permissions', label: 'Permissions' })
   }
 
-  // Git and Terminal tabs together
+  // Git, Terminal, and Files tabs together
   if (hasGitSync.value) {
     tabs.push({ id: 'git', label: 'Git' })
   }
   tabs.push({ id: 'terminal', label: 'Terminal' })
+  tabs.push({ id: 'files', label: 'Files' })
 
   // Folders - hide for system agent
   if (agent.value?.can_share && !isSystem) {

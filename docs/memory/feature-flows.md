@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-03 | #51 | Per-agent Files tab restored with two-panel file manager | [file-browser.md](feature-flows/file-browser.md) |
 | 2026-03-03 | #52 | Templates restored to main NavBar | NavBar component change (no new flow) |
 | 2026-03-03 | #53 | Agent Detail: removed sub-nav, widened panel, reduced padding | Layout change to AgentDetail.vue (no new flow) |
 | 2026-03-02 | SUB-001 | Subscription credential priority fix (API key vs OAuth) | [subscription-management.md](feature-flows/subscription-management.md) |
@@ -83,8 +84,8 @@
 | Execution Detail Page | [execution-detail-page.md](feature-flows/execution-detail-page.md) | Dedicated page for execution details |
 | Continue Execution as Chat | [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md) | Resume executions as interactive chat (EXEC-023) |
 | Agent Info Display | [agent-info-display.md](feature-flows/agent-info-display.md) | Template metadata in Info tab |
-| File Browser | [file-browser.md](feature-flows/file-browser.md) | Browse workspace files |
-| File Manager | [file-manager.md](feature-flows/file-manager.md) | Standalone `/files` page |
+| Per-Agent File Manager | [file-browser.md](feature-flows/file-browser.md) | Two-panel file manager in Agent Detail Files tab |
+| File Manager (Deprecated) | [file-manager.md](feature-flows/file-manager.md) | Former standalone `/files` page — replaced by per-agent Files tab |
 
 ### Collaboration & Permissions
 

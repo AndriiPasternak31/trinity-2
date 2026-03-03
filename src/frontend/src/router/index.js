@@ -50,12 +50,7 @@ const routes = [
     component: () => import('../views/ExecutionDetail.vue'),
     meta: { requiresAuth: true }
   },
-  {
-    path: '/files',
-    name: 'FileManager',
-    component: () => import('../views/FileManager.vue'),
-    meta: { requiresAuth: true }
-  },
+  // REMOVED: /files route - file management is now per-agent via Files tab in AgentDetail
   // REMOVED: /credentials route - credentials are now managed per-agent only
   // Old global credential management is replaced by per-agent CredentialsPanel
   {

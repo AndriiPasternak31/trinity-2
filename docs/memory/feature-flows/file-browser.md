@@ -1,13 +1,14 @@
-# Feature: File Browser (Tree Structure)
+# Feature: Per-Agent File Manager
 
-> **Updated**: 2026-02-18 - **Files tab removed from AgentDetail.vue**. Users should use the standalone File Manager page at `/files` instead. The FilesPanel.vue component and backend API remain available.
+> **Updated**: 2026-03-03 - **Files tab restored to AgentDetail.vue** (Issue #51). FilesPanel.vue rewritten with full two-panel file manager using same components as standalone FileManager. Standalone `/files` route removed.
 >
-> **Previous (2026-01-23)**: Verified line numbers and architecture. Frontend refactored to use `FilesPanel.vue` component with `useFileBrowser` composable. Protected path handling added to agent server.
+> **Previous (2026-02-18)**: Files tab removed from AgentDetail.vue. Users directed to standalone `/files` page.
 
 ## Revision History
 | Date | Changes |
 |------|---------|
-| 2026-02-18 | **Files tab removed from AgentDetail.vue**: The Files tab is no longer visible in the Agent Detail page. Users should use the standalone File Manager page at `/files` instead. The FilesPanel component and backend API remain functional for programmatic access. |
+| 2026-03-03 | **Per-agent Files tab restored** (Issue #51): FilesPanel.vue rewritten with full file manager (tree + preview). Uses `file-manager/FileTreeNode.vue` and `file-manager/FilePreview.vue`. Standalone `/files` route removed. |
+| 2026-02-18 | Files tab removed from AgentDetail.vue. Users directed to standalone File Manager. |
 | 2026-01-23 | Verified all line numbers. Updated frontend architecture (FilesPanel + composable). Documented protected paths (delete/edit). |
 | 2025-12-30 | Updated line numbers. Service file grew from 137 to 413 lines. |
 | 2025-12-27 | Service layer refactoring. File operations moved to `services/agent_service/files.py`. |
@@ -15,16 +16,14 @@
 | 2025-12-01 | Initial tree structure implementation. |
 
 ## Overview
-Users can browse and download files from agent workspaces through the Trinity web UI without requiring SSH access. The feature displays files in a **hierarchical tree structure** similar to macOS Finder, with expandable/collapsible folders. Users can navigate folder hierarchies, search files, and download individual files.
-
-> **Note (2026-02-18)**: The Files tab has been removed from AgentDetail.vue. File browsing is now available via the standalone **File Manager** page at `/files`. See [file-manager.md](file-manager.md) for the current UI documentation.
+Users can browse, preview, edit, download, and delete files from agent workspaces through the Trinity web UI without requiring SSH access. The file manager is embedded in the **Files tab** of each agent's detail page, providing a **two-panel layout** (tree on left, preview on right) with rich media support.
 
 ## User Story
-As a Trinity user, I want to browse files in my agent's workspace using a familiar folder tree interface so that I can easily navigate directory structures and access agent-generated artifacts without needing SSH or Docker command-line access.
+As a Trinity user, I want to manage files in my agent's workspace using a familiar two-panel file manager so that I can browse, preview, edit, and delete files without needing SSH or Docker command-line access.
 
 ## Entry Points
-- **UI (Current)**: `/files` route - File Manager page with two-panel layout (see [file-manager.md](file-manager.md))
-- **UI (Removed)**: `src/frontend/src/views/AgentDetail.vue` - Files tab removed (2026-02-18)
+- **UI**: `src/frontend/src/views/AgentDetail.vue` - Files tab in Agent Detail page
+- **Component**: `src/frontend/src/components/FilesPanel.vue` - Full file manager panel
 - **API**: `GET /api/agents/{agent_name}/files`
 - **API**: `GET /api/agents/{agent_name}/files/download`
 - **API**: `GET /api/agents/{agent_name}/files/preview`
@@ -37,86 +36,137 @@ As a Trinity user, I want to browse files in my agent's workspace using a famili
 
 ### Architecture
 
-The file browser uses a **component + composable** architecture:
+The file browser uses a **component-based** architecture with shared sub-components:
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| View | `src/frontend/src/views/AgentDetail.vue` | Files tab REMOVED (2026-02-18) |
-| Page | `src/frontend/src/views/FileManager.vue` | Standalone file manager at `/files` |
-| Component | `src/frontend/src/components/FilesPanel.vue` (130 lines) | File browser UI |
-| Component | `src/frontend/src/components/FileTreeNode.vue` (141 lines) | Recursive tree node |
-| Composable | `src/frontend/src/composables/useFileBrowser.js` (111 lines) | State and logic |
-| Store | `src/frontend/src/stores/agents.js:452-478` | API calls |
-
-> **Note**: The FilesPanel component is no longer rendered in AgentDetail.vue but remains available for use in the standalone File Manager page.
+| View | `src/frontend/src/views/AgentDetail.vue` | Files tab host (visibleTabs) |
+| Component | `src/frontend/src/components/FilesPanel.vue` | Full two-panel file manager |
+| Component | `src/frontend/src/components/file-manager/FileTreeNode.vue` | Rich recursive tree node with icons |
+| Component | `src/frontend/src/components/file-manager/FilePreview.vue` | Rich media preview (image/video/audio/PDF/text/edit) |
+| Store | `src/frontend/src/stores/agents.js` | API calls (listAgentFiles, downloadAgentFile, deleteAgentFile, updateAgentFile, getFilePreviewBlob) |
 
 ### FilesPanel Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/FilesPanel.vue`
+**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/FilesPanel.vue` (~607 lines)
 
-> **Note (2026-02-18)**: This component is no longer rendered in AgentDetail.vue. It is used in the standalone File Manager page at `/files`.
-
+Rendered in AgentDetail.vue (line 184-186):
 ```vue
-<!-- Previously in AgentDetail.vue - NOW REMOVED -->
 <div v-if="activeTab === 'files'">
   <FilesPanel :agent-name="agent.name" :agent-status="agent.status" />
 </div>
 ```
 
-**Features** (Lines 1-67):
-- **Guard**: Shows "Agent must be running" message if status !== 'running' (Line 3-8)
-- **Search Box**: `v-model="fileSearchQuery"` - filters files by name (Line 11-17)
-- **Loading State**: Spinner while loading files (Line 21-27)
-- **Error State**: Error message with retry button (Line 29-34)
-- **Empty State**: "No files found in workspace" (Line 36-38)
-- **File Tree**: Recursive FileTreeNode components (Line 52-62)
+**Two-Panel Layout** (Lines 11-195):
+- **Left Panel** (w-80, lines 14-80): File tree with controls, search, and footer stats
+- **Right Panel** (flex-1, lines 83-194): FilePreview component with file info bar and action buttons
+
+**Left Panel Features**:
+- **Controls Row** (Lines 16-36): Refresh button (`@click="loadFiles"`) + "Hidden" checkbox (`v-model="showHidden"`, persisted to `localStorage`)
+- **Search Box** (Lines 39-51): `v-model="searchQuery"` - filters tree recursively via `filteredTree` computed
+- **Tree View** (Lines 54-74): Loading spinner, error state, empty state, or `FileTreeNode` components
+- **Footer Stats** (Lines 77-79): Total file count and total size
+
+**Right Panel Features**:
+- **No File Selected** (Lines 85-93): Placeholder prompting user to select a file
+- **FilePreview** (Lines 96-109): Renders `FilePreview` component with preview data, edit state props
+- **File Info Bar** (Lines 112-192): File name, path, size, modified date. Action buttons: Edit (text files only, not edit-protected), Download, Delete (with confirmation modal)
+- **Delete Confirmation Modal** (Lines 198-244): Warns about folder contents, disables during delete
+
+**Props** (Lines 264-273):
+```javascript
+const props = defineProps({
+  agentName: { type: String, required: true },
+  agentStatus: { type: String, default: 'stopped' }
+})
+```
+
+**Key State** (Lines 287-303):
+- `fileTree`, `selectedFile`, `searchQuery`, `loading`, `error` - tree and selection state
+- `previewData`, `previewLoading`, `previewError` - preview state
+- `isEditing`, `editContent`, `saving`, `hasUnsavedChanges` - edit mode state
+- `showHidden` - persisted to localStorage
+- `showDeleteConfirm`, `downloading`, `deleting` - action state
+
+**Key Methods**:
+- `loadFiles()` (Line 387-402): Calls `agentsStore.listAgentFiles()`, populates `fileTree`
+- `onFileSelect(item)` (Line 404-424): Sets `selectedFile`, resets edit state, calls `loadPreview()` for files
+- `loadPreview(file)` (Line 426-437): Calls `agentsStore.getFilePreviewBlob()`, sets `previewData`
+- `downloadFile()` (Line 439-469): Fetches blob from preview URL, triggers browser download via `<a>` element
+- `deleteFile()` (Line 471-493): Calls `agentsStore.deleteAgentFile()`, clears selection, reloads tree
+- `startEdit()` (Line 496-508): Fetches text from preview blob URL, enters edit mode
+- `saveFile()` (Line 526-547): Calls `agentsStore.updateAgentFile()`, exits edit mode, reloads preview
+
+**Lifecycle & Watchers** (Lines 574-605):
+- `onMounted`: Loads files if agent is running
+- `onUnmounted`: Revokes blob URLs
+- `watch(agentStatus)`: Reloads when agent starts, clears when agent stops
+- `watch(agentName)`: Reloads when switching agents
 
 ### FileTreeNode Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/FileTreeNode.vue`
+**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/file-manager/FileTreeNode.vue` (220 lines)
 
-Recursive component using Vue's `h()` render function (141 lines):
+Recursive template-based component with rich file type icons:
 
 ```javascript
-// Line 13-21
-export default defineComponent({
-  name: 'FileTreeNode',
-  props: {
-    item: Object,           // Tree node (file or directory)
-    depth: Number,          // Nesting level for indentation
-    searchQuery: String,    // Current search query
-    expandedFolders: Set   // Set of expanded folder paths
-  },
-  emits: ['toggle-folder', 'download'],
-  // ...
+// Lines 64-68
+const props = defineProps({
+  item: { type: Object, required: true },
+  selectedPath: { type: String, default: null },
+  searchQuery: { type: String, default: '' }
 })
 ```
 
 **Features**:
-- **Folders** (Line 35-88): Chevron icon (rotates when expanded), folder icon, file count badge
-- **Files** (Line 89-136): File icon, name, size, download button (visible on hover)
-- **Indentation**: 20px per depth level (Line 24, 93)
-- **Recursion**: Renders children via self-reference (Line 75-87)
+- **Folders** (Lines 13-22): Chevron icon (rotates 90deg when expanded), expand/collapse on click
+- **Files** (Lines 23, 34-36): File size display, click to select
+- **File Type Icons** (Lines 93-113, 145-218): Color-coded SVG icons for folders (yellow), video (purple), audio (green), image (blue), code (gray), PDF (red), text, and generic documents - all defined as inline render-function components
+- **Selection Highlight** (Line 8): Indigo background when `selectedPath` matches
+- **Search Highlight** (Line 9, 83-86): Yellow background on name match
+- **Indentation**: `ml-4` per nesting level via recursive children div (Line 45)
+- **Recursion** (Lines 46-53): Renders children via self-reference, shows "Empty folder" for empty directories
+- **Auto-expand on search** (Lines 73-78): Watches `item.expanded` prop set by parent's `filteredTree` computed
 
-### useFileBrowser Composable
+### FilePreview Component
+
+**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/file-manager/FilePreview.vue` (245 lines)
+
+Rich media preview component supporting multiple file types:
+
+**Props** (Lines 146-155):
+```javascript
+const props = defineProps({
+  file: { type: Object, required: true },
+  agentName: { type: String, required: true },
+  previewData: { type: Object, default: null },
+  previewLoading: { type: Boolean, default: false },
+  previewError: { type: String, default: null },
+  isEditing: { type: Boolean, default: false },
+  editContent: { type: String, default: '' }
+})
+```
+
+**Preview Types** (determined by extension + MIME type):
+- **Image** (Lines 40-47): `<img>` with dimension overlay
+- **Video** (Lines 50-59): `<video>` with controls
+- **Audio** (Lines 62-81): `<audio>` with decorative card
+- **PDF** (Lines 84-90): `<embed>` filling container
+- **Text/Code** (Lines 93-107): Edit mode textarea or read-only `<pre><code>` block. Text content loaded via `fetch(previewData.url)` in watcher (Lines 219-231)
+- **Binary/Unknown** (Lines 110-123): Fallback with "Preview not available" message
+- **Directory** (Lines 25-35): Folder icon with item count
+
+### Legacy: useFileBrowser Composable
 
 **File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/composables/useFileBrowser.js`
 
-```javascript
-// Line 7-13 - State
-const fileTree = ref([])               // Hierarchical tree structure
-const filesLoading = ref(false)
-const filesError = ref(null)
-const fileSearchQuery = ref('')
-const expandedFolders = ref(new Set()) // Track which folders are open
-const totalFileCount = ref(0)
-```
+> **Note (2026-03-03)**: This composable is NO LONGER used by FilesPanel. It was replaced when FilesPanel was rewritten with inline state management. The composable still exists in the codebase and is exported from `composables/index.js` but has no active consumers. It may be a candidate for removal.
 
-**Functions**:
-- `loadFiles()` (Line 51-65) - Fetches file tree from API
-- `toggleFolder(path)` (Line 67-75) - Expands/collapses folder
-- `downloadFile(filePath, fileName)` (Line 77-96) - Downloads file via blob
-- `filteredFileTree` (Line 15-49) - Computed property for search filtering
+### Legacy: components/FileTreeNode.vue
+
+**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/FileTreeNode.vue`
+
+> **Note (2026-03-03)**: This is the OLD render-function based tree node (141 lines). It has been superseded by `file-manager/FileTreeNode.vue` (220 lines, template-based with icons). No components import it. It may be a candidate for removal.
 
 ### Store Actions
 
@@ -523,11 +573,11 @@ EDIT_PROTECTED_PATHS = [
 
 ### File List Request Flow
 ```
-User clicks "Files" tab
+User clicks "Files" tab in Agent Detail
   |
 FilesPanel mounts / status watcher triggers
   |
-loadFiles() called (useFileBrowser composable)
+loadFiles() called (FilesPanel inline method)
   |
 agentsStore.listAgentFiles(name)
   |
@@ -552,31 +602,29 @@ Display files in UI with search/filter
 
 ### File Download Flow
 ```
-User clicks download icon
+User clicks Download button in right panel
   |
-downloadFile(path, name) called (useFileBrowser composable)
+downloadFile() called (FilesPanel inline method)
   |
-agentsStore.downloadAgentFile(name, path)
+Fetches blob from previewData.url (or calls agentsStore.getFilePreviewBlob)
   |
-GET /api/agents/{name}/files/download?path=... (backend router)
+GET /api/agents/{name}/files/preview?path=... (backend router, if not cached)
   |
-download_agent_file_logic() - Authorization check
+preview_agent_file_logic() - Authorization check
   |
 agent_http_request() - proxy to agent
   |
-GET http://agent-{name}:8000/api/files/download?path=... (agent-server)
+GET http://agent-{name}:8000/api/files/preview?path=... (agent-server)
   |
 Validate path within workspace
   |
 Check file size <= 100MB
   |
-Read file content (UTF-8 with error replacement)
+Return FileResponse with correct Content-Type
   |
-Return PlainTextResponse
+Create Blob in browser (previewData.url)
   |
-Create Blob in browser
-  |
-Trigger download via <a> element
+Create object URL, trigger download via <a> element
   |
 Show success notification
 ```
@@ -669,22 +717,31 @@ This feature does not emit real-time events.
 ### Test Steps
 
 #### 1. File List Display
-**Action**: Navigate to `/files` page -> Select agent from dropdown
+**Action**: Navigate to Agent Detail page -> Click "Files" tab
 **Expected**:
-- Loading spinner appears briefly
-- File list loads showing workspace contents
-- Each file shows: name, path, size, modified time
-- Folders show file count badge
+- Two-panel layout appears: tree on left, preview area on right
+- Loading spinner appears briefly in tree panel
+- File tree loads showing workspace contents
+- Each file shows name and size; folders show file count badge
+- Footer shows total file count and total size
 
-#### 2. Search/Filter Files
+#### 2. File Preview
+**Action**: Click a text file (e.g., `README.md`) in the tree
+**Expected**:
+- File is highlighted in tree (indigo background)
+- Right panel shows file content in monospace `<pre>` block
+- File info bar at bottom shows name, path, size, modified date
+- Edit, Download, and Delete buttons appear
+
+#### 3. Search/Filter Files
 **Action**: Type "test" in search box
 **Expected**:
-- File list filters in real-time
-- Only files with "test" in name or path shown
-- Counter updates (e.g., "5 file(s)")
+- File tree filters in real-time (recursive filtering)
+- Only files with "test" in name shown, parent folders auto-expanded
+- Matching items highlighted with yellow background
 
-#### 3. File Download
-**Action**: Click download icon on a file
+#### 4. File Download
+**Action**: Select a file in tree, click "Download" button in right panel
 **Expected**:
 - Browser downloads file with original filename
 - Success notification appears
@@ -696,14 +753,32 @@ This feature does not emit real-time events.
 docker exec agent-{name} cat /home/developer/path/to/file.txt
 ```
 
-#### 4. Stopped Agent Guard
-**Action**: Stop agent, click "Files" tab
+#### 5. File Edit & Save
+**Action**: Select a text file, click "Edit" button, modify content, click "Save"
+**Expected**:
+- Textarea replaces preview with file content
+- "You have unsaved changes" warning appears after editing
+- "Save" and "Cancel" buttons replace Edit/Download/Delete
+- After save, returns to preview mode with updated content
+- Success notification "Saved {filename}"
+
+#### 6. File Delete
+**Action**: Select a file, click "Delete" button, confirm in modal
+**Expected**:
+- Confirmation modal warns about action being irreversible
+- For folders, shows count of files inside
+- After delete, file removed from tree, selection cleared
+- Success notification "Deleted {filename}"
+- Protected files (CLAUDE.md, .env, etc.) have Delete button disabled
+
+#### 7. Stopped Agent Guard
+**Action**: Stop agent, navigate to "Files" tab
 **Expected**:
 - Empty state with message "Agent must be running to browse files"
 - No API calls made
 - No errors in console
 
-#### 5. Large File Handling
+#### 8. Large File Handling
 **Action**: Create 101MB file in workspace, try to download
 **Expected**:
 - Download fails with error notification
@@ -715,7 +790,14 @@ docker exec agent-{name} cat /home/developer/path/to/file.txt
 docker exec agent-{name} dd if=/dev/zero of=/home/developer/large.bin bs=1M count=101
 ```
 
-#### 6. Permission Checks
+#### 9. Hidden Files Toggle
+**Action**: Check the "Hidden" checkbox in the controls row
+**Expected**:
+- Tree reloads including hidden files (.env, .git, .gitignore, etc.)
+- Setting persisted to localStorage (`filesPanel.showHidden`)
+- Unchecking reloads without hidden files
+
+#### 10. Permission Checks
 **Action**: Try to access agent owned by another user
 **Expected**:
 - Backend returns 403 Forbidden
@@ -723,10 +805,12 @@ docker exec agent-{name} dd if=/dev/zero of=/home/developer/large.bin bs=1M coun
 - No file data exposed
 
 ### Edge Cases
-- **Empty workspace**: Shows "No files found in workspace"
-- **Hidden files**: .env, .git files not shown in list
-- **Binary files**: Download works but content may be garbled (treated as text)
-- **Network error**: Shows error with retry button
+- **Empty workspace**: Shows "This folder is empty" in tree panel
+- **Hidden files**: Hidden by default, toggle with "Hidden" checkbox
+- **Binary files**: Preview shows "Preview not available for this file type"; download still works
+- **Image/video/audio files**: Rich preview (img/video/audio elements) in right panel
+- **Unsaved changes on file switch**: Confirmation dialog before losing edits
+- **Network error**: Shows error text in tree panel
 - **Path with spaces**: Handles correctly (URL encoding)
 
 ### Cleanup
@@ -736,7 +820,7 @@ docker exec agent-{name} rm /home/developer/large.bin
 ```
 
 ### Status
-Working - Feature tested and operational as of 2025-12-01
+Working - Feature tested and operational as of 2026-03-03 (Issue #51)
 
 ---
 
@@ -748,8 +832,7 @@ Working - Feature tested and operational as of 2025-12-01
 - **Agent Sharing** - Shared users can browse files too
 
 ### Downstream
-- **Audit Logging** - All file operations logged for compliance
-- None (read-only feature, no downstream dependencies)
+- None (no downstream dependencies; audit logging removed during earlier refactoring)
 
 ### Similar Features
 - **Agent Logs & Telemetry** - Also provides read-only agent data view
@@ -789,11 +872,11 @@ Working - Feature tested and operational as of 2025-12-01
 
 ## Implementation Notes
 
-### Why Plain Text?
-- Simplifies implementation (no MIME type detection)
-- Covers 90% of use cases (logs, code, configs)
-- Browser can handle text encoding issues
-- Future enhancement can add proper binary support
+### Why Plain Text Download + Rich Preview?
+- Download endpoint returns UTF-8 text (simple, works for code/config/logs)
+- Preview endpoint returns proper MIME types (images, video, audio, PDF rendered natively)
+- FilePreview component detects type by extension + MIME and renders appropriate element
+- Binary files without a recognized preview type show "Preview not available" fallback
 
 ### Why 100MB Limit?
 - Prevents memory issues in Python/JavaScript
@@ -805,7 +888,7 @@ Working - Feature tested and operational as of 2025-12-01
 - Reduces clutter in file list
 - Git repositories (.git) can be huge
 - `show_hidden=true` parameter available when needed
-- FileManager view has a toggle to show hidden files
+- FilesPanel has a "Hidden" checkbox toggle (persisted to localStorage)
 
 ### Why Recursive Tree vs Flat List?
 - **Hierarchical structure**: Mirrors actual filesystem organization
@@ -817,6 +900,16 @@ Working - Feature tested and operational as of 2025-12-01
 ---
 
 ## Changelog
+
+- **2026-03-03**: **Files tab restored to Agent Detail** (Issue #51)
+  - FilesPanel.vue rewritten from 130-line tree-only panel to ~607-line two-panel file manager
+  - Left panel: file tree with refresh, hidden toggle, search, footer stats
+  - Right panel: FilePreview component with file info bar and Edit/Download/Delete actions
+  - Uses shared `file-manager/FileTreeNode.vue` (220 lines, template-based with file type icons)
+  - Uses shared `file-manager/FilePreview.vue` (245 lines, image/video/audio/PDF/text/edit support)
+  - All state managed inline (no longer uses `useFileBrowser` composable)
+  - Standalone `/files` route removed from router
+  - Old `components/FileTreeNode.vue` (141 lines, render-function) now unused/legacy
 
 - **2026-01-23**: Verified all line numbers and updated documentation
   - Frontend refactored: FilesPanel component + useFileBrowser composable

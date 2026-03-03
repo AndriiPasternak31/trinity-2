@@ -1,16 +1,16 @@
-# Feature: File Manager (Standalone Page)
+# Feature: File Manager (Standalone Page) — DEPRECATED
 
 > **Created**: 2025-12-27 - Phase 11.5, Requirement 12.2
 >
-> **Updated**: 2026-02-18 - Files tab removed from AgentDetail.vue; File Manager is now the **primary** file browsing interface
+> **Deprecated**: 2026-03-03 (Issue #51) - Standalone `/files` route removed. File management is now per-agent via the Files tab in Agent Detail. See [file-browser.md](file-browser.md).
 >
-> **Previous (2026-01-23)**: Verified line numbers and component structure
+> **Previous (2026-02-18)**: Files tab removed from AgentDetail.vue; File Manager was the primary file browsing interface
 >
-> **Related**: [file-browser.md](file-browser.md) - Documents the FilesPanel component and API (Files tab removed 2026-02-18)
+> **Related**: [file-browser.md](file-browser.md) - Documents the per-agent FilesPanel component (restored 2026-03-03)
 
 ## Overview
 
-The File Manager is a **dedicated standalone page** (`/files` route) providing a two-panel interface for browsing, previewing, and managing files across all running agents. **As of 2026-02-18, this is the primary UI for file browsing** (the Files tab in AgentDetail has been removed). The File Manager allows quick switching between agents and supports rich media previews (images, video, audio, PDF), file deletion with protected path warnings, **hidden files visibility toggle**, and **inline text file editing**.
+**DEPRECATED**: The standalone File Manager page at `/files` has been replaced by per-agent Files tabs in Agent Detail (Issue #51, 2026-03-03). The `FileManager.vue` component is preserved but the route has been removed. The shared sub-components (`file-manager/FileTreeNode.vue` and `file-manager/FilePreview.vue`) are now used by the per-agent `FilesPanel.vue`.
 
 ## User Story
 
