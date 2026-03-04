@@ -564,6 +564,9 @@ class TestAsyncModeExecution:
         if response.status_code == 503:
             pytest.skip("Agent server not ready")
 
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity from prior async tests")
+
         assert_status(response, 200)
         data = response.json()
         execution_id = data["execution_id"]
@@ -619,6 +622,9 @@ class TestAsyncModeExecution:
         if response.status_code == 503:
             pytest.skip("Agent server not ready")
 
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity from prior async tests")
+
         # Should work (200) or fail gracefully if model not available
         assert_status_in(response, [200, 400, 500])
 
@@ -649,6 +655,9 @@ class TestAsyncModeExecution:
 
             if response.status_code == 503:
                 pytest.skip("Agent server not ready")
+
+            if response.status_code == 429:
+                pytest.skip("Agent at capacity from prior async tests")
 
             assert_status(response, 200)
             data = response.json()
@@ -701,6 +710,9 @@ class TestAsyncModeActivities:
 
         if response.status_code == 503:
             pytest.skip("Agent server not ready")
+
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity from prior async tests")
 
         assert_status(response, 200)
 

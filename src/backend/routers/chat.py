@@ -18,65 +18,15 @@ from services.docker_service import get_agent_container
 from services.activity_service import activity_service
 from services.execution_queue import get_execution_queue, QueueFullError, AgentBusyError
 from services.slot_service import get_slot_service
+from services.task_execution_service import (
+    get_task_execution_service,
+    agent_post_with_retry,
+)
 from database import db
 from utils.credential_sanitizer import sanitize_execution_log, sanitize_response
 
 logger = logging.getLogger(__name__)
 
-
-async def agent_post_with_retry(
-    agent_name: str,
-    endpoint: str,
-    payload: dict,
-    max_retries: int = 3,
-    retry_delay: float = 1.0,
-    timeout: float = 600.0
-) -> httpx.Response:
-    """
-    Make a POST request to an agent with retry logic.
-
-    This handles the case where an agent container is running but
-    its internal HTTP server is not yet ready.
-
-    Args:
-        agent_name: Name of the agent
-        endpoint: API endpoint path (e.g., "/api/chat", "/api/task")
-        payload: Request payload
-        max_retries: Number of retry attempts for connection errors
-        retry_delay: Initial delay between retries (doubles each retry)
-        timeout: Request timeout in seconds
-
-    Returns:
-        httpx.Response object
-
-    Raises:
-        httpx.ConnectError: If all connection attempts fail
-        httpx.TimeoutException: If request times out
-    """
-    agent_url = f"http://agent-{agent_name}:8000{endpoint}"
-
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(agent_url, json=payload)
-                return response
-        except httpx.ConnectError as e:
-            last_error = e
-            if attempt < max_retries - 1:
-                delay = retry_delay * (2 ** attempt)  # Exponential backoff
-                logger.debug(
-                    f"Agent {agent_name} connection failed (attempt {attempt + 1}/{max_retries}), "
-                    f"retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
-            else:
-                logger.warning(
-                    f"Agent {agent_name} connection failed after {max_retries} attempts: {e}"
-                )
-
-    # All retries exhausted
-    raise last_error or httpx.ConnectError(f"Failed to connect to agent {agent_name}")
 
 router = APIRouter(prefix="/api/agents", tags=["chat"])
 
@@ -662,29 +612,6 @@ async def execute_parallel_task(
     )
     execution_id = execution.id if execution else None
 
-    # CAPACITY-001: Check and acquire slot for parallel execution
-    slot_service = get_slot_service()
-    max_parallel_tasks = db.get_max_parallel_tasks(name)
-    slot_acquired = await slot_service.acquire_slot(
-        agent_name=name,
-        execution_id=execution_id or f"temp-{datetime.utcnow().timestamp()}",
-        max_parallel_tasks=max_parallel_tasks,
-        message_preview=request.message[:100] if request.message else ""
-    )
-
-    if not slot_acquired:
-        # At capacity - return 429 and clean up execution record
-        if execution_id:
-            db.update_execution_status(
-                execution_id=execution_id,
-                status="failed",
-                error=f"Agent at capacity ({max_parallel_tasks}/{max_parallel_tasks} parallel tasks running)"
-            )
-        raise HTTPException(
-            status_code=429,
-            detail=f"Agent '{name}' is at capacity ({max_parallel_tasks} parallel tasks). Try again later."
-        )
-
     # Broadcast collaboration event if this is agent-to-agent communication
     # Track collaboration activity FIRST (belongs to source agent) - mirrors /api/chat pattern
     collaboration_activity_id = None
@@ -712,27 +639,48 @@ async def execute_parallel_task(
             }
         )
 
-    # Track parallel task activity (belongs to target agent)
-    task_activity_id = await activity_service.track_activity(
-        agent_name=name,
-        activity_type=ActivityType.CHAT_START,
-        user_id=current_user.id,
-        triggered_by=triggered_by,
-        parent_activity_id=collaboration_activity_id,  # Link to collaboration if agent-initiated
-        related_execution_id=execution_id,  # Database execution ID for structured queries
-        details={
-            "message_preview": request.message[:100],
-            "source_agent": x_source_agent,
-            "parallel_mode": True,
-            "async_mode": request.async_mode,
-            "model": request.model,
-            "timeout_seconds": request.timeout_seconds,
-            "execution_id": execution_id  # Also in details for WebSocket events
-        }
-    )
-
-    # Async mode: spawn task in background and return immediately
+    # Async mode: acquire slot here, spawn background task which releases it
     if request.async_mode:
+        slot_service = get_slot_service()
+        max_parallel_tasks = db.get_max_parallel_tasks(name)
+        slot_acquired = await slot_service.acquire_slot(
+            agent_name=name,
+            execution_id=execution_id or f"temp-{datetime.utcnow().timestamp()}",
+            max_parallel_tasks=max_parallel_tasks,
+            message_preview=request.message[:100] if request.message else ""
+        )
+
+        if not slot_acquired:
+            if execution_id:
+                db.update_execution_status(
+                    execution_id=execution_id,
+                    status="failed",
+                    error=f"Agent at capacity ({max_parallel_tasks}/{max_parallel_tasks} parallel tasks running)"
+                )
+            raise HTTPException(
+                status_code=429,
+                detail=f"Agent '{name}' is at capacity ({max_parallel_tasks} parallel tasks). Try again later."
+            )
+
+        # Track parallel task activity (belongs to target agent)
+        task_activity_id = await activity_service.track_activity(
+            agent_name=name,
+            activity_type=ActivityType.CHAT_START,
+            user_id=current_user.id,
+            triggered_by=triggered_by,
+            parent_activity_id=collaboration_activity_id,
+            related_execution_id=execution_id,
+            details={
+                "message_preview": request.message[:100],
+                "source_agent": x_source_agent,
+                "parallel_mode": True,
+                "async_mode": True,
+                "model": request.model,
+                "timeout_seconds": request.timeout_seconds,
+                "execution_id": execution_id
+            }
+        )
+
         # Update execution status to "running"
         if execution_id:
             db.update_execution_status(execution_id=execution_id, status="running")
@@ -762,244 +710,106 @@ async def execute_parallel_task(
             "async_mode": True
         }
 
-    try:
-        # Build payload for agent's /api/task endpoint
-        # Pass execution_id so agent uses it for process registry (enables termination tracking)
-        payload = {
-            "message": request.message,
-            "model": request.model,
-            "allowed_tools": request.allowed_tools,
-            "system_prompt": request.system_prompt,
-            "timeout_seconds": request.timeout_seconds,
-            "execution_id": execution_id,  # Database execution ID for process registry
-            "resume_session_id": request.resume_session_id  # Claude Code session resume (EXEC-023)
-        }
+    # ---- Sync mode: delegate to TaskExecutionService (EXEC-024) ----
+    task_execution_service = get_task_execution_service()
+    result = await task_execution_service.execute_task(
+        agent_name=name,
+        message=request.message,
+        triggered_by=triggered_by,
+        source_user_id=current_user.id,
+        source_user_email=current_user.email or current_user.username,
+        source_agent_name=x_source_agent,
+        source_mcp_key_id=x_mcp_key_id,
+        source_mcp_key_name=x_mcp_key_name,
+        model=request.model,
+        timeout_seconds=request.timeout_seconds or 900,
+        resume_session_id=request.resume_session_id,
+        allowed_tools=request.allowed_tools,
+        system_prompt=request.system_prompt,
+        execution_id=execution_id,
+    )
 
-        start_time = datetime.utcnow()
-
-        # Call agent's /api/task endpoint with retry logic
-        response = await agent_post_with_retry(
-            name,
-            "/api/task",
-            payload,
-            max_retries=3,
-            retry_delay=1.0,
-            timeout=float(request.timeout_seconds or 600) + 10  # Add buffer to agent timeout (default 600s)
-        )
-        response.raise_for_status()
-
-        response_data = response.json()
-
-        execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-        metadata = response_data.get("metadata", {})
-
-        # Update execution record with success
-        # SECURITY: Sanitize credentials from execution logs and response
-        if execution_id:
-            tool_calls_json = None
-            execution_log_json = None
-            # Note: Check for key existence, not truthiness - empty list [] is valid log
-            if "execution_log" in response_data and response_data["execution_log"] is not None:
-                execution_log = response_data["execution_log"]
-                if isinstance(execution_log, list) and len(execution_log) > 0:
-                    try:
-                        execution_log_json = json.dumps(execution_log)
-                        # SECURITY: Sanitize credentials before persistence
-                        execution_log_json = sanitize_execution_log(execution_log_json)
-                        tool_calls_json = execution_log_json  # Keep for backwards compatibility
-                        logger.debug(f"[Task] Execution {execution_id}: captured {len(execution_log)} log entries")
-                    except Exception as e:
-                        logger.error(f"[Task] Failed to serialize execution_log for {execution_id}: {e}")
-                else:
-                    logger.warning(f"[Task] Execution {execution_id}: execution_log is empty (type={type(execution_log).__name__})")
-            else:
-                logger.warning(f"[Task] Execution {execution_id}: no execution_log in agent response")
-
-            # Agent returns metadata with input_tokens, output_tokens, context_window
-            context_used = metadata.get("input_tokens", 0) + metadata.get("output_tokens", 0)
-            sanitized_resp = sanitize_response(response_data.get("response"))
-
-            # Extract Claude Code session_id for --resume support (EXEC-023)
-            claude_session_id = response_data.get("session_id") or metadata.get("session_id")
-
-            db.update_execution_status(
-                execution_id=execution_id,
-                status="success",
-                response=sanitized_resp,
-                context_used=context_used if context_used > 0 else None,
-                context_max=metadata.get("context_window") or 200000,
-                cost=metadata.get("cost_usd"),
-                tool_calls=tool_calls_json,
-                execution_log=execution_log_json,
-                claude_session_id=claude_session_id
-            )
-
-        # Track task completion
+    # Complete collaboration activity based on result
+    if collaboration_activity_id:
         await activity_service.complete_activity(
-            activity_id=task_activity_id,
-            status="completed",
+            activity_id=collaboration_activity_id,
+            status="completed" if result.status == "success" else "failed",
             details={
-                "session_id": response_data.get("session_id"),
-                "cost_usd": metadata.get("cost_usd"),
-                "execution_time_ms": execution_time_ms,
-                "tool_count": len(response_data.get("execution_log", [])),
-                "parallel_mode": True
-            }
+                "response_length": len(result.response),
+                "execution_id": execution_id,
+            },
+            error=result.error if result.status == "failed" else None,
         )
 
-        # Complete collaboration activity if this was agent-to-agent
-        if collaboration_activity_id:
-            await activity_service.complete_activity(
-                activity_id=collaboration_activity_id,
-                status="completed",
-                details={
-                    "response_length": len(response_data.get("response", "")),
-                    "execution_time_ms": execution_time_ms,
-                    "execution_id": execution_id
-                }
+    # Handle failure — translate to HTTP errors
+    if result.status == "failed":
+        if "at capacity" in (result.error or ""):
+            raise HTTPException(
+                status_code=429,
+                detail=f"Agent '{name}' is at capacity. Try again later."
+            )
+        elif "timed out" in (result.error or ""):
+            raise HTTPException(
+                status_code=504,
+                detail=result.error
+            )
+        else:
+            raise HTTPException(
+                status_code=503,
+                detail=result.error or "Failed to execute task. The agent may be unavailable."
             )
 
-        # Persist to chat session if requested (for authenticated Chat tab)
-        if request.save_to_session:
-            try:
-                # Create new session or get existing one
-                if request.create_new_session:
-                    # User clicked "New Chat" - close old sessions and create a new one
-                    session = db.create_new_chat_session(
-                        agent_name=name,
-                        user_id=current_user.id,
-                        user_email=current_user.email or current_user.username
-                    )
-                else:
-                    # Continue existing session or create if none exists
-                    session = db.get_or_create_chat_session(
-                        agent_name=name,
-                        user_id=current_user.id,
-                        user_email=current_user.email or current_user.username
-                    )
+    # Build response from service result
+    response_data = result.raw_response
 
-                # Use user_message if provided, otherwise fall back to message
-                # (user_message contains the original message without context prefix)
-                original_user_message = request.user_message or request.message
-
-                # Add user message to session
-                db.add_chat_message(
-                    session_id=session.id,
+    # Persist to chat session if requested (for authenticated Chat tab)
+    if request.save_to_session:
+        try:
+            if request.create_new_session:
+                session = db.create_new_chat_session(
                     agent_name=name,
                     user_id=current_user.id,
-                    user_email=current_user.email or current_user.username,
-                    role="user",
-                    content=original_user_message
+                    user_email=current_user.email or current_user.username
                 )
-
-                # Add assistant response to session
-                sanitized_resp = sanitize_response(response_data.get("response", ""))
-                db.add_chat_message(
-                    session_id=session.id,
+            else:
+                session = db.get_or_create_chat_session(
                     agent_name=name,
                     user_id=current_user.id,
-                    user_email=current_user.email or current_user.username,
-                    role="assistant",
-                    content=sanitized_resp,
-                    cost=metadata.get("cost_usd"),
-                    context_used=metadata.get("input_tokens", 0) + metadata.get("output_tokens", 0),
-                    context_max=metadata.get("context_window") or 200000,
-                    execution_time_ms=execution_time_ms
+                    user_email=current_user.email or current_user.username
                 )
 
-                # Add session ID to response
-                response_data["chat_session_id"] = session.id
-                logger.debug(f"[Task] Saved to chat session {session.id} for agent '{name}'")
-            except Exception as e:
-                # Don't fail the request if session persistence fails
-                logger.warning(f"[Task] Failed to save to chat session for agent '{name}': {e}")
+            original_user_message = request.user_message or request.message
 
-        # Add database execution ID to response for frontend tracking
-        response_data["task_execution_id"] = execution_id
-
-        return response_data
-
-    except httpx.TimeoutException:
-        # Update execution record with timeout failure - but NOT if already cancelled
-        if execution_id:
-            existing = db.get_execution(execution_id)
-            if existing and existing.status == "cancelled":
-                logger.info(f"Execution {execution_id} already cancelled, not overwriting with timeout status")
-            else:
-                db.update_execution_status(
-                    execution_id=execution_id,
-                    status="failed",
-                    error=f"Task execution timed out after {request.timeout_seconds} seconds"
-                )
-
-        await activity_service.complete_activity(
-            activity_id=task_activity_id,
-            status="failed",
-            error="Task execution timed out"
-        )
-
-        # Complete collaboration activity on failure
-        if collaboration_activity_id:
-            await activity_service.complete_activity(
-                activity_id=collaboration_activity_id,
-                status="failed",
-                error="Task execution timed out"
+            db.add_chat_message(
+                session_id=session.id,
+                agent_name=name,
+                user_id=current_user.id,
+                user_email=current_user.email or current_user.username,
+                role="user",
+                content=original_user_message
             )
 
-        raise HTTPException(
-            status_code=504,
-            detail=f"Task execution timed out after {request.timeout_seconds} seconds"
-        )
-
-    except httpx.HTTPError as e:
-        # Extract detailed error message from agent response if available
-        error_msg = f"HTTP error: {type(e).__name__}"
-        if hasattr(e, 'response') and e.response is not None:
-            try:
-                error_data = e.response.json()
-                if "detail" in error_data:
-                    error_msg = error_data["detail"]
-            except Exception:
-                # Try raw text if JSON parsing fails
-                if e.response.text:
-                    error_msg = e.response.text[:500]
-        logger.error(f"Failed to execute parallel task on {name}: {error_msg}")
-
-        # Update execution record with failure - but NOT if already cancelled (terminated by user)
-        if execution_id:
-            # Check if execution was already cancelled (terminated by user)
-            existing = db.get_execution(execution_id)
-            if existing and existing.status == "cancelled":
-                logger.info(f"Execution {execution_id} already cancelled, not overwriting with failed status")
-            else:
-                db.update_execution_status(
-                    execution_id=execution_id,
-                    status="failed",
-                    error=error_msg
-                )
-
-        await activity_service.complete_activity(
-            activity_id=task_activity_id,
-            status="failed",
-            error=type(e).__name__
-        )
-
-        # Complete collaboration activity on failure
-        if collaboration_activity_id:
-            await activity_service.complete_activity(
-                activity_id=collaboration_activity_id,
-                status="failed",
-                error=error_msg
+            db.add_chat_message(
+                session_id=session.id,
+                agent_name=name,
+                user_id=current_user.id,
+                user_email=current_user.email or current_user.username,
+                role="assistant",
+                content=result.response,
+                cost=result.cost,
+                context_used=result.context_used,
+                context_max=result.context_max,
             )
 
-        raise HTTPException(
-            status_code=503,
-            detail="Failed to execute task. The agent may be unavailable."
-        )
+            response_data["chat_session_id"] = session.id
+            logger.debug(f"[Task] Saved to chat session {session.id} for agent '{name}'")
+        except Exception as e:
+            logger.warning(f"[Task] Failed to save to chat session for agent '{name}': {e}")
 
-    finally:
-        # CAPACITY-001: Release slot when sync task completes (success or failure)
-        await slot_service.release_slot(name, execution_id or f"temp-{datetime.utcnow().timestamp()}")
+    # Add database execution ID to response for frontend tracking
+    response_data["task_execution_id"] = execution_id
+
+    return response_data
 
 
 @router.get("/{name}/chat/history")

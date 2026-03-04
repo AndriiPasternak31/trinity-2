@@ -23,6 +23,7 @@ from database import (
 )
 from services.docker_service import get_agent_container
 from services.email_service import email_service
+from services.task_execution_service import get_task_execution_service
 
 
 class PublicChatHistoryResponse(BaseModel):
@@ -307,67 +308,58 @@ async def public_chat(
         max_turns=10
     )
 
-    # Execute via parallel task endpoint
-    try:
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(
-                f"http://agent-{agent_name}:8000/api/task",
-                json={
-                    "message": context_prompt,
-                    "timeout_seconds": 120
-                }
+    # EXEC-024: Execute via TaskExecutionService (unified execution path)
+    # Public executions now get full tracking: execution records, activity stream,
+    # slot management, credential sanitization, and Dashboard timeline visibility.
+    source_email = verified_email or f"anonymous ({client_ip})"
+    task_execution_service = get_task_execution_service()
+    result = await task_execution_service.execute_task(
+        agent_name=agent_name,
+        message=context_prompt,
+        triggered_by="public",
+        source_user_email=source_email,
+        timeout_seconds=120,
+    )
+
+    if result.status == "failed":
+        error = result.error or ""
+        if "at capacity" in error:
+            raise HTTPException(
+                status_code=429,
+                detail="Agent is busy. Please try again later."
+            )
+        elif "timed out" in error:
+            raise HTTPException(
+                status_code=504,
+                detail="Request timed out. Please try again with a simpler question."
+            )
+        else:
+            logger.error(f"Public chat task failed for {agent_name}: {error}")
+            raise HTTPException(
+                status_code=502,
+                detail="Failed to process your request. Please try again."
             )
 
-            if response.status_code != 200:
-                logger.error(f"Agent task failed: {response.status_code} - {response.text}")
-                raise HTTPException(
-                    status_code=502,
-                    detail="Failed to process your request. Please try again."
-                )
+    assistant_response = result.response
 
-            result = response.json()
-            assistant_response = result.get("response", result.get("result", ""))
+    # Store assistant response in public chat messages
+    db.add_public_chat_message(
+        session_id=chat_session.id,
+        role="assistant",
+        content=assistant_response,
+        cost=result.cost
+    )
 
-            # Calculate cost from usage if available
-            cost = None
-            usage = result.get("usage")
-            if usage:
-                # Rough cost estimate (adjust rates as needed)
-                input_tokens = usage.get("input_tokens", 0)
-                output_tokens = usage.get("output_tokens", 0)
-                cost = (input_tokens * 0.000003) + (output_tokens * 0.000015)
+    # Get updated message count
+    updated_session = db.get_public_chat_session(chat_session.id)
+    message_count = updated_session.message_count if updated_session else 0
 
-            # Store assistant response
-            db.add_public_chat_message(
-                session_id=chat_session.id,
-                role="assistant",
-                content=assistant_response,
-                cost=cost
-            )
-
-            # Get updated message count
-            updated_session = db.get_public_chat_session(chat_session.id)
-            message_count = updated_session.message_count if updated_session else 0
-
-            return PublicChatResponse(
-                response=assistant_response,
-                session_id=session_identifier if identifier_type == "anonymous" else None,
-                message_count=message_count,
-                usage=usage
-            )
-
-    except httpx.TimeoutException:
-        logger.error(f"Agent request timed out for {link['agent_name']}")
-        raise HTTPException(
-            status_code=504,
-            detail="Request timed out. Please try again with a simpler question."
-        )
-    except httpx.RequestError as e:
-        logger.error(f"Agent request failed: {e}")
-        raise HTTPException(
-            status_code=502,
-            detail="Failed to reach the agent. Please try again."
-        )
+    return PublicChatResponse(
+        response=assistant_response,
+        session_id=session_identifier if identifier_type == "anonymous" else None,
+        message_count=message_count,
+        usage=None  # Usage details are tracked in the execution record
+    )
 
 
 # Introduction prompt - asks agent to introduce itself

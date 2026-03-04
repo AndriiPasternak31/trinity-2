@@ -124,6 +124,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `credential_encryption.py` - AES-256-GCM encryption for .credentials.enc files (NEW: 2026-02-05)
 - `process_engine/` - Process Engine service (NEW: 2026-01-16, see below)
 - `slack_service.py` - Slack API client (OAuth, messaging, verification) (NEW: 2026-02-25, SLACK-001)
+- `task_execution_service.py` - Unified task execution lifecycle (slot mgmt, activity tracking, sanitization) (NEW: 2026-03-04, EXEC-024)
 
 **Logging (`logging_config.py`):**
 - Structured JSON logging for production

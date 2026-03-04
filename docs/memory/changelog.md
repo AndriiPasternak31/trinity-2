@@ -1,3 +1,20 @@
+### 2026-03-04
+🔄 **Refactor: Unified Task Execution Service (EXEC-024)**
+
+Extracted task execution orchestration from `routers/chat.py` into a shared `services/task_execution_service.py` so that all callers use a single code path for execution tracking, activity tracking, slot management, and credential sanitization.
+
+**New file:**
+- `src/backend/services/task_execution_service.py` — `TaskExecutionService.execute_task()` encapsulates full lifecycle: create execution record → acquire slot → track activity → call agent (with retry) → sanitize response → update execution → complete activity → release slot. Also exports `agent_post_with_retry()` moved from `routers/chat.py`.
+
+**Refactored:**
+- `src/backend/routers/chat.py` — Sync `/task` path now delegates to `TaskExecutionService.execute_task()`. Router retains auth, collaboration tracking, async mode, and session persistence. Removed inline `agent_post_with_retry()` (now imported from service).
+- `src/backend/routers/public.py` — `public_chat()` now uses `TaskExecutionService` instead of raw `httpx.AsyncClient`. Public executions now appear in Tasks tab, Dashboard timeline, and respect capacity slots.
+
+**Behavioral changes:**
+- Public link executions now create `schedule_executions` records with `triggered_by="public"` — visible in Tasks tab and Dashboard
+- Public link executions now count toward agent capacity slots (429 when at capacity)
+- Public link execution logs are now credential-sanitized
+
 ### 2026-03-03
 ✨ **Feature: Subscription Agent Assignment UI (SUB-003)**
 

@@ -141,11 +141,16 @@ class TestExecutionFields:
         assert_status(response, 200)
         executions = response.json()
 
-        # Find successful execution
+        # Find successful execution and check detail endpoint for response
         successful = [e for e in executions if e.get("status") == "success"]
         if successful:
-            execution = successful[0]
-            # Response should be present for successful executions
+            execution_id = successful[0]["id"]
+            detail_response = api_client.get(
+                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
+            )
+            assert_status(detail_response, 200)
+            execution = detail_response.json()
+            # Response should be present for successful executions (via detail endpoint)
             assert "response" in execution, "Successful execution should have response"
 
 

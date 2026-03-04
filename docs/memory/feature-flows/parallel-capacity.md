@@ -3,13 +3,14 @@
 > **Requirement**: CAPACITY-001 - Per-Agent Parallel Execution Capacity
 > **Status**: Implemented (Phase 1: Backend, Phase 2: Frontend UI)
 > **Created**: 2026-02-28
-> **Updated**: 2026-03-03
+> **Updated**: 2026-03-04
 > **Priority**: P1
 
 ## Revision History
 
 | Date | Changes |
 |------|---------|
+| 2026-03-04 | EXEC-024: Slot management split - sync path delegated to TaskExecutionService, public links gain slot enforcement |
 | 2026-03-03 | Phase 2: Frontend UI - CapacityMeter component, store plumbing, Agents page + Dashboard timeline integration |
 | 2026-02-28 | Initial implementation - Database, Redis slots, REST API, task endpoint integration |
 
@@ -41,17 +42,29 @@ The frontend displays slot usage as a vertical capacity meter bar on the Agents 
 │     │                                                                    │
 │     v                                                                    │
 │  ┌────────────────────────────────────────────────────────────────┐     │
-│  │  Backend (chat.py:596-617)                                      │     │
+│  │  Backend — Slot Management (EXEC-024 split)                     │     │
 │  │                                                                  │     │
-│  │  1. Create execution record in database                         │     │
-│  │  2. Get max_parallel_tasks from SQLite                          │     │
-│  │  3. Call slot_service.acquire_slot()                            │     │
-│  │     ├── Check ZCARD < max_parallel_tasks                        │     │
-│  │     ├── If full → Return False                                  │     │
-│  │     └── If available → ZADD + store metadata → Return True      │     │
-│  │  4. If not acquired → Return 429 Too Many Requests              │     │
-│  │  5. If acquired → Execute task                                  │     │
-│  │  6. On completion → slot_service.release_slot()                 │     │
+│  │  SYNC path (chat.py:714-730 → task_execution_service.py):       │     │
+│  │  1. Create execution record in database (chat.py:602-613)       │     │
+│  │  2. Delegate to TaskExecutionService.execute_task()              │     │
+│  │     ├── Acquire slot (task_execution_service.py:164)             │     │
+│  │     ├── If full → Return failed result ("at capacity")          │     │
+│  │     ├── Execute task with retry                                  │     │
+│  │     └── Release slot in finally block (line 372)                │     │
+│  │  3. Router translates failed result → 429 (chat.py:746-750)     │     │
+│  │                                                                  │     │
+│  │  ASYNC path (chat.py:642-711):                                  │     │
+│  │  1. Create execution record in database (chat.py:602-613)       │     │
+│  │  2. Router acquires slot directly (chat.py:644-651)             │     │
+│  │  3. If full → 429 response (chat.py:653-663)                   │     │
+│  │  4. Spawn _execute_task_background() with release_slot=True     │     │
+│  │  5. Background task releases slot in finally (chat.py:554-557)  │     │
+│  │                                                                  │     │
+│  │  PUBLIC path (public.py:315-322 → task_execution_service.py):   │     │
+│  │  1. Delegate to TaskExecutionService.execute_task()              │     │
+│  │     ├── Creates execution record + acquires slot internally     │     │
+│  │     └── Release slot in finally block                           │     │
+│  │  2. Router translates failed result → 429 (public.py:326-330)  │     │
 │  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
 │  ┌─────────────────────┐         ┌─────────────────────────────────┐    │
@@ -80,33 +93,64 @@ The frontend displays slot usage as a vertical capacity meter bar on the Agents 
 
 ### 1. Slot Acquisition (Task Start)
 
+There are now three paths that acquire slots, depending on the caller:
+
+**Sync mode** (authenticated `/task` endpoint, `async_mode=false`):
 ```
-POST /api/agents/{name}/task
+POST /api/agents/{name}/task  (sync)
        │
        v
-┌─────────────────────────────────────────────────┐
-│ 1. db.get_max_parallel_tasks(name)              │
-│    → Returns max_parallel_tasks (1-10, def: 3)  │
-│                                                  │
-│ 2. slot_service.acquire_slot(                   │
-│      agent_name, execution_id,                  │
-│      max_parallel_tasks, message_preview        │
-│    )                                             │
-│    ├── Clean stale slots (ZREMRANGEBYSCORE)     │
-│    ├── Check: ZCARD < max?                      │
-│    ├── If YES: ZADD + HSET metadata             │
-│    └── Return True/False                        │
-└─────────────────────────────────────────────────┘
+  chat.py:714-730 — delegates to TaskExecutionService
        │
-       ├── slot_acquired=False → 429 Too Many Requests
+       v
+  task_execution_service.py:162-184
+  ┌─────────────────────────────────────────────────┐
+  │ 1. db.get_max_parallel_tasks(name)              │
+  │ 2. slot_service.acquire_slot(...)               │
+  │    ├── Clean stale slots (ZREMRANGEBYSCORE)     │
+  │    ├── Check: ZCARD < max?                      │
+  │    ├── If YES: ZADD + HSET metadata             │
+  │    └── Return True/False                        │
+  │ 3. If not acquired → Return failed result       │
+  │    (router translates to 429)                   │
+  └─────────────────────────────────────────────────┘
+```
+
+**Async mode** (authenticated `/task` endpoint, `async_mode=true`):
+```
+POST /api/agents/{name}/task  (async)
        │
-       └── slot_acquired=True → Execute task
+       v
+  chat.py:642-663 — router acquires slot directly
+  ┌─────────────────────────────────────────────────┐
+  │ 1. db.get_max_parallel_tasks(name)              │
+  │ 2. slot_service.acquire_slot(...)               │
+  │ 3. If not acquired → 429 Too Many Requests     │
+  │ 4. Spawn background task with release_slot=True │
+  └─────────────────────────────────────────────────┘
+```
+
+**Public link** (`POST /api/public/chat/{token}`):
+```
+POST /api/public/chat/{token}
+       │
+       v
+  public.py:315-322 — delegates to TaskExecutionService
+       │
+       v
+  task_execution_service.py:162-184  (same as sync above)
 ```
 
 ### 2. Slot Release (Task Complete)
 
 ```
 Task completes (success or failure)
+       │
+       ├── Sync + Public path:
+       │   task_execution_service.py:370-375 (finally block)
+       │
+       └── Async path:
+           _execute_task_background() → chat.py:554-557 (finally block)
        │
        v
 ┌─────────────────────────────────────────────────┐
@@ -180,16 +224,39 @@ Every 5 seconds (agents store / network store):
 | `src/backend/routers/agents.py` | 1365-1416 | `GET /api/agents/{name}/capacity` - Get capacity |
 | `src/backend/routers/agents.py` | 1419-1461 | `PUT /api/agents/{name}/capacity` - Update capacity |
 
-### Task Endpoint Integration
+### Task Endpoint Integration (EXEC-024 split)
+
+**TaskExecutionService** (sync + public path):
+
+| File | Line | Purpose |
+|------|------|---------|
+| `src/backend/services/task_execution_service.py` | 1-391 | Unified execution lifecycle service |
+| `src/backend/services/task_execution_service.py` | 112-128 | `execute_task()` entry point |
+| `src/backend/services/task_execution_service.py` | 162-169 | Slot acquisition (sync/public) |
+| `src/backend/services/task_execution_service.py` | 171-184 | At-capacity handling (returns failed result) |
+| `src/backend/services/task_execution_service.py` | 370-375 | Slot release in `finally` block |
+
+**chat.py** (async path + router delegation):
 
 | File | Line | Purpose |
 |------|------|---------|
 | `src/backend/routers/chat.py` | 20 | Import get_slot_service |
-| `src/backend/routers/chat.py` | 596-617 | Slot acquisition before task execution |
-| `src/backend/routers/chat.py` | 606-617 | 429 response when at capacity |
-| `src/backend/routers/chat.py` | 680 | Async mode: `release_slot=True` flag |
-| `src/backend/routers/chat.py` | 427-539 | `_execute_task_background()` with slot release |
-| `src/backend/routers/chat.py` | 931 | Sync mode: slot release in finally block |
+| `src/backend/routers/chat.py` | 21-23 | Import get_task_execution_service |
+| `src/backend/routers/chat.py` | 642-663 | Async mode: router acquires slot directly |
+| `src/backend/routers/chat.py` | 653-663 | Async mode: 429 response when at capacity |
+| `src/backend/routers/chat.py` | 697 | Async mode: `release_slot=True` flag |
+| `src/backend/routers/chat.py` | 370-558 | `_execute_task_background()` with slot release in finally |
+| `src/backend/routers/chat.py` | 554-557 | Async mode: slot release in `finally` block |
+| `src/backend/routers/chat.py` | 714-730 | Sync mode: delegates to TaskExecutionService |
+| `src/backend/routers/chat.py` | 746-750 | Sync mode: translates "at capacity" result to 429 |
+
+**public.py** (public link path):
+
+| File | Line | Purpose |
+|------|------|---------|
+| `src/backend/routers/public.py` | 26 | Import get_task_execution_service |
+| `src/backend/routers/public.py` | 311-322 | Public chat delegates to TaskExecutionService |
+| `src/backend/routers/public.py` | 326-330 | Translates "at capacity" result to 429 |
 
 ### Pydantic Models
 
@@ -438,6 +505,16 @@ TTL: 30 minutes (EXPIRE)
 ```
 
 ## Slot Lifecycle
+
+As of EXEC-024, slot acquisition/release is handled by different code paths depending on the execution mode:
+
+| Execution Mode | Slot Acquire | Slot Release |
+|----------------|-------------|--------------|
+| **Sync** (authenticated `/task`) | `TaskExecutionService.execute_task()` (line 164) | `TaskExecutionService` finally block (line 372) |
+| **Async** (authenticated `/task`, `async_mode=true`) | `chat.py` router directly (line 646) | `_execute_task_background()` finally (line 557) |
+| **Public** (`/api/public/chat/{token}`) | `TaskExecutionService.execute_task()` (line 164) | `TaskExecutionService` finally block (line 372) |
+
+**Note**: Prior to EXEC-024, public link executions bypassed slot management entirely. They now go through `TaskExecutionService` and are subject to the same capacity limits as authenticated requests.
 
 ### 1. Slot Acquisition Logic
 

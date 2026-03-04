@@ -42,14 +42,16 @@ Public Agent Links allow agent owners to generate shareable URLs that enable una
          +------------------------+------------------------+
          v                        v                        v
 +------------------+  +----------------------+  +------------------+
-|   SQLite DB      |  |   Email Service      |  |   Agent Server   |
+|   SQLite DB      |  |   Email Service      |  |TaskExecutionSvc  |
 +------------------+  +----------------------+  +------------------+
-| agent_public_    |  | Console (dev)        |  | /api/task        |
-|   links          |  | SMTP                 |  | (parallel exec)  |
-| public_link_     |  | SendGrid             |  |                  |
-|   verifications  |  |                      |  |                  |
-| public_link_     |  |                      |  |                  |
-|   usage          |  |                      |  |                  |
+| agent_public_    |  | Console (dev)        |  | execute_task()   |
+|   links          |  | SMTP                 |  |   -> slot mgmt   |
+| public_link_     |  | SendGrid             |  |   -> exec record |
+|   verifications  |  |                      |  |   -> activity    |
+| public_link_     |  |                      |  |   -> agent POST  |
+|   usage          |  |                      |  |   -> sanitize    |
+| schedule_        |  |                      |  |                  |
+|   executions     |  |                      |  |                  |
 +------------------+  +----------------------+  +------------------+
 ```
 
@@ -88,9 +90,18 @@ Public User -> POST /api/public/chat/{token}
             -> Backend validates token
             -> Check rate limit (30/min per IP)
             -> Record usage
-            -> Proxy to agent's /api/task endpoint
+            -> TaskExecutionService.execute_task(triggered_by="public")
+               -> Create schedule_executions record
+               -> Acquire capacity slot (429 if at capacity)
+               -> Track activity start
+               -> POST agent /api/task (with retry)
+               -> Sanitize credentials from response
+               -> Track activity completion
+               -> Release slot
             -> Return response
 ```
+
+> **EXEC-024 (2026-03-04)**: Public chat now routes through `TaskExecutionService` instead of a raw `httpx` call. This means public executions create `schedule_executions` records, appear in the Tasks tab and Dashboard timeline, count toward agent capacity slots, and have credential-sanitized logs.
 
 ### 3. Public Chat (Email Required)
 
@@ -201,8 +212,8 @@ import { ChatMessages, ChatInput } from '../components/chat'
 | `GET /api/public/link/{token}` | `public.py:43` | `get_public_link_info()` |
 | `POST /api/public/verify/request` | `public.py:73` | `request_verification_code()` |
 | `POST /api/public/verify/confirm` | `public.py:130` | `confirm_verification_code()` |
-| `POST /api/public/chat/{token}` | `public.py:166` | `public_chat()` |
-| `GET /api/public/intro/{token}` | `public.py:276` | `get_agent_intro()` |
+| `POST /api/public/chat/{token}` | `public.py:215` | `public_chat()` |
+| `GET /api/public/intro/{token}` | `public.py:374` | `get_agent_intro()` |
 
 ### Database Operations
 
@@ -296,6 +307,18 @@ import { ChatMessages, ChatInput } from '../components/chat'
 { "event": "public_link_deleted", "data": { "agent_name": "...", "link_id": "..." } }
 ```
 
+### Execution Tracking (EXEC-024)
+
+Each public chat message now creates a full execution record via `TaskExecutionService`:
+
+| Side Effect | Description |
+|-------------|-------------|
+| **Execution record** | `schedule_executions` row with `triggered_by="public"`, `source_user_email` set to verified email or `"anonymous ({ip})"` |
+| **Activity stream** | `CHAT_START` / `completed` activity pair visible in Dashboard timeline |
+| **Slot management** | Execution occupies a capacity slot; 429 returned if all slots busy |
+| **Credential sanitization** | Response text and execution logs are sanitized via `sanitize_response()` / `sanitize_execution_log()` |
+| **Tasks tab visibility** | Public executions appear alongside manual/scheduled executions in the Tasks tab |
+
 ### Audit Logging
 
 | Event Type | Action | Trigger |
@@ -359,6 +382,7 @@ PUBLIC_CHAT_URL=
 | Session required | 401 | Session token required for this link |
 | Session expired | 401 | Invalid or expired session |
 | Rate limited | 429 | Too many requests |
+| Agent at capacity | 429 | Agent is busy (all parallel task slots occupied) |
 | Agent unavailable | 503 | Agent is not available |
 | Agent timeout | 504 | Request timed out |
 | Agent error | 502 | Failed to process your request |
@@ -376,6 +400,7 @@ PUBLIC_CHAT_URL=
 | `src/backend/routers/public_links.py:30-39` | URL builders: `_build_public_url()`, `_build_external_url()` |
 | `src/backend/routers/public_links.py:42-61` | `_link_to_response()` - converts DB dict to API model |
 | `src/backend/routers/public.py` | Public endpoints |
+| `src/backend/services/task_execution_service.py` | Unified task execution lifecycle (EXEC-024) |
 | `src/backend/services/email_service.py` | Email sending service |
 | `src/backend/db_models.py:301-374` | Pydantic models |
 | `src/backend/db_models.py:329-333` | `PublicLinkWithUrl` with `external_url` field |
@@ -458,7 +483,7 @@ docker-compose exec backend python -m pytest tests/test_public_links.py -v
 ## Related Flows
 
 - **Upstream**: Agent Lifecycle (agent must exist and be running), Agent Sharing (now hosts PublicLinksPanel in same tab)
-- **Downstream**: Agent Chat (uses same `/api/task` endpoint)
+- **Downstream**: Agent Chat (shares `TaskExecutionService.execute_task()` unified execution path)
 - **Related**: [Authenticated Chat Tab](authenticated-chat-tab.md) - shares chat components (ChatMessages, ChatInput, ChatBubble, ChatLoadingIndicator)
 - **Related**: Agent Sharing (manages `can_share` permission, embeds PublicLinksPanel via SharingPanel.vue)
 - **Related**: [Slack Integration](slack-integration.md) (SLACK-001) - Slack as delivery channel for public links
@@ -670,7 +695,7 @@ Response displayed as first assistant message
 
 ### Backend Implementation
 
-**Intro Prompt** (`public.py:267-273`):
+**Intro Prompt** (`public.py:366-372`):
 ```python
 INTRO_PROMPT = """Provide a brief 2-paragraph introduction of yourself.
 
@@ -680,11 +705,11 @@ Second paragraph: Your purpose and how you can help the user.
 Be concise, welcoming, and conversational. Do not use headers, bullet points, or markdown formatting."""
 ```
 
-**Endpoint** (`public.py:276-356`):
+**Endpoint** (`public.py:374-455`):
 - Validates link token and session (if email required)
-- Sends intro prompt to agent via `/api/task`
+- Sends intro prompt to agent via direct `httpx` call to `/api/task` (not routed through TaskExecutionService -- intros are lightweight and do not need execution tracking)
 - Returns `{"intro": "..."}`
-- 60-second timeout for generation
+- 120-second timeout for generation
 
 ### Frontend Implementation
 
@@ -912,10 +937,11 @@ db.build_public_chat_context(session_id, message, max_turns=10)
   -> "Previous conversation:\nUser: ...\nAssistant: ...\n\nCurrent message:\nUser: ..."
         |
         v
-POST to agent /api/task with context-enriched prompt
+TaskExecutionService.execute_task(triggered_by="public")
+  -> execution record, slot, activity, agent POST, sanitize, release
         |
         v
-db.add_public_chat_message(session_id, "assistant", response)
+db.add_public_chat_message(session_id, "assistant", response, cost=result.cost)
         |
         v
 Return {response, session_id (for anonymous), message_count}
@@ -1050,22 +1076,29 @@ class PublicChatMessage(BaseModel):
 - `build_public_chat_context()`
 - `delete_public_link_sessions()`
 
-**Chat Endpoint** (`routers/public.py:214-370`):
-1. Validate link token (line 230)
-2. Determine session identifier (lines 234-262)
+**Chat Endpoint** (`routers/public.py:215-362`):
+1. Validate link token (line 231)
+2. Determine session identifier (lines 235-263)
    - Email links: validate session_token, extract email
    - Anonymous links: use provided session_id or generate new
-3. Rate limit check (lines 264-270)
-4. Check agent availability (lines 272-278)
-5. Get or create session (lines 283-287)
-6. Store user message (lines 289-294)
-7. Record usage (lines 296-301)
-8. Build context-enriched prompt (lines 303-308)
-9. Call agent /api/task (lines 311-328)
-10. Calculate cost from usage (lines 331-338)
-11. Store assistant response (lines 340-346)
-12. Get updated message count (lines 348-350)
-13. Return with session_id for anonymous links (lines 352-357)
+3. Rate limit check (lines 265-271)
+4. Check agent availability (lines 273-279)
+5. Get or create session (lines 284-288)
+6. Store user message (lines 290-295)
+7. Record usage (lines 297-302)
+8. Build context-enriched prompt (lines 304-309)
+9. **Execute via `TaskExecutionService.execute_task(triggered_by="public")`** (lines 311-322)
+   - Creates `schedule_executions` record
+   - Acquires capacity slot (returns 429 if at capacity)
+   - Tracks activity start (Dashboard timeline)
+   - POSTs to agent `/api/task` with retry
+   - Sanitizes credentials from response
+   - Tracks activity completion
+   - Releases slot
+10. Check result status; raise 429/504/502 on failure (lines 324-341)
+11. Store assistant response with cost from result (lines 346-351)
+12. Get updated message count (lines 353-355)
+13. Return with session_id for anonymous links (lines 357-362)
 
 **History Endpoint** (`routers/public.py:465-538`):
 1. Validate link token (line 480)
@@ -1176,12 +1209,15 @@ The `PUBLIC_LINK_MODE_HEADER` constant is defined at `db/public_chat.py:17-18`. 
 
 ### Cost Tracking
 
-Assistant message cost is calculated from agent response usage (`public.py:331-338`):
+Assistant message cost is now sourced from `TaskExecutionResult.cost` (calculated by the agent server and returned in metadata). The `TaskExecutionService` persists cost in the `schedule_executions` record; the public chat endpoint passes it through to `add_public_chat_message()`:
 ```python
-if usage:
-    input_tokens = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-    cost = (input_tokens * 0.000003) + (output_tokens * 0.000015)
+# public.py:346-351
+db.add_public_chat_message(
+    session_id=chat_session.id,
+    role="assistant",
+    content=assistant_response,
+    cost=result.cost  # From TaskExecutionResult
+)
 ```
 
 ### Files
@@ -1191,21 +1227,23 @@ if usage:
 | `src/backend/db/public_chat.py` | 307 | PublicChatOperations class, `PUBLIC_LINK_MODE_HEADER` constant (line 18), `build_context_prompt()` (245-280) |
 | `src/backend/database.py` | 1437 | Tables (660-687), indexes (781-783), delegation (1404-1432) |
 | `src/backend/db_models.py` | 483 | PublicChatSession (389-398), PublicChatMessage (401-408), updated Request/Response (370-382) |
-| `src/backend/routers/public.py` | 603 | Updated chat (214-370), new history (465-538), new session (541-602), response models (28-38) |
+| `src/backend/routers/public.py` | 595 | Updated chat (215-362) uses TaskExecutionService, history (457-530), session (533-594), response models (29-39) |
+| `src/backend/services/task_execution_service.py` | 391 | Unified execution lifecycle: slot mgmt, execution records, activity tracking, credential sanitization |
 | `src/frontend/src/views/PublicChat.vue` | 684 | State (325-339), loadHistory (456-492), sendMessage (571-633), confirmNewConversation (530-568), New button (17-27), messagesContainer ref (334), bottom-aligned layout (191-193) |
 
 ### Error Handling
 
 | Error Case | HTTP Status | Handler |
 |------------|-------------|---------|
-| Invalid link token | 404 | `public.py:231-232` |
-| Session token required (email link) | 401 | `public.py:241-245` |
-| Invalid/expired session | 401 | `public.py:248-252` |
-| Rate limited | 429 | `public.py:266-270` |
-| Agent unavailable | 503 | `public.py:274-278` |
-| Agent timeout | 504 | `public.py:359-364` |
-| Agent error | 502 | `public.py:321-326, 365-370` |
-| Missing session_id for clear | 400 | `public.py:578-582` |
+| Invalid link token | 404 | `public.py:232-233` |
+| Session token required (email link) | 401 | `public.py:242-246` |
+| Invalid/expired session | 401 | `public.py:249-253` |
+| Rate limited | 429 | `public.py:267-271` |
+| Agent at capacity | 429 | `public.py:326-330` (via TaskExecutionService slot check) |
+| Agent unavailable | 503 | `public.py:275-279` |
+| Agent timeout | 504 | `public.py:331-335` |
+| Agent error | 502 | `public.py:336-341` |
+| Missing session_id for clear | 400 | `public.py:570-574` |
 
 ### Testing
 
@@ -1440,3 +1478,4 @@ See [slack-integration.md](slack-integration.md) for complete implementation det
 | 2026-02-17 | **PUB-005 documentation refresh**: Added exact line numbers for all backend endpoints (chat:214, history:465, session:541), db operations (public_chat.py methods with lines), database schema locations (660-687, 781-783), delegation methods (1404-1432), and frontend methods (loadHistory:429, sendMessage:544, confirmNewConversation:503). Added response model documentation, error handling table, cost tracking details, and expanded test scenarios. Updated file line counts (public.py:603, PublicChat.vue:658, db_models.py:483). |
 | 2026-02-17 | **Implemented PUB-006 Public Client Mode Awareness**: Agents now receive `PUBLIC_LINK_MODE_HEADER` constant ("### Trinity: Public Link Access Mode") prepended to all public chat prompts via `build_context_prompt()` in `db/public_chat.py:17-18,265-266`. **UI: Bottom-aligned messages**: Chat messages now stack from bottom up (like iMessage/Slack) using flexbox with spacer div (lines 191-193), new `messagesContainer` ref for scroll handling (line 334). File line count: PublicChat.vue now 684 lines. |
 | 2026-02-25 | **SLACK-001 Slack Integration**: Added Slack as delivery channel for public links. New section documenting Slack integration, updated Related Flows to include slack-integration.md. See [slack-integration.md](slack-integration.md) for full implementation details. |
+| 2026-03-04 | **EXEC-024 TaskExecutionService refactor**: `POST /api/public/chat/{token}` now routes through `TaskExecutionService.execute_task(triggered_by="public")` instead of raw `httpx` call. Public executions now create `schedule_executions` records, appear in Tasks tab and Dashboard timeline, count toward capacity slots (429 when full), and have credential-sanitized logs. Updated architecture diagram, data flow sections, chat endpoint steps, cost tracking, error handling, and file references. Added `task_execution_service.py` to files list. |
