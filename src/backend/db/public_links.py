@@ -8,10 +8,23 @@ Handles:
 """
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
 from db.connection import get_db_connection
+
+
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC now."""
+    return datetime.now(timezone.utc)
+
+
+def _parse_aware(dt_str: str) -> datetime:
+    """Parse an ISO datetime string, ensuring the result is timezone-aware (UTC)."""
+    dt = datetime.fromisoformat(dt_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 class PublicLinkOperations:
@@ -187,8 +200,8 @@ class PublicLinkOperations:
             return False, "disabled", None
 
         if link["expires_at"]:
-            expires = datetime.fromisoformat(link["expires_at"])
-            if datetime.utcnow() > expires:
+            expires = _parse_aware(link["expires_at"])
+            if _utcnow() > expires:
                 return False, "expired", None
 
         return True, None, link
@@ -258,7 +271,7 @@ class PublicLinkOperations:
             verification_id, expires_at, _ = row
 
             # Check expiration
-            if datetime.utcnow() > datetime.fromisoformat(expires_at):
+            if _utcnow() > _parse_aware(expires_at):
                 return False, "code_expired", None
 
             # Generate session token
@@ -297,7 +310,7 @@ class PublicLinkOperations:
 
         email, session_expires = row
 
-        if datetime.utcnow() > datetime.fromisoformat(session_expires):
+        if _utcnow() > _parse_aware(session_expires):
             return False, None
 
         return True, email

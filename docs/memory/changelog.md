@@ -1,4 +1,12 @@
 ### 2026-03-04
+🐛 **Fix: Public links with expiration crash on timezone-naive datetime comparison (Issue #62)**
+
+Fixed `TypeError: can't compare offset-naive and offset-aware datetimes` in `db/public_links.py`. Public links with an `expires_at` value stored timezone-aware timestamps (e.g., `2026-03-31T17:03:00.000Z`) but compared them against `datetime.utcnow()` which returns naive datetimes. Added `_utcnow()` (returns `datetime.now(timezone.utc)`) and `_parse_aware()` helpers. Fixed all three comparison sites: `is_link_valid()`, `verify_code()`, `validate_session()`.
+
+- `src/backend/db/public_links.py` — Added `timezone` import, `_utcnow()` and `_parse_aware()` helpers; replaced 3 naive-vs-aware comparisons
+
+---
+
 🔄 **Refactor: Unified Task Execution Service (EXEC-024)**
 
 Extracted task execution orchestration from `routers/chat.py` into a shared `services/task_execution_service.py` so that all callers use a single code path for execution tracking, activity tracking, slot management, and credential sanitization.
