@@ -228,6 +228,7 @@
       :is-live-mode="true"
       :time-range-hours="selectedTimeRange"
       :schedules="schedules"
+      :slot-stats="slotStats"
       @play="handlePlay"
       @pause="handlePause"
       @stop="handleStop"
@@ -519,6 +520,7 @@ const {
   isLoadingHistory,
   contextStats,
   executionStats,
+  slotStats,
   schedules,
   // Timeline/Replay state
   isTimelineMode,

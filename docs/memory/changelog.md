@@ -1,4 +1,23 @@
 ### 2026-03-03
+📊 **Feature: Capacity Meter — Vertical volume bar for execution slots**
+
+Added `CapacityMeter.vue` component showing parallel execution slot usage as a vertical bar with discrete cells. Fills bottom-to-top, color-coded by utilization (green < 50%, yellow < 80%, orange < 100%, red + pulse at 100%). Integrated across all fleet views.
+
+**New Component:**
+- `src/frontend/src/components/CapacityMeter.vue` — Reusable vertical bar with props: `active`, `max`, `height`, `width`
+
+**Store Changes:**
+- `src/frontend/src/stores/agents.js` — Added `slotStats` state, `fetchSlotStats()` action calling `GET /api/agents/slots`, integrated into 5-second polling
+- `src/frontend/src/stores/network.js` — Added `slotStats` ref, `fetchSlotStats()` function threading data onto node.data.slotStats, integrated into polling, exposed in return block
+
+**View Integration (5 locations):**
+- `src/frontend/src/views/Agents.vue` — Desktop: 9-column grid with "Load" column header and meter between Stats and Arrow; Tablet: meter in Row 2 alongside toggles
+- `src/frontend/src/components/AgentNode.vue` — Tested but ultimately removed from graph nodes
+- `src/frontend/src/components/ReplayTimeline.vue` — Meter in timeline agent tiles (52px tall), restructured tile to flex row
+- `src/frontend/src/views/Dashboard.vue` — Passes `slotStats` from network store to ReplayTimeline
+
+---
+
 📊 **Feature: Replace context bars with success rate bars (Issue #60)**
 
 Replaced context usage progress bars with success rate bars across fleet-view components. Added dual-window (24h + 7d) execution statistics via a single efficient SQL query.

@@ -1,6 +1,6 @@
 # Feature Flow: Dashboard Timeline View
 
-> **Last Updated**: 2026-03-03 (Replace Context Bar with Success Rate Bar - Issue #60)
+> **Last Updated**: 2026-03-03 (Capacity Meter in Timeline Tiles - CAPACITY-001 Phase 2)
 > **Status**: Implemented
 > **Requirements Doc**: `docs/requirements/DASHBOARD_TIMELINE_VIEW.md`, `docs/requirements/TIMELINE_ALL_EXECUTIONS.md`, `docs/requirements/TIMELINE_SCHEDULE_MARKERS.md`
 
@@ -33,9 +33,12 @@ The Dashboard offers two views for monitoring the agent fleet:
    - Auto-scrolls to "Now" position
 
 2. **Rich Agent Tiles** (left column, 288px):
-   - Row 1: Agent name, system badge (SYS), status dot with active pulse, autonomy toggle
-   - Row 2: Success rate bar with percentage (24h primary, 7d fallback, dash if no data)
-   - Row 3: Execution stats (tasks, success rate, cost) or "No tasks", memory limit
+   - Layout: `flex` row with two siblings -- content column and CapacityMeter
+   - Content column (`flex-col justify-between flex-1 min-w-0`):
+     - Row 1: Agent name, system badge (SYS), status dot with active pulse, autonomy toggle
+     - Row 2: Success rate bar with percentage (24h primary, 7d fallback, dash if no data)
+     - Row 3: Execution stats (tasks, success rate, cost) or "No tasks", memory limit
+   - CapacityMeter (`ml-1.5 flex-shrink-0 self-stretch`): vertical slot indicator, height=52 width=6, always shown, defaults to active=0/max=3 when no slot data
 
 3. **Live Event Streaming**
    - WebSocket remains connected (unlike old Replay mode)
@@ -97,8 +100,9 @@ The Dashboard offers two views for monitoring the agent fleet:
 +-------------------+    +------------------+
 | setViewMode()     |    | contextStats     |
 | - graph           |    | executionStats   |
-| - timeline        |    | (5s polling)     |
-+-------------------+    +------------------+
+| - timeline        |    | slotStats        |
++-------------------+    | (5s polling)     |
+                         +------------------+
 ```
 
 ### Execution ID Handling
@@ -127,6 +131,7 @@ The Dashboard offers two views for monitoring the agent fleet:
 | `isLiveMode` | Hardcoded `true` | Enables live features |
 | `timeRangeHours` | `selectedTimeRange` | For default zoom calculation |
 | `schedules` | `networkStore.schedules` | Enabled schedules for markers (TSM-001) |
+| `slotStats` | `networkStore.slotStats` | Per-agent slot capacity `{ agentName: { max, active } }` for CapacityMeter |
 
 ### Events Emitted by ReplayTimeline
 
@@ -536,6 +541,59 @@ newStats[stat.name] = {
 ```
 
 **Note**: The `contextStats` prop is still passed to `ReplayTimeline` and used for `activityState` detection (active/idle/offline status dot), but it no longer drives a visible bar in the tile layout.
+
+### 14. Capacity Meter in Timeline Tiles (CAPACITY-001 Phase 2)
+
+Each agent tile includes a vertical `CapacityMeter` showing active vs max parallel execution slots. The tile div changed from `flex-col` to `flex` (horizontal row): the 3-row content sits in a `flex-col justify-between flex-1 min-w-0` wrapper, and CapacityMeter is a sibling.
+
+**Tile Layout** (`ReplayTimeline.vue:118-211`):
+```html
+<!-- Outer tile: flex row -->
+<div class="px-3 py-2 ... flex" :style="{ height: rowHeight + 'px' }">
+  <!-- Left: 3-row content column -->
+  <div class="flex flex-col justify-between flex-1 min-w-0">
+    <!-- Row 1: Name, badges, status dot, autonomy toggle -->
+    <!-- Row 2: Success rate bar -->
+    <!-- Row 3: Stats -->
+  </div>
+
+  <!-- Right: Capacity meter -->
+  <CapacityMeter
+    :active="row.slotStats ? row.slotStats.active : 0"
+    :max="row.slotStats ? row.slotStats.max : 3"
+    :height="52"
+    :width="6"
+    class="ml-1.5 flex-shrink-0 self-stretch"
+  />
+</div>
+```
+
+**CapacityMeter Component** (`src/frontend/src/components/CapacityMeter.vue`):
+- Renders `max` stacked cells in `flex-col-reverse` (bottom-up fill)
+- Active slots filled with color based on utilization: green (<50%), yellow (50-80%), orange (80-100%), red (100%)
+- At capacity (100%): cells pulse with `capacity-pulse` animation
+- Tooltip: `"active/max slots"`
+
+**Data Flow**:
+1. `stores/network.js:fetchSlotStats()` calls `GET /api/agents/slots` (line ~967)
+2. Response: `{ agents: { agentName: { max, active } }, timestamp }` (from `BulkSlotState` model)
+3. Stored in `slotStats` ref (line ~51), also threaded onto `nodes[].data.slotStats` for Graph view
+4. `fetchSlotStats()` runs on 5-second context polling interval alongside `fetchContextStats()` and `fetchExecutionStats()` (line ~1008-1014)
+5. `Dashboard.vue` destructures `slotStats` from network store (line ~523) and passes as prop to `<ReplayTimeline>`  (line ~231)
+6. `ReplayTimeline.vue` accepts `slotStats` prop (line ~394), maps `slotStats[agent.name]` onto each `agentRows` row as `row.slotStats` (line ~667-728)
+7. Each tile reads `row.slotStats` to render CapacityMeter (line ~204-210)
+
+**Backend Endpoint** (`src/backend/routers/agents.py:257-282`):
+```python
+@router.get("/slots")
+async def get_all_agent_slots(current_user: User = Depends(get_current_user)):
+    agent_capacities = db.get_all_agents_parallel_capacity()
+    slot_service = get_slot_service()
+    slot_states = await slot_service.get_all_slot_states(agent_capacities)
+    return BulkSlotState(agents=slot_states, timestamp=datetime.utcnow().isoformat() + "Z")
+```
+
+**Default Behavior**: When `slotStats[agent.name]` is absent (e.g., endpoint not yet available), the meter defaults to `active=0`, `max=3`. The meter is always rendered (no `v-if`).
 
 ## Testing
 
@@ -962,6 +1020,7 @@ This ensures:
 
 | Date | Change |
 |------|--------|
+| 2026-03-03 | **UX: Capacity Meter in Timeline Tiles (CAPACITY-001 Phase 2)** - CapacityMeter component added to every agent tile as a sibling to the content column. Tile outer div changed from `flex-col` to `flex` row. `slotStats` prop added: Dashboard destructures from network store, passes to ReplayTimeline, threaded through `agentRows` computed. Data from `GET /api/agents/slots` via `fetchSlotStats()` on 5s polling. Defaults to active=0/max=3 when no data. |
 | 2026-03-03 | **UX: Success Rate Bar (Issue #60)** - Row 2 in timeline agent tiles now shows a success rate bar instead of context progress bar. Uses 24h success rate (primary) with 7d fallback. Helpers: `getRowSuccessPercent()`, `getSuccessBarClass()`. Removed: `getProgressBarClass()`. `contextStats` prop still passed for activity state detection but no longer displayed as a bar. `fetchExecutionStats()` now requests `include_7d: true` for dual-window stats (`taskCount7d`, `successRate7d`). Tile layout condensed from 5 rows to 3 rows (autonomy toggle moved to Row 1). |
 | 2026-03-02 | **UX: Filter Persistence** - Dashboard now preserves filter state across page reload. Persisted: time range (`trinity-dashboard-time-range`), quick tags (`trinity-dashboard-quick-tags`). Previously persisted: view mode, tag clouds toggle, system view selection, node positions. Quick tags cleared when system view is selected. |
 | 2026-02-27 | **Fix (REFRESH-001)**: Dashboard Timeline Refresh - Added WebSocket ping/pong heartbeat (30s), activity status change handler for `agent_activity` events, and fallback activity polling (60s). Prevents timeline from going stale when idle. Backend: `main.py:362-376`. Frontend: `network.js` (4 new functions), `Dashboard.vue` (lifecycle hooks). |

@@ -1,20 +1,23 @@
 # Feature Flow: Parallel Execution Capacity
 
 > **Requirement**: CAPACITY-001 - Per-Agent Parallel Execution Capacity
-> **Status**: Implemented (Phase 1: Backend)
+> **Status**: Implemented (Phase 1: Backend, Phase 2: Frontend UI)
 > **Created**: 2026-02-28
-> **Updated**: 2026-02-28
+> **Updated**: 2026-03-03
 > **Priority**: P1
 
 ## Revision History
 
 | Date | Changes |
 |------|---------|
+| 2026-03-03 | Phase 2: Frontend UI - CapacityMeter component, store plumbing, Agents page + Dashboard timeline integration |
 | 2026-02-28 | Initial implementation - Database, Redis slots, REST API, task endpoint integration |
 
 ## Overview
 
 This feature implements configurable per-agent parallel execution capacity with Redis-based slot tracking. Each agent has a `max_parallel_tasks` setting (1-10, default 3), and the `/api/agents/{name}/task` endpoint enforces this limit by returning HTTP 429 when capacity is reached.
+
+The frontend displays slot usage as a vertical capacity meter bar on the Agents page and Dashboard timeline view, polled every 5 seconds via `GET /api/agents/slots`.
 
 ## Problem Statement
 
@@ -56,6 +59,19 @@ This feature implements configurable per-agent parallel execution capacity with 
 │  │  agent_ownership    │         │  agent:slots:{name} (ZSET)      │    │
 │  │  max_parallel_tasks │         │  agent:slot:{name}:{id} (HASH)  │    │
 │  └─────────────────────┘         └─────────────────────────────────┘    │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────┐     │
+│  │  Frontend (5-second polling)                                    │     │
+│  │                                                                  │     │
+│  │  stores/agents.js  ──► GET /api/agents/slots                   │     │
+│  │  stores/network.js ──► GET /api/agents/slots                   │     │
+│  │       │                                                          │     │
+│  │       v                                                          │     │
+│  │  CapacityMeter.vue (vertical bar with discrete cells)           │     │
+│  │       │                                                          │     │
+│  │       ├── Agents.vue (desktop tile, tablet tile)                │     │
+│  │       └── ReplayTimeline.vue (dashboard timeline tile)          │     │
+│  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -115,6 +131,26 @@ GET /api/agents/{name}/capacity
 └─────────────────────────────────────────────────┘
 ```
 
+### 4. Frontend Polling (Phase 2)
+
+```
+Every 5 seconds (agents store / network store):
+       │
+       ├── GET /api/agents/slots
+       │   → { agents: { name: { max, active } } }
+       │
+       v
+┌─────────────────────────────────────────────────┐
+│ agents.js:  slotStats[agentName] = { max, active } │
+│ network.js: node.data.slotStats = { max, active }  │
+│                                                      │
+│ CapacityMeter.vue renders vertical bar:              │
+│   - N discrete cells (N = max)                       │
+│   - Filled cells = active (bottom-to-top)            │
+│   - Color by utilization %                           │
+└─────────────────────────────────────────────────┘
+```
+
 ## Key Files
 
 ### Database Layer (SQLite)
@@ -161,11 +197,120 @@ GET /api/agents/{name}/capacity
 |------|------|---------|
 | `src/backend/db_models.py` | 893-923 | `CapacityUpdate`, `SlotInfo`, `AgentCapacity`, `BulkSlotState` |
 
+### Frontend: CapacityMeter Component (Phase 2)
+
+| File | Line | Purpose |
+|------|------|---------|
+| `src/frontend/src/components/CapacityMeter.vue` | 1-61 | Vertical bar component with discrete cells |
+| `src/frontend/src/components/CapacityMeter.vue` | 22-27 | Props: `active`, `max`, `height`, `width` |
+| `src/frontend/src/components/CapacityMeter.vue` | 29 | `capped` computed: `Math.min(active, max)` |
+| `src/frontend/src/components/CapacityMeter.vue` | 38-45 | `fillClass` computed: color thresholds by utilization % |
+| `src/frontend/src/components/CapacityMeter.vue` | 49-60 | `capacity-pulse` CSS animation for 100% utilization |
+
+### Frontend: Store Plumbing (Phase 2)
+
+| File | Line | Purpose |
+|------|------|---------|
+| `src/frontend/src/stores/agents.js` | 16 | `slotStats: {}` state declaration |
+| `src/frontend/src/stores/agents.js` | 616-638 | `fetchSlotStats()` action - calls `GET /api/agents/slots` |
+| `src/frontend/src/stores/agents.js` | 677 | `fetchSlotStats()` called on polling start |
+| `src/frontend/src/stores/agents.js` | 683 | `fetchSlotStats()` called in 5-second polling interval |
+| `src/frontend/src/stores/network.js` | 51 | `slotStats` ref declaration |
+| `src/frontend/src/stores/network.js` | 967-997 | `fetchSlotStats()` - calls API + threads onto `node.data.slotStats` |
+| `src/frontend/src/stores/network.js` | 1008 | `fetchSlotStats()` called on polling start |
+| `src/frontend/src/stores/network.js` | 1014 | `fetchSlotStats()` called in 5-second polling interval |
+
+### Frontend: View Integration (Phase 2)
+
+| File | Line | Purpose |
+|------|------|---------|
+| `src/frontend/src/views/Agents.vue` | 688 | Import CapacityMeter component |
+| `src/frontend/src/views/Agents.vue` | 419-425 | Desktop layout: meter as flex sibling, `self-stretch`, width=6, height=48 |
+| `src/frontend/src/views/Agents.vue` | 533-539 | Tablet layout: meter with `v-if`, width=10, height=28 |
+| `src/frontend/src/views/Agents.vue` | 908-910 | `getSlotStats()` helper reads from `agentsStore.slotStats` |
+| `src/frontend/src/components/ReplayTimeline.vue` | 373 | Import CapacityMeter component |
+| `src/frontend/src/components/ReplayTimeline.vue` | 204-210 | Timeline tile: meter, `self-stretch`, width=6, height=52 |
+| `src/frontend/src/components/ReplayTimeline.vue` | 394 | `slotStats` prop declaration |
+| `src/frontend/src/components/ReplayTimeline.vue` | 667 | Thread `slotStats` onto each agent row |
+| `src/frontend/src/views/Dashboard.vue` | 231 | Pass `:slot-stats="slotStats"` to ReplayTimeline |
+| `src/frontend/src/views/Dashboard.vue` | 523 | Destructure `slotStats` from network store |
+
 ### Tests
 
 | File | Line | Purpose |
 |------|------|---------|
 | `tests/test_capacity.py` | 1-383 | 24 tests for capacity endpoints and validation |
+
+## Frontend Integration (Phase 2)
+
+### CapacityMeter Component
+
+`src/frontend/src/components/CapacityMeter.vue` -- a reusable vertical bar that shows parallel execution slot usage as discrete cells.
+
+**Props**:
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `active` | Number | 0 | Number of currently occupied slots |
+| `max` | Number | 1 | Maximum parallel slots (determines cell count) |
+| `height` | Number | 36 | Height in pixels (0/falsy allows CSS flex stretch) |
+| `width` | Number | 12 | Width in pixels |
+
+**Rendering**:
+- Uses `flex-col-reverse` so cells fill from bottom to top
+- `gap-px` between cells, `flex-1` per cell for equal sizing
+- Each cell is a `div` with `rounded-sm` and `transition-colors duration-300`
+- Active cells use `fillClass`, inactive cells use `bg-gray-200 dark:bg-gray-700`
+- Native `title` attribute shows `"N/M slots"` on hover
+
+**Color Thresholds** (by `utilization = capped / max * 100`):
+
+| Utilization | Color | Class |
+|-------------|-------|-------|
+| 0% | Gray | `bg-gray-200 dark:bg-gray-700` |
+| 1-49% | Green | `bg-green-500` |
+| 50-79% | Yellow | `bg-yellow-500` |
+| 80-99% | Orange | `bg-orange-500` |
+| 100% | Red + pulse | `bg-red-500` + `capacity-pulse` animation |
+
+The `capacity-pulse` animation is a CSS keyframe that oscillates opacity between 1.0 and 0.5 on a 1.2-second cycle, applied only to filled cells when at 100% utilization.
+
+### Store Plumbing
+
+Both the agents store (for Agents page) and network store (for Dashboard) fetch slot data from the same endpoint.
+
+**agents.js** (`src/frontend/src/stores/agents.js`):
+- State: `slotStats: {}` (line 16) -- map of agent name to `{ max, active }`
+- Action: `fetchSlotStats()` (lines 616-638) -- `GET /api/agents/slots`, parses `response.data.agents` object map
+- Integrated into `startContextPolling()` (lines 669-687) -- called immediately and every 5 seconds
+- Graceful degradation: 404 errors are silently ignored (endpoint may not exist in older backends)
+
+**network.js** (`src/frontend/src/stores/network.js`):
+- State: `slotStats` ref (line 51)
+- Action: `fetchSlotStats()` (lines 967-997) -- same API call, but also threads data onto `node.data.slotStats` for graph nodes
+- Integrated into `startContextPolling()` (lines 1000-1018) -- called immediately and every 5 seconds
+
+### View Integration
+
+**1. Agents.vue -- Desktop layout** (line 419-425):
+- Meter sits as a flex sibling alongside the two-row content block (grid row + tags row)
+- `class="ml-1 flex-shrink-0 self-stretch"` -- full tile height via flex stretching
+- Props: `width=6`, `height=48`
+- Always rendered (no `v-if`); defaults to `active=0, max=3` when no slot data
+
+**2. Agents.vue -- Tablet layout** (line 533-539):
+- Conditionally rendered with `v-if="getSlotStats(agent.name)"`
+- Props: `width=10`, `height=28`
+
+**3. ReplayTimeline.vue -- Dashboard timeline** (line 204-210):
+- Meter added to every agent tile in the timeline agent panel
+- `class="ml-1.5 flex-shrink-0 self-stretch"` -- full tile height
+- Props: `width=6`, `height=52`
+- Always rendered (no `v-if`); defaults to `active=0, max=3` when no slot data
+- Data flows: Dashboard.vue passes `slotStats` prop (line 231) -> ReplayTimeline threads onto row objects (line 667-728)
+
+**4. AgentNode.vue -- Dashboard graph** (NOT integrated):
+- Capacity meter was tested in graph nodes but ultimately removed -- not displayed there.
 
 ## API Specifications
 
@@ -229,7 +374,7 @@ GET /api/agents/{name}/capacity
 ### GET /api/agents/slots (Bulk)
 
 **Authentication**: Required (JWT)
-**Purpose**: Dashboard polling endpoint
+**Purpose**: Dashboard and Agents page polling endpoint (every 5 seconds)
 
 **Response** (200):
 ```json
@@ -242,6 +387,8 @@ GET /api/agents/{name}/capacity
   "timestamp": "2026-02-28T10:05:00Z"
 }
 ```
+
+**Note**: Response is an object map (not an array). Frontend iterates with `Object.entries()`.
 
 ### POST /api/agents/{name}/task (Updated)
 
@@ -355,6 +502,7 @@ async def _cleanup_stale_slots_for_agent(self, agent_name):
 | At capacity (task) | 429 | "Agent '{name}' is at capacity ({N} parallel tasks). Try again later." |
 | Invalid capacity value | 400 | "max_parallel_tasks must be an integer between 1 and 10" |
 | Missing field | 400 | "max_parallel_tasks is required" |
+| Slots API 404 (frontend) | N/A | Silently ignored; meter defaults to 0/3 |
 
 ## Security Considerations
 
@@ -384,19 +532,29 @@ async def _cleanup_stale_slots_for_agent(self, agent_name):
 cd tests && pytest test_capacity.py -v
 ```
 
+### Manual UI Testing (Phase 2)
+
+1. **Action**: Navigate to Agents page with running agents
+   **Expected**: Each agent tile shows a vertical capacity bar on the right edge
+   **Verify**: Bar is gray when no tasks running, green/yellow/orange/red as slots fill
+
+2. **Action**: Navigate to Dashboard timeline view
+   **Expected**: Each agent row in the timeline panel shows a capacity bar
+   **Verify**: Bar updates every 5 seconds as tasks start/complete
+
+3. **Action**: Trigger enough parallel tasks to fill an agent's capacity
+   **Expected**: Bar turns red and pulses at 100% utilization
+   **Verify**: After tasks complete, bar returns to lower utilization color
+
 ## Related Flows
 
 - **Upstream**: [parallel-headless-execution.md](parallel-headless-execution.md) - Task endpoint that enforces capacity
 - **Upstream**: [execution-queue.md](execution-queue.md) - Sequential queue (bypassed by parallel tasks)
-- **Downstream**: [agent-dashboard.md](agent-dashboard.md) - Will display capacity meters (Phase 2)
-- **Downstream**: [dashboard-timeline-view.md](dashboard-timeline-view.md) - Will display swim lanes (Phase 3)
+- **Related**: [agents-page-ui-improvements.md](agents-page-ui-improvements.md) - Agents page tile layout where meter is displayed
+- **Related**: [dashboard-timeline-view.md](dashboard-timeline-view.md) - Dashboard timeline where meter is displayed
+- **Related**: [agent-network.md](agent-network.md) - Dashboard graph view (meter NOT displayed here)
 
-## Future Enhancements (Phases 2-4)
-
-### Phase 2: Dashboard Capacity Meter
-- Replace activity dot with horizontal capacity bar
-- Visual states: idle (gray), partial (green/yellow), full (red pulse)
-- Tooltip with slot details
+## Future Enhancements (Phases 3-4)
 
 ### Phase 3: Timeline Swim Lanes
 - Fixed N lanes per agent (N = max_parallel_tasks)

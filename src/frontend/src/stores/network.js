@@ -48,6 +48,7 @@ export const useNetworkStore = defineStore('network', () => {
   const isLoadingHistory = ref(false)
   const contextStats = ref({}) // Map of agent name -> context stats
   const executionStats = ref({}) // Map of agent name -> execution stats
+  const slotStats = ref({}) // Map of agent name -> { max, active } for capacity meters
   const contextPollingInterval = ref(null) // Interval ID for context polling
   const agentRefreshInterval = ref(null) // Interval ID for agent list refresh
   const activityRefreshInterval = ref(null) // Interval ID for activity refresh (fallback)
@@ -962,6 +963,39 @@ export const useNetworkStore = defineStore('network', () => {
     }
   }
 
+  // Fetch slot stats for capacity meters
+  async function fetchSlotStats() {
+    try {
+      const response = await axios.get('/api/agents/slots')
+      const agentsMap = response.data.agents || {}
+
+      const newStats = {}
+      Object.entries(agentsMap).forEach(([name, stat]) => {
+        newStats[name] = {
+          max: stat.max || 1,
+          active: stat.active || 0
+        }
+      })
+      slotStats.value = newStats
+
+      // Thread slot stats onto node data
+      nodes.value.forEach(node => {
+        const stats = newStats[node.id]
+        if (stats) {
+          node.data = {
+            ...node.data,
+            slotStats: stats
+          }
+        }
+      })
+    } catch (error) {
+      // Slots endpoint may not exist yet - fail silently
+      if (error.response?.status !== 404) {
+        console.error('Failed to fetch slot stats:', error)
+      }
+    }
+  }
+
   // Start polling context and execution stats every 5 seconds
   function startContextPolling() {
     if (contextPollingInterval.value) {
@@ -971,11 +1005,13 @@ export const useNetworkStore = defineStore('network', () => {
     // Fetch immediately
     fetchContextStats()
     fetchExecutionStats()
+    fetchSlotStats()
 
     // Then poll every 5 seconds
     contextPollingInterval.value = setInterval(() => {
       fetchContextStats()
       fetchExecutionStats()
+      fetchSlotStats()
     }, 5000)
 
     console.log('[Collaboration] Started context polling (every 5s)')
@@ -1518,6 +1554,7 @@ export const useNetworkStore = defineStore('network', () => {
     isLoadingHistory,
     contextStats,
     executionStats,
+    slotStats,
     schedules,
     filterTags,
     // View mode / Replay state
@@ -1559,6 +1596,7 @@ export const useNetworkStore = defineStore('network', () => {
     onNodeDragStop,
     fetchContextStats,
     fetchExecutionStats,
+    fetchSlotStats,
     startContextPolling,
     stopContextPolling,
     startAgentRefresh,

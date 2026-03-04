@@ -120,84 +120,94 @@
             :key="'label-' + i"
             :class="[
               'px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700',
-              'flex flex-col justify-between',
+              'flex',
               row.isSystemAgent
                 ? 'bg-purple-50/80 dark:bg-purple-900/20'
                 : 'bg-white dark:bg-gray-800'
             ]"
             :style="{ height: rowHeight + 'px' }"
           >
-            <!-- Row 1: Name, badges, status dot -->
-            <div class="flex items-center justify-between">
-              <div class="flex items-center flex-1 mr-2 min-w-0">
-                <div
-                  :class="[
-                    'w-2 h-2 rounded-full flex-shrink-0 mr-1.5',
-                    row.activityState === 'active' ? 'active-pulse' : ''
-                  ]"
-                  :style="{ backgroundColor: getStatusDotColor(row) }"
-                ></div>
-                <span
-                  class="text-sm font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
-                  @click="navigateToAgent(row.name)"
-                  :title="row.name"
-                >
-                  {{ row.name }}
-                </span>
-                <span
-                  v-if="row.isSystemAgent"
-                  class="ml-1.5 px-1 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 flex-shrink-0"
-                >
-                  SYS
-                </span>
+            <div class="flex flex-col justify-between flex-1 min-w-0">
+              <!-- Row 1: Name, badges, status dot -->
+              <div class="flex items-center justify-between">
+                <div class="flex items-center flex-1 mr-2 min-w-0">
+                  <div
+                    :class="[
+                      'w-2 h-2 rounded-full flex-shrink-0 mr-1.5',
+                      row.activityState === 'active' ? 'active-pulse' : ''
+                    ]"
+                    :style="{ backgroundColor: getStatusDotColor(row) }"
+                  ></div>
+                  <span
+                    class="text-sm font-semibold text-gray-900 dark:text-white truncate cursor-pointer hover:text-blue-600 dark:hover:text-blue-400"
+                    @click="navigateToAgent(row.name)"
+                    :title="row.name"
+                  >
+                    {{ row.name }}
+                  </span>
+                  <span
+                    v-if="row.isSystemAgent"
+                    class="ml-1.5 px-1 py-0.5 text-[10px] font-semibold rounded bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 flex-shrink-0"
+                  >
+                    SYS
+                  </span>
+                </div>
+                <!-- Autonomy toggle (compact) -->
+                <AutonomyToggle
+                  v-if="!row.isSystemAgent"
+                  :model-value="row.autonomyEnabled"
+                  :show-label="false"
+                  size="sm"
+                  @toggle="toggleAutonomy(row.name)"
+                />
               </div>
-              <!-- Autonomy toggle (compact) -->
-              <AutonomyToggle
-                v-if="!row.isSystemAgent"
-                :model-value="row.autonomyEnabled"
-                :show-label="false"
-                size="sm"
-                @toggle="toggleAutonomy(row.name)"
-              />
-            </div>
 
-            <!-- Row 2: Success rate bar (inline) -->
-            <div class="flex items-center gap-2">
-              <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                <div
+              <!-- Row 2: Success rate bar (inline) -->
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    v-if="getRowSuccessPercent(row) > 0"
+                    class="h-full rounded-full transition-all duration-500"
+                    :class="getSuccessBarClass(getRowSuccessPercent(row))"
+                    :style="{ width: getRowSuccessPercent(row) + '%' }"
+                  ></div>
+                </div>
+                <span
                   v-if="getRowSuccessPercent(row) > 0"
-                  class="h-full rounded-full transition-all duration-500"
-                  :class="getSuccessBarClass(getRowSuccessPercent(row))"
-                  :style="{ width: getRowSuccessPercent(row) + '%' }"
-                ></div>
+                  class="text-[10px] font-medium w-7 text-right"
+                  :class="getSuccessBarClass(getRowSuccessPercent(row)).replace('bg-', 'text-')"
+                >{{ getRowSuccessPercent(row) }}%</span>
+                <span v-else class="text-[10px] text-gray-400 dark:text-gray-500 w-7 text-right">&mdash;</span>
               </div>
-              <span
-                v-if="getRowSuccessPercent(row) > 0"
-                class="text-[10px] font-medium w-7 text-right"
-                :class="getSuccessBarClass(getRowSuccessPercent(row)).replace('bg-', 'text-')"
-              >{{ getRowSuccessPercent(row) }}%</span>
-              <span v-else class="text-[10px] text-gray-400 dark:text-gray-500 w-7 text-right">&mdash;</span>
-            </div>
 
-            <!-- Row 3: Stats (compact) -->
-            <div class="flex items-center text-[10px] text-gray-500 dark:text-gray-400 gap-1">
-              <template v-if="row.executionStats && row.executionStats.taskCount > 0">
-                <span class="font-medium text-gray-700 dark:text-gray-300">{{ row.executionStats.taskCount }}</span>
-                <span>tasks</span>
-                <span class="text-gray-300 dark:text-gray-600">·</span>
-                <span :class="getSuccessRateClass(row.executionStats.successRate)" class="font-medium">{{ Math.round(row.executionStats.successRate || 0) }}%</span>
-                <template v-if="row.executionStats.totalCost > 0">
+              <!-- Row 3: Stats (compact) -->
+              <div class="flex items-center text-[10px] text-gray-500 dark:text-gray-400 gap-1">
+                <template v-if="row.executionStats && row.executionStats.taskCount > 0">
+                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ row.executionStats.taskCount }}</span>
+                  <span>tasks</span>
                   <span class="text-gray-300 dark:text-gray-600">·</span>
-                  <span class="font-medium">${{ row.executionStats.totalCost.toFixed(2) }}</span>
+                  <span :class="getSuccessRateClass(row.executionStats.successRate)" class="font-medium">{{ Math.round(row.executionStats.successRate || 0) }}%</span>
+                  <template v-if="row.executionStats.totalCost > 0">
+                    <span class="text-gray-300 dark:text-gray-600">·</span>
+                    <span class="font-medium">${{ row.executionStats.totalCost.toFixed(2) }}</span>
+                  </template>
                 </template>
-              </template>
-              <template v-else>
-                <span class="text-gray-400 dark:text-gray-500">No tasks</span>
-              </template>
-              <span class="flex-1"></span>
-              <span class="text-gray-400">{{ row.memoryLimit || '4g' }}</span>
+                <template v-else>
+                  <span class="text-gray-400 dark:text-gray-500">No tasks</span>
+                </template>
+                <span class="flex-1"></span>
+                <span class="text-gray-400">{{ row.memoryLimit || '4g' }}</span>
+              </div>
             </div>
 
+            <!-- Capacity meter — full tile height -->
+            <CapacityMeter
+              :active="row.slotStats ? row.slotStats.active : 0"
+              :max="row.slotStats ? row.slotStats.max : 3"
+              :height="52"
+              :width="6"
+              class="ml-1.5 flex-shrink-0 self-stretch"
+            />
           </div>
         </div>
 
@@ -360,6 +370,7 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { parseUTC, getTimestampMs, formatLocalTime } from '@/utils/timestamps'
 import AutonomyToggle from './AutonomyToggle.vue'
+import CapacityMeter from './CapacityMeter.vue'
 
 const router = useRouter()
 
@@ -379,7 +390,8 @@ const props = defineProps({
   executionStats: { type: Object, default: () => ({}) },
   isLiveMode: { type: Boolean, default: false },
   timeRangeHours: { type: Number, default: 24 },
-  schedules: { type: Array, default: () => [] }
+  schedules: { type: Array, default: () => [] },
+  slotStats: { type: Object, default: () => ({}) }
 })
 
 const emit = defineEmits(['play', 'pause', 'stop', 'speed-change', 'seek', 'toggle-autonomy'])
@@ -652,6 +664,7 @@ const agentRows = computed(() => {
     const nodeData = nodeMap.get(agent.name) || {}
     const ctxStats = props.contextStats[agent.name] || {}
     const execStats = props.executionStats[agent.name] || null
+    const slotData = props.slotStats[agent.name] || null
 
     const bars = activities.map(act => {
       const x = ((act.time - startTime.value) / duration.value) * actualGridWidth.value
@@ -711,7 +724,8 @@ const agentRows = computed(() => {
       // From context/execution stats
       contextPercent: ctxStats.contextPercent || 0,
       activityState: ctxStats.activityState || (agent.status === 'running' ? 'idle' : 'offline'),
-      executionStats: execStats
+      executionStats: execStats,
+      slotStats: slotData
     }
   })
 })

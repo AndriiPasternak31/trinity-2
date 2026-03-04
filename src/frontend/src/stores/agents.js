@@ -12,6 +12,8 @@ export const useAgentsStore = defineStore('agents', {
     contextStats: {},  // Map of agent name -> stats
     // Execution stats for agents list page (tasks, success rate, cost, last run)
     executionStats: {},  // Map of agent name -> execution stats
+    // Slot stats for capacity meters (active/max parallel slots)
+    slotStats: {},  // Map of agent name -> { max, active }
     contextPollingInterval: null,
     sortBy: 'created_desc',  // Default sort order
     // Running toggle loading state per agent
@@ -610,6 +612,31 @@ export const useAgentsStore = defineStore('agents', {
       }
     },
 
+    // Slot Stats Actions (for capacity meters on Agents list page)
+    async fetchSlotStats() {
+      try {
+        const authStore = useAuthStore()
+        const response = await axios.get('/api/agents/slots', {
+          headers: authStore.authHeader
+        })
+        const agentsMap = response.data.agents || {}
+
+        const newStats = {}
+        Object.entries(agentsMap).forEach(([name, stat]) => {
+          newStats[name] = {
+            max: stat.max || 1,
+            active: stat.active || 0
+          }
+        })
+        this.slotStats = newStats
+      } catch (error) {
+        // Slots endpoint may not exist yet - fail silently
+        if (error.response?.status !== 404) {
+          console.error('Failed to fetch slot stats:', error)
+        }
+      }
+    },
+
     // Toggle autonomy mode for an agent
     async toggleAutonomy(agentName) {
       try {
@@ -647,11 +674,13 @@ export const useAgentsStore = defineStore('agents', {
       // Fetch immediately
       this.fetchContextStats()
       this.fetchExecutionStats()
+      this.fetchSlotStats()
 
       // Then poll every 5 seconds
       this.contextPollingInterval = setInterval(() => {
         this.fetchContextStats()
         this.fetchExecutionStats()
+        this.fetchSlotStats()
       }, 5000)
 
       console.log('[Agents] Started context polling (every 5s)')

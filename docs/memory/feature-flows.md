@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-03 | CAPACITY-001 | Capacity meter UI on Agents page and Dashboard timeline (Phase 2) | [parallel-capacity.md](feature-flows/parallel-capacity.md) |
 | 2026-03-03 | #60 | Success rate bar replaces context bar on Dashboard nodes | [agent-network.md](feature-flows/agent-network.md) |
 | 2026-03-03 | #60 | Success rate bar replaces context bar in timeline tiles | [dashboard-timeline-view.md](feature-flows/dashboard-timeline-view.md) |
 | 2026-03-03 | #60 | Success rate bar replaces context bar on Agents page | [agents-page-ui-improvements.md](feature-flows/agents-page-ui-improvements.md) |

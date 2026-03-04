@@ -218,7 +218,7 @@
         <!-- Agents List -->
         <div class="flex flex-col gap-1.5">
           <!-- Column Header (lg+ only) -->
-          <div class="hidden lg:grid lg:grid-cols-[auto_auto_1fr_auto_auto_180px_auto_auto] lg:gap-x-4 items-center px-4 py-2 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+          <div class="hidden lg:grid lg:grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto] lg:gap-x-4 items-center px-4 py-2 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
             <div class="w-4"></div>
             <div class="w-3"></div>
             <div>Name</div>
@@ -245,9 +245,11 @@
             ]"
           >
             <!-- Desktop layout (lg+) -->
-            <div class="hidden lg:flex lg:flex-col px-4 py-3">
-              <!-- Top row: fixed layout data -->
-              <div class="grid grid-cols-[auto_auto_1fr_auto_auto_180px_auto_auto] gap-x-4 items-center">
+            <div class="hidden lg:flex px-4 py-3">
+              <!-- Two-row content block -->
+              <div class="flex flex-col flex-1 min-w-0">
+              <!-- Main grid (Row 1) -->
+              <div class="grid grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto] gap-x-4 items-center">
                 <!-- Checkbox -->
                 <input
                   type="checkbox"
@@ -357,7 +359,7 @@
                 </div>
 
                 <!-- Stats -->
-                <div class="flex items-center text-[11px] text-gray-500 dark:text-gray-400 gap-x-1.5 whitespace-nowrap">
+                <div class="flex items-center text-[11px] text-gray-500 dark:text-gray-400 gap-x-1.5 whitespace-nowrap overflow-hidden">
                   <template v-if="hasExecutionStats(agent.name)">
                     <span class="font-medium text-gray-700 dark:text-gray-300">{{ getExecutionStats(agent.name).taskCount }}</span>
                     <span class="text-gray-300 dark:text-gray-600">·</span>
@@ -372,7 +374,7 @@
                     </template>
                     <template v-if="!agent.is_system && hasSchedules(agent.name)">
                       <span class="text-gray-300 dark:text-gray-600">·</span>
-                      <svg class="w-3 h-3 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-3 h-3 inline flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span :class="agent.autonomy_enabled ? '' : 'line-through'">{{ getSchedulesEnabled(agent.name) }}/{{ getSchedulesTotal(agent.name) }}</span>
@@ -411,6 +413,16 @@
                   </span>
                 </template>
               </div>
+              </div><!-- end flex-col wrapper -->
+
+              <!-- Capacity meter — full tile height -->
+              <CapacityMeter
+                :active="getSlotStats(agent.name) ? getSlotStats(agent.name).active : 0"
+                :max="getSlotStats(agent.name) ? getSlotStats(agent.name).max : 3"
+                :height="48"
+                :width="6"
+                class="ml-1 flex-shrink-0 self-stretch"
+              />
             </div>
 
             <!-- Tablet layout (md, < lg) -->
@@ -518,6 +530,13 @@
                     <span class="text-[10px] text-gray-400 dark:text-gray-500">&mdash;</span>
                   </template>
                 </div>
+                <CapacityMeter
+                  v-if="getSlotStats(agent.name)"
+                  :active="getSlotStats(agent.name).active"
+                  :max="getSlotStats(agent.name).max"
+                  :height="28"
+                  :width="10"
+                />
                 <div class="flex items-center text-[11px] text-gray-500 dark:text-gray-400 gap-x-1.5 whitespace-nowrap">
                   <template v-if="hasExecutionStats(agent.name)">
                     <span class="font-medium text-gray-700 dark:text-gray-300">{{ getExecutionStats(agent.name).taskCount }}</span>
@@ -666,6 +685,7 @@ import RuntimeBadge from '../components/RuntimeBadge.vue'
 import RunningStateToggle from '../components/RunningStateToggle.vue'
 import AutonomyToggle from '../components/AutonomyToggle.vue'
 import ReadOnlyToggle from '../components/ReadOnlyToggle.vue'
+import CapacityMeter from '../components/CapacityMeter.vue'
 import { ServerIcon } from '@heroicons/vue/24/outline'
 import axios from 'axios'
 
@@ -882,6 +902,11 @@ const get7dSuccessBarColor = (agentName) => {
   if (percent >= 90) return 'bg-green-500'
   if (percent >= 50) return 'bg-yellow-500'
   return 'bg-red-500'
+}
+
+// Slot stats helpers (for capacity meters)
+const getSlotStats = (agentName) => {
+  return agentsStore.slotStats[agentName] || null
 }
 
 // Execution stats helpers

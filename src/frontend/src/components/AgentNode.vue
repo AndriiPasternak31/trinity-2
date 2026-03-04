@@ -21,7 +21,7 @@
     />
 
     <!-- Agent info -->
-    <div class="flex flex-col flex-grow">
+    <div class="flex flex-col flex-grow min-w-0">
       <!-- Header with name, runtime badge, system badge, and status dot -->
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center flex-1 mr-2 min-w-0">

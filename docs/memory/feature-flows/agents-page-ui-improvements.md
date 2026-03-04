@@ -1,8 +1,10 @@
 # Feature: Agents Page UI Improvements
 
-> **Status**: Implemented (2025-12-07, Enhanced 2026-01-09, System Agent Consolidation 2026-01-13, Toggle UX 2026-01-26, Component Standardization 2026-02-12, Horizontal Row Tiles 2026-03-03, Two-Row Tiles + Persistent Filter 2026-03-03, Full Filtering 2026-03-03, Success Rate Bar 2026-03-03)
+> **Status**: Implemented (2025-12-07, Enhanced 2026-01-09, System Agent Consolidation 2026-01-13, Toggle UX 2026-01-26, Component Standardization 2026-02-12, Horizontal Row Tiles 2026-03-03, Two-Row Tiles + Persistent Filter 2026-03-03, Full Filtering 2026-03-03, Success Rate Bar 2026-03-03, Capacity Meter + Fixed Grid 2026-03-03)
 > **Tested**: All features verified working
-> **Last Updated**: 2026-03-03 - Success Rate Bar (#60): Replaced context usage progress bars with success rate bars across all three breakpoints (desktop, tablet, mobile). Column header "Context" renamed to "Success", grid col 160px to 180px. Sort dropdown "Context Usage" replaced with "Success Rate" (value `success_desc`). Dual-window stats (24h + 7d) fetched via `include_7d=true` param. Color coding: green (>=90%), yellow (50-89%), red (<50%), gray dash for no data. Fallback logic: 24h bar + 7d secondary text, 7d-only bar, or gray dash.
+> **Last Updated**: 2026-03-03 - Capacity Meter + Fixed Grid Columns: Added CapacityMeter component to desktop and tablet layouts. Desktop: flex sibling alongside two-row content block (height=48, width=6), default fallback active=0/max=3. Tablet: between success bar and stats (height=28, width=10), conditional on slot data. Fixed grid column widths: Activity column 56px, Stats column 200px with `overflow-hidden` to prevent layout shifts from varying stats content.
+>
+> **Previous (2026-03-03)** - Success Rate Bar (#60): Replaced context usage progress bars with success rate bars across all three breakpoints (desktop, tablet, mobile). Column header "Context" renamed to "Success", grid col 160px to 180px. Sort dropdown "Context Usage" replaced with "Success Rate" (value `success_desc`). Dual-window stats (24h + 7d) fetched via `include_7d=true` param. Color coding: green (>=90%), yellow (50-89%), red (<50%), gray dash for no data. Fallback logic: 24h bar + 7d secondary text, 7d-only bar, or gray dash.
 >
 > **Previous (2026-03-03)** - Full Filtering (#55): Single-row header with title, search input, status segmented buttons (All/Running/Stopped), tag dropdown, sort dropdown, and Create Agent button all on one line. Filters combine with AND logic. Filter state persists in localStorage (`trinity-agents-filter-name`, `trinity-agents-filter-status`, `trinity-agents-filter-tag-dropdown`). Shows filtered count (X/Y) when filters active. Clear button. Smart empty state with "No matching agents" message. Legacy `trinity-agents-filter-tag` and `trinity-agents-filter-tags` auto-migrate to new dropdown format.
 >
@@ -365,29 +367,40 @@ const get7dSuccessBarColor = (agentName) => {
 ### Files to Modify
 1. **`src/frontend/src/stores/agents.js`**
    - Add `contextStats` state
-   - Add `fetchContextStats()` actions
+   - Add `slotStats` state (Map of agent name -> `{ max, active }`)
+   - Add `fetchContextStats()`, `fetchSlotStats()` actions
    - Add `startContextPolling()` and `stopContextPolling()` actions
 
 2. **`src/frontend/src/views/Agents.vue`**
    - Add sort dropdown and sorting logic
    - Add activity state indicator (dot + label)
    - Add success rate bar (replaced context bar in Issue #60)
+   - Add CapacityMeter to desktop and tablet layouts
+   - Import `CapacityMeter` from `../components/CapacityMeter.vue`
+   - Add `getSlotStats()` helper reading from `agentsStore.slotStats`
    - Add CSS for pulse animation
    - Call polling on mount/unmount
 
-3. **`src/backend/routers/agents.py`**
+3. **`src/frontend/src/components/CapacityMeter.vue`**
+   - Vertical segmented bar showing active/max parallel slots
+   - Props: `active`, `max`, `height`, `width`
+   - Color coding: green (<50%), yellow (50-79%), orange (80-99%), red (100%/at capacity with pulse)
+
+4. **`src/backend/routers/agents.py`**
    - Added `include_7d: bool = False` param to GET /execution-stats
 
-4. **`src/backend/db/schedules.py`**
+5. **`src/backend/db/schedules.py`**
    - Added `get_all_agents_execution_stats_dual()` with single SQL CASE WHEN
 
-5. **`src/backend/database.py`**
+6. **`src/backend/database.py`**
    - Added facade method for the dual query
 
 ### New Code Reuse
 - **API**: `GET /api/agents/context-stats` (already exists, for activity state)
 - **API**: `GET /api/agents/execution-stats?include_7d=true` (dual-window stats for success rate bar)
+- **API**: `GET /api/agents/slots` (parallel capacity slot stats for CapacityMeter)
 - **CSS**: Pulse animation from AgentNode.vue
+- **Component**: `CapacityMeter.vue` (reusable vertical bar for slot utilization)
 - **Logic**: Success rate bar color coding (green/yellow/red thresholds)
 - **Logic**: Activity state detection from network.js
 
@@ -491,21 +504,25 @@ Major UI overhaul to align Agents page with Dashboard (AgentNode.vue) tiles. Cha
 
 #### Store Changes (`agents.js`)
 
-1. **New State** (line 14):
+1. **New State** (lines 14-16):
    ```javascript
    executionStats: {},  // Map of agent name -> execution stats
+   slotStats: {},       // Map of agent name -> { max, active }
    ```
 
 2. **New Actions**:
-   - `fetchExecutionStats()` (lines 523-547): Fetches from `GET /api/agents/execution-stats?include_7d=true`
+   - `fetchExecutionStats()` (lines 584-611): Fetches from `GET /api/agents/execution-stats?include_7d=true`
      - Maps response to: `taskCount`, `successCount`, `failedCount`, `runningCount`, `successRate`, `totalCost`, `lastExecutionAt`, `taskCount7d`, `successRate7d`
-   - `toggleAutonomy(agentName)` (lines 550-576): Calls `PUT /api/agents/{name}/autonomy`
+   - `fetchSlotStats()` (lines 616-638): Fetches from `GET /api/agents/slots`
+     - Maps response `agents` map to `{ max, active }` per agent
+     - Fails silently on 404 (endpoint may not exist yet)
+   - `toggleAutonomy(agentName)` (lines 641-667): Calls `PUT /api/agents/{name}/autonomy`
      - Toggles `agent.autonomy_enabled` locally after successful API call
      - Returns `{ success, enabled, schedulesUpdated }`
 
-3. **Updated Polling** (lines 578-594):
-   - `startContextPolling()` now also calls `fetchExecutionStats()` on mount and every 10 seconds
-   - Both `fetchContextStats()` and `fetchExecutionStats()` run in parallel
+3. **Updated Polling** (lines 669-687):
+   - `startContextPolling()` calls `fetchContextStats()`, `fetchExecutionStats()`, and `fetchSlotStats()` on mount and every 5 seconds
+   - All three fetches run in parallel
 
 #### Helper Functions (`Agents.vue` script section)
 
@@ -515,6 +532,7 @@ Major UI overhaul to align Agents page with Dashboard (AgentNode.vue) tiles. Cha
 | `isActive(agentName)` | 288-290 | Returns true if agent is actively processing |
 | `getStatusDotColor(agentName)` | 292-297 | Returns hex color for status dot |
 | `getActivityLabelClass(agentName)` | 299-303 | Returns Tailwind classes for activity label |
+| `getSlotStats(agentName)` | ~908-910 | Returns `{ max, active }` from `agentsStore.slotStats` or null |
 | `getSuccessBarPercent(agentName)` | ~848-851 | Returns rounded 24h success rate (0-100) |
 | `getSuccessBarColor(agentName)` | ~853-858 | Returns Tailwind bg class (green/yellow/red) based on success rate |
 | `hasSuccessData(agentName)` | ~860-863 | Returns true if 24h taskCount > 0 |
@@ -561,17 +579,20 @@ Major UI overhaul to align Agents page with Dashboard (AgentNode.vue) tiles. Cha
 
 ```
 User loads /agents page
-    └── onMounted() [Agents.vue:269-272]
+    └── onMounted() [Agents.vue]
         ├── agentsStore.fetchAgents() → GET /api/agents
         │   └── Backend: get_accessible_agents() [helpers.py:83-153]
         │       ├── list_all_agents_fast() - Docker labels only (no stats)
         │       └── db.get_all_agent_metadata() - Single JOIN query for all metadata
         │           └── Returns: owner, is_system, autonomy, limits, git config, share access
-        └── agentsStore.startContextPolling() [agents.js:642-658]
+        └── agentsStore.startContextPolling() [agents.js:669-687]
             ├── fetchContextStats() → GET /api/agents/context-stats
             ├── fetchExecutionStats() → GET /api/agents/execution-stats?include_7d=true
             │   └── Backend: db.get_all_agents_execution_stats_dual() [db/schedules.py:788-846]
             │       └── Single SQL with CASE WHEN for 24h + 7d windows
+            ├── fetchSlotStats() → GET /api/agents/slots
+            │   └── Returns: { agents: { name: { max, active } } }
+            │   └── Used by CapacityMeter component on desktop/tablet layouts
             └── setInterval(5000) for continuous updates
 
 User toggles autonomy switch
@@ -597,19 +618,25 @@ The `/api/agents` endpoint benefits from two optimizations:
 
 ### Files Modified
 
-1. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js`** (681 lines total):
-   - Line 14: Added `executionStats: {}` state
-   - Lines 523-547: Added `fetchExecutionStats()` action
-   - Lines 550-576: Added `toggleAutonomy()` action
-   - Lines 578-594: Updated `startContextPolling()` to include execution stats
+1. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js`** (699 lines total):
+   - Lines 14-16: Added `executionStats: {}` and `slotStats: {}` state
+   - Lines 584-611: Added `fetchExecutionStats()` action
+   - Lines 616-638: Added `fetchSlotStats()` action
+   - Lines 641-667: Added `toggleAutonomy()` action
+   - Lines 669-687: Updated `startContextPolling()` to include execution + slot stats
 
-2. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue`** (413 lines total):
-   - Lines 44-224: Complete rewrite with grid layout and card components
-   - Lines 98-133: Autonomy toggle implementation
-   - Lines 140-153: Context progress bar (always visible)
-   - Lines 155-172: Execution stats row
-   - Lines 279-364: Helper functions for stats and autonomy
-   - Lines 394-411: CSS for active-pulse animation
+2. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue`** (1083 lines total):
+   - Line 688: Import `CapacityMeter` from `../components/CapacityMeter.vue`
+   - Lines 248-426: Desktop layout with two-row content block + CapacityMeter flex sibling
+   - Lines 252: Fixed grid: `grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto]`
+   - Lines 419-425: Desktop CapacityMeter (height=48, width=6, fallback active=0/max=3)
+   - Lines 533-539: Tablet CapacityMeter (height=28, width=10, conditional on slot data)
+   - Lines 908-910: `getSlotStats()` helper
+
+3. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/CapacityMeter.vue`** (58 lines total):
+   - Vertical segmented bar with `flex-col-reverse gap-px`
+   - Props: `active`, `max`, `height`, `width`
+   - Color: green (<50%) / yellow (50-79%) / orange (80-99%) / red (100% with capacity-pulse animation)
 
 ### Testing Steps
 
@@ -777,15 +804,18 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
 
 ### Three Responsive Breakpoints
 
-**Desktop (lg+)** -- `Agents.vue` lines 199-343:
-- CSS grid row: `grid-cols-[auto_auto_1fr_auto_auto_180px_auto_auto]`
-- 8 columns: checkbox | status dot | name+badges | activity label | toggles | success rate bar | stats | chevron
+**Desktop (lg+)** -- `Agents.vue` lines 248-426:
+- Outer wrapper: `class="hidden lg:flex px-4 py-3"` containing a `flex-col flex-1 min-w-0` block for the two-row content, plus a CapacityMeter flex sibling
+- Row 1 (CSS grid): `grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto]` with `gap-x-4`
+- 8 columns: checkbox | status dot | name+badges | activity label (fixed 56px) | toggles | success rate bar (180px) | stats (fixed 200px, `overflow-hidden`) | chevron
 - Column header row: uppercase labels (NAME, STATUS, CONTROLS, SUCCESS, STATS)
+- Row 2: tag pills left-aligned under name (`pl-[3.625rem]`)
+- CapacityMeter: `height=48`, `width=6`, `class="ml-1 flex-shrink-0 self-stretch"` -- uses `getSlotStats(agent.name)` with fallback `active=0, max=3` when no slot data
 
-**Tablet (md to lg)** -- `Agents.vue` lines 345-447:
+**Tablet (md to lg)** -- `Agents.vue` lines 428-556:
 - Two-line compact layout using `flex-col`
 - Line 1: checkbox, status dot, name, badges, activity label, chevron
-- Line 2 (indented `pl-[3.25rem]`): toggles, success rate bar with `w-24` fixed width, stats summary
+- Line 2 (indented `pl-[3.25rem]`): toggles, success rate bar with `w-24` fixed width, CapacityMeter (`height=28`, `width=10`, conditional on `getSlotStats()`), stats summary
 
 **Mobile (<md)** -- `Agents.vue` lines 449-514:
 - Compact mini-card using `flex-col`
@@ -811,11 +841,11 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
 
 ### Files Changed
 
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue` -- template (lines 169-516) and scoped styles (lines 905-936)
+- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue` -- template and scoped styles
+- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/CapacityMeter.vue` -- new component (added for capacity meter integration)
 
-### Files NOT Changed
+### Files NOT Changed (for initial row tile rewrite)
 
-- `src/frontend/src/stores/agents.js` -- no changes
 - Backend endpoints -- no changes
 - Toggle components (RunningStateToggle, ReadOnlyToggle, AutonomyToggle) -- no changes
 - Helper functions in script section -- no changes (same functions, same logic)
@@ -825,12 +855,23 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
 ## References
 
 > Line numbers verified 2026-03-03
-- **Agents.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue` (1151 lines total)
+- **Agents.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue` (1083 lines total)
   - Template: lines 1-658
-  - Script: lines 660-1117
-  - Scoped styles: lines 1119-1150
-- **agents.js store**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js` (745 lines total)
+  - Script: lines 660-1050 (approx)
+  - Scoped styles: lines 1050-1083 (approx)
+  - Import CapacityMeter: line 688
+  - Desktop CapacityMeter: lines 419-425 (height=48, width=6, fallback active=0/max=3)
+  - Tablet CapacityMeter: lines 533-539 (height=28, width=10, conditional)
+  - Desktop grid template: line 252 (`grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto]`)
+  - `getSlotStats()` helper: lines 908-910
+- **CapacityMeter.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/CapacityMeter.vue` (58 lines)
+  - Props: `active`, `max`, `height`, `width`
+  - Color coding: green/yellow/orange/red by utilization, capacity-pulse animation at 100%
+- **agents.js store**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js` (699 lines total)
+  - `slotStats` state: line 16
   - `fetchExecutionStats()`: lines 584-611 (calls `/api/agents/execution-stats?include_7d=true`)
+  - `fetchSlotStats()`: lines 616-638 (calls `/api/agents/slots`)
+  - `startContextPolling()`: lines 669-687 (fetches context + execution + slot stats every 5s)
   - `success_desc` sort case: lines 64-70
 - **AgentNode.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/AgentNode.vue` - Visual design reference
 - **Backend agents router**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py`
@@ -850,6 +891,7 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
 
 | Date | Changes |
 |------|---------|
+| 2026-03-03 | **Capacity Meter + Fixed Grid Columns**: Added `CapacityMeter` component (from `../components/CapacityMeter.vue`) to desktop and tablet layouts. Desktop: flex sibling alongside the two-row content block (`ml-1 flex-shrink-0 self-stretch`, height=48, width=6), default fallback active=0/max=3 when no slot data. Tablet: placed between success bar and stats (height=28, width=10), conditional `v-if="getSlotStats(agent.name)"`. Added `getSlotStats()` helper reading `agentsStore.slotStats`. Fixed desktop grid column widths from `grid-cols-[auto_auto_1fr_auto_auto_180px_auto_auto]` to `grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto]` -- Activity column fixed at 56px, Stats column fixed at 200px with `overflow-hidden` to prevent layout shifts when agents have varying stats content. Store: `slotStats` state (line 16), `fetchSlotStats()` action (lines 616-638) calling `GET /api/agents/slots`, polled every 5s via `startContextPolling()`. |
 | 2026-03-03 | **Success Rate Bar (Issue #60)**: Replaced context usage progress bars with success rate bars across desktop, tablet, and mobile layouts. Column header "Context" renamed to "Success", grid col 160px to 180px. Sort dropdown "Context Usage" (`context_desc`) replaced with "Success Rate" (`success_desc`), sorts by `successRate`. Removed helpers: `getContextPercent()`, `getProgressBarColor()`. Added helpers: `getSuccessBarPercent()`, `getSuccessBarColor()`, `hasSuccessData()`, `has7dOnlyStats()`, `has7dStats()`, `get7dSuccessRate()`, `get7dSuccessBarColor()`. `fetchExecutionStats()` now calls `/api/agents/execution-stats?include_7d=true`, stores `taskCount7d` and `successRate7d` per agent. Backend: added `include_7d: bool = False` param to GET /execution-stats, added `get_all_agents_execution_stats_dual()` with single SQL CASE WHEN for both 24h and 7d windows (db/schedules.py), added facade method in database.py. |
 | 2026-03-03 | **Horizontal Row Tile Layout (Issue #54)**: Complete template rewrite from 3-column card grid to full-width horizontal rows. Three responsive breakpoints: desktop (9-column CSS grid), tablet (two-line compact), mobile (mini-card). Column header row on desktop. System agent changed from purple ring to `border-l-3` left accent. Chevron arrow replaces "View Details" button. Type display removed. Schedule stats merged inline. New `.border-l-3` and `dark:hover:bg-gray-750` scoped styles. Template-only change -- no store or backend modifications. |
 | 2026-02-18 17:50 | **Toggle Size Consistency**: All toggles in Agents.vue now use consistent `size="sm"`: RunningStateToggle (line 245), ReadOnlyToggle (line 252), AutonomyToggle (line 259). ReadOnlyToggle no longer has `:show-label="false"` - it now shows labels like the other toggles. This matches the toggle size standardization across the system. |
