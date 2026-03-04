@@ -1,4 +1,11 @@
 ### 2026-03-03
+✨ **Feature: Subscription Agent Assignment UI (SUB-003)**
+
+Added agent assign/unassign controls to expanded subscription rows in Settings. No backend changes — uses existing `PUT /api/subscriptions/agents/{name}` and `DELETE /api/subscriptions/agents/{name}` endpoints.
+
+- `src/frontend/src/views/Settings.vue` — Agent badges now have X buttons to unassign; dropdown + Assign button to add agents; agents on other subscriptions shown with "(on sub-name)" suffix; per-agent spinners during operations; tip text updated
+
+### 2026-03-03
 🔄 **Feature: Long-Lived Subscription Tokens (SUB-002 — replaces SUB-001)**
 
 Replaced `.credentials.json` file injection with `CLAUDE_CODE_OAUTH_TOKEN` env var injection. Tokens from `claude setup-token` (~1 year lifetime) replace short-lived OAuth blobs that expired every 8-15 hours.

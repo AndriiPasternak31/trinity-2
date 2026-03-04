@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-03 | SUB-003 | Agent assign/unassign controls in subscription expanded rows | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-03 | SUB-002 | Subscription management rewrite: token-based auth via env var | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-03 | THINK-001 | Dynamic thinking status labels in Chat tab via SSE streaming | [authenticated-chat-tab.md](feature-flows/authenticated-chat-tab.md) |
 | 2026-03-03 | CAPACITY-001 | Capacity meter UI on Agents page and Dashboard timeline (Phase 2) | [parallel-capacity.md](feature-flows/parallel-capacity.md) |

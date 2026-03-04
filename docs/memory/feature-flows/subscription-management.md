@@ -146,15 +146,16 @@ Features:
 - **Expandable rows** showing owner, rate limit tier, assigned agents
 - **Delete confirmation** with cascade warning (agent count)
 
-#### 3. Expanded Details Row (`Settings.vue:544-571`)
+#### 3. Expanded Details Row (`Settings.vue:544-614`)
 
 Shows when row is clicked (`expandedSubscriptions.has(sub.id)`):
 - Owner email
 - Rate limit tier (if set)
-- Assigned agents list (badges with agent icons)
-- Hint about `assign_subscription` MCP tool if no agents assigned
+- **Assigned agents with X buttons** — Each agent badge includes a small X button that calls `unassignAgentFromSubscription()`. Shows per-agent spinner during removal.
+- **Agent assignment dropdown + Assign button** — `<select>` listing available agents (excludes agents already on this subscription). Agents assigned to other subscriptions show `"(on sub-name)"` suffix. Plus an "Assign" button that calls `assignAgentToSubscription()`.
+- Empty state: "No agents assigned yet."
 
-### State Variables (`Settings.vue:1031-1041`)
+### State Variables (`Settings.vue:1075-1103`)
 
 ```javascript
 // Subscriptions state (SUB-002)
@@ -168,11 +169,50 @@ const newSubscription = ref({
   type: 'max',
   token: ''              // Long-lived token from `claude setup-token`
 })
+
+// Agent assignment state (SUB-003)
+const allAgents = ref([])           // Cached from GET /api/agents
+const loadingAgents = ref(false)
+const assigningAgent = ref(null)    // Agent name being assigned (spinner)
+const unassigningAgent = ref(null)  // Agent name being removed (spinner)
+const selectedAgentToAssign = ref({}) // Map of sub.id -> dropdown selection
+
+// Computed: builds { agentName: subscriptionName } from all subscriptions
+const agentSubscriptionMap = computed(() => { ... })
 ```
 
 ### Methods
 
-#### `loadSubscriptions()` (`Settings.vue:1473-1488`)
+#### `fetchAgentList()` (`Settings.vue:1632-1645`)
+
+Fetches agent list on first row expand. Cached — returns immediately if already loaded.
+
+```javascript
+async function fetchAgentList() {
+  if (allAgents.value.length > 0 || loadingAgents.value) return
+  loadingAgents.value = true
+  try {
+    const response = await axios.get('/api/agents', { headers: authStore.authHeader })
+    allAgents.value = response.data || []
+  } finally {
+    loadingAgents.value = false
+  }
+}
+```
+
+#### `getAvailableAgents(subId)` (`Settings.vue:1647-1657`)
+
+Returns agents not assigned to this subscription, sorted unassigned-first (agents on other subs sorted to end).
+
+#### `assignAgentToSubscription(subName, agentName)` (`Settings.vue:1659-1674`)
+
+Calls `PUT /api/subscriptions/agents/{name}?subscription_name=X`. Reloads subscriptions and clears dropdown selections on success.
+
+#### `unassignAgentFromSubscription(agentName)` (`Settings.vue:1676-1691`)
+
+Shows confirm dialog, then calls `DELETE /api/subscriptions/agents/{name}`. Reloads subscriptions on success.
+
+#### `loadSubscriptions()`
 
 Fetches all subscriptions on page load.
 
@@ -258,9 +298,9 @@ async function deleteSubscription(subscription) {
 }
 ```
 
-#### `toggleSubscriptionDetails(subscriptionId)` (`Settings.vue:1559-1567`)
+#### `toggleSubscriptionDetails(subscriptionId)` (`Settings.vue:1621-1630`)
 
-Toggles row expansion with forced reactivity update.
+Toggles row expansion with forced reactivity update. When expanding, also calls `fetchAgentList()` to load available agents for the dropdown.
 
 ### Data Flow
 
@@ -1064,6 +1104,34 @@ MCP client methods: `src/mcp-server/src/client.ts:946-1063`
 4. Verify: Button shows "Deleting..."
 5. Verify: Subscription removed from list after delete completes
 
+#### Test: Assign Agent via Expanded Row (SUB-003)
+1. Expand a subscription row
+2. Verify: Dropdown shows available agents (fetched from `GET /api/agents`)
+3. Select an agent, click "Assign"
+4. Verify: Spinner on Assign button during request
+5. Verify: Agent badge appears, agent count increments
+6. Verify: Agent removed from dropdown options
+
+#### Test: Unassign Agent via X Button (SUB-003)
+1. Expand a subscription row with at least one assigned agent
+2. Click X button on an agent badge
+3. Verify: Confirmation dialog: 'Remove "agent-name"...'
+4. Click OK
+5. Verify: Spinner on the specific badge being removed
+6. Verify: Badge removed, agent count decrements
+
+#### Test: Agent on Other Subscription Shown in Dropdown (SUB-003)
+1. Register two subscriptions (sub-A and sub-B)
+2. Assign an agent to sub-A
+3. Expand sub-B row
+4. Verify: Dropdown shows the agent with "(on sub-A)" suffix
+5. Select it and click Assign
+6. Verify: Agent moves from sub-A to sub-B (backend handles reassignment)
+
+#### Test: Empty Agent List (SUB-003)
+1. Assign all agents to the current subscription
+2. Verify: Dropdown shows no options, Assign button is disabled
+
 ---
 
 ### UI Testing (Agent Detail -- Auth Badge)
@@ -1115,6 +1183,7 @@ MCP client methods: `src/mcp-server/src/client.ts:946-1063`
 
 | Date | Changes |
 |------|---------|
+| 2026-03-03 | **SUB-003 Agent assignment UI**: Added assign/unassign controls to expanded subscription rows in Settings. Agent badges have X buttons for removal, dropdown + Assign button for adding agents, agents on other subs shown with "(on sub-name)" suffix. No backend changes. |
 | 2026-03-03 | **SUB-002 complete rewrite**: Token-based auth replacing file-injection. Registration takes `token` (from `claude setup-token`, prefix `sk-ant-oat01-`) instead of `credentials_json`. Storage encrypts `{"token": ...}` instead of `{".credentials.json": ...}`. Injection via `CLAUDE_CODE_OAUTH_TOKEN` env var on container creation -- no file injection needed. Removed `inject_subscription_to_agent()`, `inject_subscription_on_start()`, HTTP credential verification, and monitoring/auto-remediation. `get_agent_auth_mode()` simplified to pure DB-state detection. Frontend changed from file upload to password input with prefix validation. |
 | 2026-03-02 | **Auth method badge in AgentHeader**: Added frontend documentation for Flow 4. |
 | 2026-03-02 | **Credential priority fix (Issue #57)**: Corrected Authentication Hierarchy. |

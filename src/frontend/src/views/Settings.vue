@@ -560,11 +560,54 @@
                                       <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd" />
                                     </svg>
                                     {{ agent }}
+                                    <button
+                                      @click.stop="unassignAgentFromSubscription(agent)"
+                                      :disabled="unassigningAgent === agent"
+                                      class="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full hover:bg-indigo-200 dark:hover:bg-indigo-800 text-indigo-600 dark:text-indigo-300 disabled:opacity-50"
+                                      title="Remove agent from subscription"
+                                    >
+                                      <svg v-if="unassigningAgent === agent" class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                      </svg>
+                                      <svg v-else class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
                                   </span>
                                 </div>
                                 <p v-else class="mt-1 text-gray-500 dark:text-gray-400 italic">
-                                  No agents assigned. Use MCP tool <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-600 rounded text-xs">assign_subscription</code> to assign.
+                                  No agents assigned yet.
                                 </p>
+                                <!-- Assign Agent Dropdown -->
+                                <div class="mt-3 flex items-center gap-2">
+                                  <select
+                                    v-model="selectedAgentToAssign[sub.id]"
+                                    :disabled="assigningAgent || loadingAgents"
+                                    class="flex-1 max-w-xs px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+                                    @click.stop
+                                  >
+                                    <option value="" disabled selected>{{ loadingAgents ? 'Loading agents...' : 'Select agent...' }}</option>
+                                    <option
+                                      v-for="agent in getAvailableAgents(sub.id)"
+                                      :key="agent.name"
+                                      :value="agent.name"
+                                    >
+                                      {{ agent.name }}{{ agentSubscriptionMap[agent.name] ? ` (on ${agentSubscriptionMap[agent.name]})` : '' }}
+                                    </option>
+                                  </select>
+                                  <button
+                                    @click.stop="assignAgentToSubscription(sub.name, selectedAgentToAssign[sub.id])"
+                                    :disabled="!selectedAgentToAssign[sub.id] || assigningAgent"
+                                    class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <svg v-if="assigningAgent" class="animate-spin -ml-0.5 mr-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Assign
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -575,7 +618,7 @@
                 </div>
 
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  💡 Tip: Assign subscriptions to agents via MCP: <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">assign_subscription("agent-name", "subscription-name")</code>
+                  Expand a subscription row to assign or remove agents. Running agents will restart automatically.
                 </p>
               </div>
             </div>
@@ -1038,6 +1081,25 @@ const newSubscription = ref({
   name: '',
   type: 'max',
   token: ''
+})
+
+// Agent assignment state (for subscription expanded rows)
+const allAgents = ref([])
+const loadingAgents = ref(false)
+const assigningAgent = ref(null)
+const unassigningAgent = ref(null)
+const selectedAgentToAssign = ref({})
+
+const agentSubscriptionMap = computed(() => {
+  const map = {}
+  for (const sub of subscriptions.value) {
+    if (sub.agents) {
+      for (const agentName of sub.agents) {
+        map[agentName] = sub.name
+      }
+    }
+  }
+  return map
 })
 
 const hasChanges = computed(() => {
@@ -1561,9 +1623,70 @@ function toggleSubscriptionDetails(subscriptionId) {
     expandedSubscriptions.value.delete(subscriptionId)
   } else {
     expandedSubscriptions.value.add(subscriptionId)
+    fetchAgentList()
   }
   // Force reactivity update
   expandedSubscriptions.value = new Set(expandedSubscriptions.value)
+}
+
+async function fetchAgentList() {
+  if (allAgents.value.length > 0 || loadingAgents.value) return
+  loadingAgents.value = true
+  try {
+    const response = await axios.get('/api/agents', {
+      headers: authStore.authHeader
+    })
+    allAgents.value = response.data || []
+  } catch (e) {
+    console.error('Failed to fetch agent list:', e)
+  } finally {
+    loadingAgents.value = false
+  }
+}
+
+function getAvailableAgents(subId) {
+  const sub = subscriptions.value.find(s => s.id === subId)
+  const assignedHere = sub?.agents || []
+  return allAgents.value
+    .filter(a => !assignedHere.includes(a.name))
+    .sort((a, b) => {
+      const aOnOther = agentSubscriptionMap.value[a.name] ? 1 : 0
+      const bOnOther = agentSubscriptionMap.value[b.name] ? 1 : 0
+      return aOnOther - bOnOther || a.name.localeCompare(b.name)
+    })
+}
+
+async function assignAgentToSubscription(subName, agentName) {
+  assigningAgent.value = agentName
+  error.value = null
+  try {
+    await axios.put(`/api/subscriptions/agents/${encodeURIComponent(agentName)}?subscription_name=${encodeURIComponent(subName)}`, {}, {
+      headers: authStore.authHeader
+    })
+    await loadSubscriptions()
+    // Clear dropdown selection for all subs
+    selectedAgentToAssign.value = {}
+  } catch (e) {
+    error.value = e.response?.data?.detail || 'Failed to assign agent'
+  } finally {
+    assigningAgent.value = null
+  }
+}
+
+async function unassignAgentFromSubscription(agentName) {
+  if (!confirm(`Remove "${agentName}" from this subscription?\n\nIf the agent is running, it will be restarted.`)) return
+  unassigningAgent.value = agentName
+  error.value = null
+  try {
+    await axios.delete(`/api/subscriptions/agents/${encodeURIComponent(agentName)}`, {
+      headers: authStore.authHeader
+    })
+    await loadSubscriptions()
+  } catch (e) {
+    error.value = e.response?.data?.detail || 'Failed to unassign agent'
+  } finally {
+    unassigningAgent.value = null
+  }
 }
 
 onMounted(() => {
