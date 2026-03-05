@@ -144,7 +144,7 @@ Fork these repositories as starting points for your agents. Each is a pre-config
 | **Cornelius** | Knowledge & Research | https://github.com/Abilityai/cornelius |
 | **Ruby** | Content & Marketing | https://github.com/Abilityai/ruby |
 | **Outbound** | Sales & Outreach | https://github.com/abilityai/outbound-agent |
-| **Webmaster** | Website & Digital Presence | *(to be provided)* |
+| **Webmaster** | Website & Digital Presence | https://github.com/Abilityai/webmaster |
 
 All templates require credentials and configuration for their respective integrations (API keys, service accounts, etc.).
 
