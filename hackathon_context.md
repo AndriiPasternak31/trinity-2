@@ -13,9 +13,8 @@
 This instance is pre-configured and ready to use. It runs on Eugene's Anthropic Max subscription. If it hits rate limits during the hackathon, you may need to configure your own Anthropic API key or subscription.
 
 **To get access:**
-1. Give Eugene your email address
-2. He will add you to the whitelist
-3. Log in at the URL above
+1. Email eugene@ability.ai with the email address you want whitelisted
+2. Once whitelisted, log in at the URL above — you'll receive a 6-digit code
 
 Individual Trinity instances can be provisioned by request for the duration of the hackathon - just ask.
 
