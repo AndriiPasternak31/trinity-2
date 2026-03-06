@@ -252,11 +252,9 @@ These are written directly to the agent's `.env` file and hot-reloaded — no re
 
 ## Purchasing from Paid Agents
 
-To build a client that buys services from paid agents on Trinity, use the Nevermined Purchaser:
+For the full HTTP-level protocol reference (discovery, token generation, request/response formats, error handling), see the **[Purchasing Guide](docs/NEVERMINED_TRINITY_PURCHASING_GUIDE.md)**.
 
-https://github.com/Abilityai/nevermined-purchaser
-
-This is a ready-made agent that authenticates with Nevermined, obtains x402 payment tokens, and calls paid agents with proper authorization. Just configure it with three environment variables: `NVM_API_KEY` (your key from nevermined.app), `NVM_PLAN_ID`, and `NVM_AGENT_ID` (provided by the agent publisher). You need to have purchased the plan beforehand to have credits available.
+For a ready-made client, use the **[Nevermined Purchaser](https://github.com/Abilityai/nevermined-purchaser)** — a working Claude Code agent that authenticates with Nevermined, obtains x402 payment tokens, and calls paid agents with proper authorization. Just configure it with three environment variables: `NVM_API_KEY` (your key from nevermined.app), `NVM_PLAN_ID`, and `NVM_AGENT_ID` (provided by the agent publisher). You need to have purchased the plan beforehand to have credits available.
 
 ---
 
