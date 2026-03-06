@@ -162,14 +162,23 @@ All templates require credentials and configuration for their respective integra
 
 Payments are built into Trinity - every agent can be monetized through the UI.
 
-**To enable payments for an agent:**
+**Step 1: Register your agent on Nevermined**
+
+1. Go to https://nevermined.app and sign in
+2. Create a new agent — when configuring it, set:
+   - **Agent Definition URL:** `https://us14.abilityai.dev/`
+   - **Protected API Endpoint:** `/ask` (click Add)
+3. Create a pricing plan for your agent
+4. Note your **Agent ID** and **Plan ID** — you'll need them in the next step
+
+**Step 2: Enable payments in Trinity**
 
 1. Open your agent in Trinity UI -> **Payments tab**
 2. Configure:
    - **NVM API Key** (from nevermined.app - format: `environment:jwt_token`)
    - **Environment:** sandbox (for testing) or live (for real transactions)
-   - **Agent ID:** Your agent's Nevermined registration ID
-   - **Plan ID:** Your pricing plan ID from Nevermined
+   - **Agent ID:** Your agent's Nevermined registration ID (from Step 1)
+   - **Plan ID:** Your pricing plan ID (from Step 1)
    - **Credits per request:** How many credits each call costs
 3. Toggle the **Enable** switch
 4. Copy the **paid endpoint URL** - this is what external callers use to pay and interact with your agent
