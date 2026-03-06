@@ -9,17 +9,23 @@
 
 ## Trinity Instance Access
 
-**Shared instance:** https://us14.abilityai.dev/login
+There are two identical shared instances. Use whichever one you are assigned to:
 
-This instance is pre-configured and ready to use. It runs on Eugene's Anthropic Max subscription. If it hits rate limits during the hackathon, you may need to configure your own Anthropic API key or subscription.
+| Instance | URL |
+|----------|-----|
+| **US-14** | https://us14.abilityai.dev/login |
+| **US-15** | https://us15.abilityai.dev/login |
+
+Both instances are pre-configured and ready to use. They run on Eugene's Anthropic Max subscriptions. If your instance hits rate limits during the hackathon, you may need to configure your own Anthropic API key or subscription.
 
 **To get access:**
 1. Email eugene@ability.ai with the email address you want whitelisted
-2. Once whitelisted, log in at the URL above — you'll receive a 6-digit code
+2. You'll be assigned to one of the two instances
+3. Log in at your assigned instance URL — you'll receive a 6-digit code
 
-Individual Trinity instances can be provisioned by request for the duration of the hackathon - just ask.
+Individual Trinity instances can also be provisioned by request for the duration of the hackathon - just ask.
 
-> Note: This instance is normally behind a VPN but has been made public for the hackathon.
+> Note: These instances are normally behind a VPN but have been made public for the hackathon.
 
 ---
 
@@ -79,13 +85,13 @@ Add this to your local agent's `.mcp.json`:
   "mcpServers": {
     "trinity": {
       "type": "http",
-      "url": "https://us14.abilityai.dev/mcp",
+      "url": "https://YOUR_INSTANCE.abilityai.dev/mcp",
       "headers": { "Authorization": "Bearer trinity_mcp_YOUR_KEY_HERE" }
     }
   }
 }
 ```
-For a self-hosted instance, replace the URL with `http://localhost:8080/mcp`.
+Replace `YOUR_INSTANCE` with your assigned instance (`us14` or `us15`). For a self-hosted instance, use `http://localhost:8080/mcp`.
 
 **Step 3: Deploy**
 
@@ -166,7 +172,7 @@ Payments are built into Trinity - every agent can be monetized through the UI.
 
 1. Go to https://nevermined.app and sign in
 2. Create a new agent — when configuring it, set:
-   - **Agent Definition URL:** `https://us14.abilityai.dev/`
+   - **Agent Definition URL:** `https://YOUR_INSTANCE.abilityai.dev/` (replace with your assigned instance: `us14` or `us15`)
    - **Protected API Endpoint:** `/ask` (click Add)
 3. Create a pricing plan for your agent
 4. Note your **Agent ID** and **Plan ID** — you'll need them in the next step
@@ -316,7 +322,8 @@ For self-hosted instances, see `docs/DEPLOYMENT.md` for full troubleshooting.
 
 | Resource | URL |
 |----------|-----|
-| Trinity Instance | https://us14.abilityai.dev/login |
+| Trinity Instance (US-14) | https://us14.abilityai.dev/login |
+| Trinity Instance (US-15) | https://us15.abilityai.dev/login |
 | Trinity Source Code | https://github.com/Abilityai/trinity/tree/main |
 | Abilities SDK | https://github.com/Abilityai/abilities |
 | Cornelius (Research Agent) | https://github.com/Abilityai/cornelius |
