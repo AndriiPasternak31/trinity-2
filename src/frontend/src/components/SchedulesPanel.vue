@@ -622,7 +622,7 @@ const formData = ref({
   enabled: true,
   timeout_seconds: 900,
   allowed_tools: null,  // null = all tools allowed
-  model: 'claude-opus-4-6'  // MODEL-001
+  model: 'claude-opus-4-5-20251101'  // MODEL-001
 })
 
 // Tool categories for allowed tools selection
@@ -748,7 +748,7 @@ function closeForm() {
     enabled: true,
     timeout_seconds: 900,
     allowed_tools: null,
-    model: 'claude-opus-4-6'
+    model: 'claude-opus-4-5-20251101'
   }
 }
 

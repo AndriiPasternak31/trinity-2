@@ -555,7 +555,7 @@ const triggerFilter = ref('all') // Filter by triggered_by type (AUDIT-001)
 
 // Model selection (MODEL-001)
 const taskModelKey = computed(() => `trinity-task-model-${props.agentName}`)
-const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-opus-4-6')
+const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-opus-4-5-20251101')
 watch(selectedModel, (val) => {
   localStorage.setItem(taskModelKey.value, val)
 })
