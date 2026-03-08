@@ -110,22 +110,23 @@ class OperatorQueueSyncService:
             # Agent not reachable or file API not ready — skip silently
             return
 
-        if not result.get("success") or result.get("not_found"):
-            return  # No queue file — agent doesn't use operator queue
+        file_exists = result.get("success") and not result.get("not_found")
 
-        content = result.get("content")
-        if not content:
-            return
+        if file_exists:
+            content = result.get("content")
+            if not content:
+                file_exists = False
 
-        try:
-            queue_data = json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning(f"Invalid JSON in operator-queue.json for {agent_name}")
-            return
+        if file_exists:
+            try:
+                queue_data = json.loads(content)
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON in operator-queue.json for {agent_name}")
+                queue_data = {"$schema": "operator-queue-v1", "requests": []}
+        else:
+            queue_data = {"$schema": "operator-queue-v1", "requests": []}
 
         requests = queue_data.get("requests", [])
-        if not requests:
-            return
 
         # 2. Process each request
         new_items = []
@@ -185,7 +186,9 @@ class OperatorQueueSyncService:
         # 4. Write responses back to the agent's file
         responded_items = db.get_operator_queue_responded_for_agent(agent_name)
         if responded_items:
-            await self._write_responses_to_agent(agent_name, client, queue_data, responded_items)
+            await self._write_responses_to_agent(
+                agent_name, client, queue_data, responded_items, file_exists
+            )
 
     async def _write_responses_to_agent(
         self,
@@ -193,6 +196,7 @@ class OperatorQueueSyncService:
         client: AgentClient,
         queue_data: dict,
         responded_items: list,
+        file_exists: bool = True,
     ):
         """Write operator responses back to the agent's queue file."""
         requests = queue_data.get("requests", [])
@@ -201,6 +205,8 @@ class OperatorQueueSyncService:
         # Build a lookup of responded items by ID
         response_map = {item["id"]: item for item in responded_items}
 
+        # Update items already in the agent's requests array
+        seen_ids = set()
         for req in requests:
             req_id = req.get("id")
             if req_id in response_map and req.get("status") == "pending":
@@ -211,9 +217,33 @@ class OperatorQueueSyncService:
                 req["responded_by"] = resp.get("responded_by_email")
                 req["responded_at"] = resp.get("responded_at")
                 updated = True
+            if req_id:
+                seen_ids.add(req_id)
+
+        # Reconstruct items missing from the file (e.g. after container restart)
+        for resp in responded_items:
+            if resp["id"] not in seen_ids:
+                requests.append({
+                    "id": resp["id"],
+                    "type": resp.get("type", "question"),
+                    "status": "responded",
+                    "priority": resp.get("priority", "medium"),
+                    "title": resp.get("title", ""),
+                    "question": resp.get("question", ""),
+                    "options": resp.get("options"),
+                    "context": resp.get("context"),
+                    "created_at": resp.get("created_at", ""),
+                    "response": resp["response"],
+                    "response_text": resp.get("response_text"),
+                    "responded_by": resp.get("responded_by_email"),
+                    "responded_at": resp.get("responded_at"),
+                })
+                updated = True
 
         if not updated:
             return
+
+        queue_data["requests"] = requests
 
         # Write the updated file back to the agent
         try:

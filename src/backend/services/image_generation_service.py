@@ -2,8 +2,8 @@
 Platform-level image generation service (IMG-001).
 
 Two-step pipeline:
-1. Prompt refinement — Gemini 2.5 Flash (text) rewrites the raw prompt using best practices
-2. Image generation — Gemini 2.5 Flash Image produces the actual image
+1. Prompt refinement — Gemini 2.0 Flash (text) rewrites the raw prompt using best practices
+2. Image generation — Gemini 3.1 Flash Image Preview produces the actual image
 
 Other code (routers, services, MCP tools, agents) calls:
     await image_generation_service.generate_image("a red apple", use_case="thumbnail")
@@ -26,8 +26,8 @@ from services.image_generation_prompts import (
 logger = logging.getLogger(__name__)
 
 # Gemini API configuration
-GEMINI_TEXT_MODEL = "gemini-2.5-flash"
-GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
+GEMINI_TEXT_MODEL = "gemini-2.0-flash"
+GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 # Timeouts
@@ -230,13 +230,19 @@ class ImageGenerationService:
             raise RuntimeError(f"Unexpected Gemini text response structure: {e}")
 
     async def _call_gemini_image(
-        self, prompt: str, aspect_ratio: str
+        self,
+        prompt: str,
+        aspect_ratio: str,
+        reference_image: Optional[bytes] = None,
+        reference_mime_type: str = "image/png",
     ) -> tuple[bytes, str]:
         """Call Gemini image model to generate an image.
 
         Args:
             prompt: The refined prompt for image generation.
             aspect_ratio: Target aspect ratio.
+            reference_image: Optional reference image bytes for style/likeness guidance.
+            reference_mime_type: MIME type of the reference image.
 
         Returns:
             Tuple of (image_bytes, mime_type).
@@ -246,11 +252,21 @@ class ImageGenerationService:
         """
         url = f"{GEMINI_API_BASE}/{GEMINI_IMAGE_MODEL}:generateContent"
 
+        parts = []
+        if reference_image:
+            parts.append({
+                "inlineData": {
+                    "mimeType": reference_mime_type,
+                    "data": base64.b64encode(reference_image).decode("utf-8"),
+                }
+            })
+        parts.append({"text": prompt})
+
         payload = {
             "contents": [
                 {
                     "role": "user",
-                    "parts": [{"text": prompt}],
+                    "parts": parts,
                 }
             ],
             "generationConfig": {
@@ -293,6 +309,138 @@ class ImageGenerationService:
             "Gemini image API returned no image data. "
             "The prompt may have been blocked by safety filters."
         )
+
+    async def generate_variation(
+        self,
+        prompt: str,
+        reference_image: bytes,
+        reference_mime_type: str = "image/png",
+        aspect_ratio: str = "1:1",
+        agent_name: Optional[str] = None,
+    ) -> ImageGenerationResult:
+        """Generate an image variation using a reference image.
+
+        Args:
+            prompt: Text prompt describing the desired image (already refined).
+            reference_image: Reference image bytes for style/likeness guidance.
+            reference_mime_type: MIME type of the reference image.
+            aspect_ratio: Target aspect ratio.
+            agent_name: Optional agent name for logging.
+
+        Returns:
+            ImageGenerationResult with image bytes or error.
+        """
+        if not self.available:
+            return ImageGenerationResult(
+                success=False,
+                original_prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                error="GEMINI_API_KEY not configured",
+            )
+
+        log_prefix = f"[IMG {agent_name or 'platform'}]"
+
+        variation_prompt = (
+            f"Generate a new variation of this portrait. Keep the same subject identity, "
+            f"features, and overall style but create a fresh natural variation — slightly "
+            f"different expression, micro-changes in lighting angle, or subtle pose shift. "
+            f"The result should look like a different photo from the same session.\n\n"
+            f"Original prompt: {prompt}"
+        )
+
+        try:
+            image_bytes, mime_type = await self._call_gemini_image(
+                variation_prompt,
+                aspect_ratio,
+                reference_image=reference_image,
+                reference_mime_type=reference_mime_type,
+            )
+            logger.info(
+                f"{log_prefix} Generated variation: {len(image_bytes)} bytes, "
+                f"aspect_ratio={aspect_ratio}"
+            )
+            return ImageGenerationResult(
+                success=True,
+                image_data=image_bytes,
+                mime_type=mime_type,
+                refined_prompt=variation_prompt,
+                original_prompt=prompt,
+                model_used=GEMINI_IMAGE_MODEL,
+                use_case="avatar",
+                aspect_ratio=aspect_ratio,
+            )
+        except Exception as e:
+            logger.error(f"{log_prefix} Variation generation failed: {e}")
+            return ImageGenerationResult(
+                success=False,
+                original_prompt=prompt,
+                use_case="avatar",
+                aspect_ratio=aspect_ratio,
+                error=str(e),
+            )
+
+    async def generate_emotion_variation(
+        self,
+        emotion_prompt: str,
+        reference_image: bytes,
+        reference_mime_type: str = "image/png",
+        aspect_ratio: str = "1:1",
+        agent_name: Optional[str] = None,
+    ) -> ImageGenerationResult:
+        """Generate an emotion variant of an avatar using a reference image.
+
+        Unlike generate_variation(), this uses a caller-supplied emotion prompt
+        instead of building a generic variation prompt.
+
+        Args:
+            emotion_prompt: Full prompt describing the desired emotion/expression.
+            reference_image: Reference image bytes for identity preservation.
+            reference_mime_type: MIME type of the reference image.
+            aspect_ratio: Target aspect ratio.
+            agent_name: Optional agent name for logging.
+
+        Returns:
+            ImageGenerationResult with image bytes or error.
+        """
+        if not self.available:
+            return ImageGenerationResult(
+                success=False,
+                original_prompt=emotion_prompt,
+                aspect_ratio=aspect_ratio,
+                error="GEMINI_API_KEY not configured",
+            )
+
+        log_prefix = f"[IMG {agent_name or 'platform'}]"
+
+        try:
+            image_bytes, mime_type = await self._call_gemini_image(
+                emotion_prompt,
+                aspect_ratio,
+                reference_image=reference_image,
+                reference_mime_type=reference_mime_type,
+            )
+            logger.info(
+                f"{log_prefix} Generated emotion variation: {len(image_bytes)} bytes"
+            )
+            return ImageGenerationResult(
+                success=True,
+                image_data=image_bytes,
+                mime_type=mime_type,
+                refined_prompt=emotion_prompt,
+                original_prompt=emotion_prompt,
+                model_used=GEMINI_IMAGE_MODEL,
+                use_case="avatar",
+                aspect_ratio=aspect_ratio,
+            )
+        except Exception as e:
+            logger.error(f"{log_prefix} Emotion variation generation failed: {e}")
+            return ImageGenerationResult(
+                success=False,
+                original_prompt=emotion_prompt,
+                use_case="avatar",
+                aspect_ratio=aspect_ratio,
+                error=str(e),
+            )
 
     async def close(self):
         """Close the HTTP client."""

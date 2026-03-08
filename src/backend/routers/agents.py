@@ -26,6 +26,7 @@ from services.docker_utils import (
     volume_get, volume_remove
 )
 from services import git_service
+from services.image_generation_prompts import AVATAR_EMOTIONS
 
 # Import service layer functions
 from services.agent_service import (
@@ -419,11 +420,16 @@ async def delete_agent_endpoint(agent_name: str, request: Request, current_user:
     except Exception as e:
         logger.warning(f"Failed to delete tags for agent {agent_name}: {e}")
 
-    # Delete cached avatar (AVATAR-001)
+    # Delete cached avatar, reference, and emotion images (AVATAR-001, AVATAR-002)
     try:
-        avatar_path = Path("/data/avatars") / f"{agent_name}.png"
-        if avatar_path.exists():
-            avatar_path.unlink()
+        for suffix in (f"{agent_name}.png", f"{agent_name}_ref.png"):
+            p = Path("/data/avatars") / suffix
+            if p.exists():
+                p.unlink()
+        for emotion in AVATAR_EMOTIONS:
+            p = Path("/data/avatars") / f"{agent_name}_emotion_{emotion}.png"
+            if p.exists():
+                p.unlink()
     except Exception as e:
         logger.warning(f"Failed to delete avatar for agent {agent_name}: {e}")
 
@@ -1508,12 +1514,18 @@ async def rename_agent_endpoint(
                 detail="Failed to update database. Agent name may already be taken."
             )
 
-        # Rename cached avatar file (AVATAR-001)
+        # Rename cached avatar, reference, and emotion image files (AVATAR-001, AVATAR-002)
         try:
-            old_avatar = Path("/data/avatars") / f"{agent_name}.png"
-            new_avatar = Path("/data/avatars") / f"{sanitized_name}.png"
-            if old_avatar.exists():
-                old_avatar.rename(new_avatar)
+            for suffix in ("", "_ref"):
+                old_path = Path("/data/avatars") / f"{agent_name}{suffix}.png"
+                new_path = Path("/data/avatars") / f"{sanitized_name}{suffix}.png"
+                if old_path.exists():
+                    old_path.rename(new_path)
+            for emotion in AVATAR_EMOTIONS:
+                old_path = Path("/data/avatars") / f"{agent_name}_emotion_{emotion}.png"
+                new_path = Path("/data/avatars") / f"{sanitized_name}_emotion_{emotion}.png"
+                if old_path.exists():
+                    old_path.rename(new_path)
         except Exception as e:
             logger.warning(f"Failed to rename avatar for agent {agent_name}: {e}")
 

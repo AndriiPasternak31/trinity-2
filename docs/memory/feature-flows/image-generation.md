@@ -1,7 +1,7 @@
 # Feature: Platform Image Generation (IMG-001)
 
 ## Overview
-Platform-level image generation service using Google Gemini models with a two-step pipeline: prompt refinement via Gemini 2.5 Flash text model, then image generation via Gemini 2.5 Flash Image model. Supports use-case-specific best practices (general, thumbnail, diagram, social) and configurable aspect ratios.
+Platform-level image generation service using Google Gemini models with a two-step pipeline: prompt refinement via Gemini 2.0 Flash text model, then image generation via Gemini 3.1 Flash Image Preview model. Supports use-case-specific best practices (general, thumbnail, diagram, social, avatar), configurable aspect ratios, and image-to-image variation generation from a reference image.
 
 ## User Story
 As a platform user (or internal service), I want to generate high-quality images from text descriptions so that agents and platform features can produce visual content without managing their own image generation infrastructure.
@@ -9,6 +9,8 @@ As a platform user (or internal service), I want to generate high-quality images
 ## Entry Points
 - **API**: `POST /api/images/generate` -- Generate an image from a text prompt (JWT required)
 - **API**: `GET /api/images/models` -- List available models and configuration options (JWT required)
+- **Internal**: `generate_variation()` -- Generate a variation from a reference image (called by avatar service)
+- **Internal**: `generate_emotion_variation()` -- Generate an emotion variant from a reference image (called by avatar emotion service, AVATAR-002)
 - **No frontend UI** -- Backend-only platform capability (no Vue components yet)
 - **No MCP tools** -- Not yet exposed via MCP server
 
@@ -47,7 +49,7 @@ router = APIRouter(prefix="/api/images", tags=["images"])
       "mime_type": "image/png",
       "refined_prompt": "the refined prompt used for generation",
       "original_prompt": "the user's raw prompt",
-      "model_used": "gemini-2.5-flash-image",
+      "model_used": "gemini-3.1-flash-image-preview",
       "use_case": "general",
       "aspect_ratio": "1:1"
   }
@@ -61,11 +63,11 @@ router = APIRouter(prefix="/api/images", tags=["images"])
   {
       "available": true,
       "models": {
-          "text_refinement": "gemini-2.5-flash",
-          "image_generation": "gemini-2.5-flash-image"
+          "text_refinement": "gemini-2.0-flash",
+          "image_generation": "gemini-3.1-flash-image-preview"
       },
-      "default_model": "gemini-2.5-flash-image",
-      "use_cases": ["general", "thumbnail", "diagram", "social"],
+      "default_model": "gemini-3.1-flash-image-preview",
+      "use_cases": ["general", "thumbnail", "diagram", "social", "avatar"],
       "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]
   }
   ```
@@ -81,13 +83,13 @@ router = APIRouter(prefix="/api/images", tags=["images"])
 **File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/image_generation_service.py`
 
 #### ImageGenerationService (line 52)
-Singleton service accessed via `get_image_generation_service()` (line 310).
+Singleton service accessed via `get_image_generation_service()` (line 395).
 
 **Constants** (lines 29-35):
 | Constant | Value |
 |----------|-------|
-| `GEMINI_TEXT_MODEL` | `gemini-2.5-flash` |
-| `GEMINI_IMAGE_MODEL` | `gemini-2.5-flash-image` |
+| `GEMINI_TEXT_MODEL` | `gemini-2.0-flash` |
+| `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` |
 | `GEMINI_API_BASE` | `https://generativelanguage.googleapis.com/v1beta/models` |
 | `PROMPT_REFINEMENT_TIMEOUT` | 30 seconds |
 | `IMAGE_GENERATION_TIMEOUT` | 120 seconds |
@@ -112,16 +114,72 @@ Main entry point. Parameters: `prompt`, `use_case`, `aspect_ratio`, `refine_prom
    - Returns `ImageGenerationResult` dataclass with image bytes, mime type, and metadata
 
 #### _call_gemini_text() (line 183)
-- **URL**: `{GEMINI_API_BASE}/gemini-2.5-flash:generateContent`
+- **URL**: `{GEMINI_API_BASE}/gemini-2.0-flash:generateContent`
 - **Auth**: `x-goog-api-key` header with `GEMINI_API_KEY`
 - **Config**: temperature 0.7, maxOutputTokens 512
 - **Response parsing**: `data["candidates"][0]["content"]["parts"][0]["text"]`
 
 #### _call_gemini_image() (line 232)
-- **URL**: `{GEMINI_API_BASE}/gemini-2.5-flash-image:generateContent`
+- **URL**: `{GEMINI_API_BASE}/gemini-3.1-flash-image-preview:generateContent`
 - **Auth**: `x-goog-api-key` header with `GEMINI_API_KEY`
 - **Config**: `responseModalities: ["image", "text"]`, `imageConfig.aspectRatio`
+- **Parameters**:
+  - `prompt: str` -- The refined text prompt
+  - `aspect_ratio: str` -- Target aspect ratio
+  - `reference_image: Optional[bytes] = None` -- Optional reference image for style/likeness guidance
+  - `reference_mime_type: str = "image/png"` -- MIME type of the reference image
+- **Reference image support** (lines 255-263): When `reference_image` is provided, it is base64-encoded and prepended as an `inlineData` part before the text prompt in the request payload. This enables image-to-image generation where Gemini uses the reference for style and likeness guidance.
+  ```python
+  parts = []
+  if reference_image:
+      parts.append({
+          "inlineData": {
+              "mimeType": reference_mime_type,
+              "data": base64.b64encode(reference_image).decode("utf-8"),
+          }
+      })
+  parts.append({"text": prompt})
+  ```
 - **Response parsing**: Iterates candidates/parts looking for `inlineData`, base64-decodes
+
+#### generate_variation() (line 313)
+Generates an image variation from a reference image. Located after `generate_image()` and before `close()`.
+
+- **Parameters**:
+  - `prompt: str` -- Text prompt (already refined, passed through from original generation)
+  - `reference_image: bytes` -- Reference image bytes (required, not optional)
+  - `reference_mime_type: str = "image/png"` -- MIME type of the reference
+  - `aspect_ratio: str = "1:1"` -- Target aspect ratio
+  - `agent_name: Optional[str] = None` -- For logging
+- **Flow**:
+  1. Check `self.available` -- return error result if no API key
+  2. Wrap the prompt with variation instructions:
+     ```python
+     variation_prompt = (
+         f"Generate a new variation of this portrait. Keep the same subject identity, "
+         f"features, and overall style but create a fresh natural variation -- slightly "
+         f"different expression, micro-changes in lighting angle, or subtle pose shift. "
+         f"The result should look like a different photo from the same session.\n\n"
+         f"Original prompt: {prompt}"
+     )
+     ```
+  3. Call `_call_gemini_image()` with `variation_prompt`, `aspect_ratio`, `reference_image`, and `reference_mime_type`
+  4. Return `ImageGenerationResult` with `use_case="avatar"`
+- **Error handling**: Catches all exceptions, returns failure result with error message
+- **Primary consumer**: The avatar generation service (AVATAR-001), which calls this to produce multiple avatar candidates from a single initial generation
+
+#### generate_emotion_variation() (AVATAR-002)
+Generates an emotion variant of an avatar using a caller-supplied emotion prompt and reference image. Unlike `generate_variation()`, this uses the caller's full prompt instead of wrapping with generic variation instructions.
+
+- **Parameters**:
+  - `emotion_prompt: str` -- Full prompt describing the desired emotion/expression (caller-built)
+  - `reference_image: bytes` -- Reference image bytes for identity preservation
+  - `reference_mime_type: str = "image/png"` -- MIME type of the reference
+  - `aspect_ratio: str = "1:1"` -- Target aspect ratio
+  - `agent_name: Optional[str] = None` -- For logging
+- **Flow**: Calls `_call_gemini_image()` directly with the emotion prompt and reference image (no prompt refinement step)
+- **Returns**: `ImageGenerationResult` with `use_case="avatar"`
+- **Primary consumer**: Background emotion generation in `avatar.py` (`_generate_emotions_background()`), which generates 8 emotion variants per agent avatar
 
 #### ImageGenerationResult (line 39)
 ```python
@@ -151,7 +209,18 @@ Four use-case-specific system prompts, each containing best practices for image 
 | `thumbnail` | `THUMBNAIL_BEST_PRACTICES` (line 52) | Bold high-contrast, simple compositions, vibrant colors, clean backgrounds, leave space for overlay text |
 | `diagram` | `DIAGRAM_BEST_PRACTICES` (line 89) | Clean minimal style, clear hierarchy, limited palette (3-5 colors), flat vector style, no text |
 | `social` | `SOCIAL_BEST_PRACTICES` (line 127) | Scroll-stopping visuals, emotional resonance, brand-safe, platform-aware aspect ratios |
-| `avatar` | `AVATAR_BEST_PRACTICES` (line 166) | Centered subject, circular crop safe, bold colors, digital illustration, no text (AVATAR-001) |
+| `avatar` | `AVATAR_BEST_PRACTICES` (line 166) | Dark mode studio portrait style (see below) |
+
+#### Avatar Prompt Style (AVATAR_BEST_PRACTICES, lines 166-226)
+The avatar prompt enforces extreme consistency through a fixed technical specification appended to every refined prompt. Key style parameters:
+
+- **Framing**: Extreme close-up portrait, face filling 85-90% of frame, subject centered, front-facing with eyes at camera
+- **Background**: Smooth dark gradient from deep slate-navy (#1a1f2e) to dark charcoal (#111827), no objects or patterns
+- **Lighting**: Single soft key light from upper-left at 45 degrees, cool 5600K color temperature, subtle cool indigo-blue rim light (#6366f1) on the right edge for subject separation
+- **Color grading**: Modern digital, cool desaturated palette, deep rich shadows, clean highlight rolloff, neutral-to-cool midtones, no film grain, sharp and clean
+- **Lens**: 85mm f/1.4 prime, shallow depth of field on background only
+- **Style**: Modern studio portrait photograph, photographic realism (not illustration, not CGI)
+- **Subject rules**: Preserve all user details exactly, add only missing defaults (calm confident expression), literal descriptions not poetic, consistent front-facing pose, circular crop safe
 
 **Exports**:
 ```python
@@ -161,6 +230,15 @@ VALID_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]
 ```
 
 All prompts instruct the model to return ONLY the refined prompt text with no explanations, markdown, or quotes.
+
+#### Emotion Variant Constants (AVATAR-002)
+
+```python
+AVATAR_EMOTIONS = ["happy", "thoughtful", "surprised", "determined", "calm", "amused", "curious", "confident"]
+AVATAR_EMOTION_PROMPTS = {emotion: "facial expression description", ...}  # 8 entries
+```
+
+Used by `avatar.py:_generate_emotions_background()` to build emotion-specific prompts for `generate_emotion_variation()`.
 
 ---
 
@@ -241,6 +319,11 @@ None.
    **Action**: Remove `GEMINI_API_KEY` from environment, restart backend, call generate
    **Expected**: 501 with "not available" message
 
+7. **Generate variation (internal API)**
+   **Action**: Call `service.generate_variation(prompt, reference_image_bytes)` from code
+   **Expected**: Returns `ImageGenerationResult` with `use_case="avatar"` and new image bytes
+   **Verify**: Result image differs from reference but maintains subject identity
+
 ### curl Examples
 
 ```bash
@@ -265,10 +348,11 @@ curl -s -X POST http://localhost:8000/api/images/generate \
 - **No frontend coupling**: Pure backend capability designed for internal service consumption
 - **Extensible**: `agent_name` parameter enables per-agent tracking; designed for future MCP tool and agent-level integration
 - **No persistence**: Images are ephemeral (returned inline, not stored). Future iterations may add storage
+- **Image-to-image**: `_call_gemini_image()` supports optional `reference_image` parameter for variation generation, used by the avatar service (AVATAR-001) and emotion variant generation (AVATAR-002)
 
 ---
 
 ## Related Flows
+- [agent-avatars.md](agent-avatars.md) -- AI-generated agent avatars, primary consumer of `generate_variation()`
 - [nevermined-payments.md](nevermined-payments.md) -- Paid agent API could use image generation
 - [authenticated-chat-tab.md](authenticated-chat-tab.md) -- Chat could eventually render generated images
-- [gemini-runtime.md](gemini-runtime.md) -- Uses same Gemini API ecosystem

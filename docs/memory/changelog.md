@@ -1,4 +1,49 @@
 ### 2026-03-08
+🎭 **Feature: Emotion avatar variants with automatic cycling (AVATAR-002)**
+
+Agents now get 8 emotion variants generated in the background after avatar creation. Emotions: happy, thoughtful, surprised, determined, calm, amused, curious, confident. On the AgentDetail page, the avatar cycles to a random emotion every 30 seconds. Agents list and dashboard use the base avatar (no cycling). Emotion files are cleaned up on avatar delete and renamed on agent rename.
+
+**New backend:**
+- `AVATAR_EMOTIONS` and `AVATAR_EMOTION_PROMPTS` constants in `image_generation_prompts.py`
+- `generate_emotion_variation()` method on `ImageGenerationService`
+- `GET /api/agents/{name}/avatar/emotions` — list available emotion variants
+- `GET /api/agents/{name}/avatar/emotion/{emotion}` — serve emotion PNG
+- Background `asyncio.create_task()` generates all 8 emotions after avatar creation
+- Delete/rename cleanup for `_emotion_{name}.png` files in `avatar.py` and `agents.py`
+
+**Frontend:**
+- `AgentHeader.vue` — new `emotionAvatarUrl` prop overrides base avatar
+- `AgentDetail.vue` — loads emotions, cycles every 30s, polls for new emotions after avatar generation
+
+---
+
+🔄 **Feature: Reference image system for avatar regeneration (AVATAR-001)**
+
+Avatars now use a reference image system. When generating from the modal, the result is saved as both the display avatar and the reference image. The hover refresh button generates a variation from the reference image (same identity, slight natural variation) without changing the reference. The modal shows the reference image alongside the current avatar, and the generate button is labeled "New Reference" when a reference exists. Two hover buttons: refresh (variation from reference) and pencil (open modal to change prompt/create new reference).
+
+**New backend endpoints:**
+- `GET /api/agents/{name}/avatar/reference` — Serve reference image
+- `POST /api/agents/{name}/avatar/regenerate` — Generate variation from reference
+
+**Modified files:**
+- `src/backend/routers/avatar.py` — Reference image storage, regenerate endpoint, reference serving
+- `src/backend/services/image_generation_service.py` — `generate_variation()` method, reference image support in `_call_gemini_image()`
+- `src/frontend/src/components/AgentHeader.vue` — Two-button hover UI (refresh + edit)
+- `src/frontend/src/components/AvatarGenerateModal.vue` — Reference image preview, "New Reference" button label
+- `src/frontend/src/views/AgentDetail.vue` — `regenerateAvatar()` calls `/regenerate`, passes `hasReference` prop
+
+---
+
+🎨 **Style: Avatar dark mode aesthetic + tighter framing + faster models (AVATAR-001)**
+
+Redesigned avatar style to match Trinity's dark mode UI: dark slate-navy/charcoal backgrounds (#1a1f2e → #111827), cool 5600K lighting, indigo-blue rim light (#6366f1) matching the UI accent color, modern digital color grading (sharp, clean, no film grain) replacing the previous warm Kodak Portra film look. Also tightened framing to extreme close-up (85-90% face fill) and switched to faster Gemini models (2.0 Flash text, 3.1 Flash Image Preview).
+
+**Modified files:**
+- `src/backend/services/image_generation_prompts.py` — Dark mode style, tighter framing
+- `src/backend/services/image_generation_service.py` — Faster Gemini models
+
+---
+
 🎨 **Style: Avatar generation now uses cinematic lifestyle photography aesthetic (AVATAR-001)**
 
 Rewrote the avatar prompt engineering to use a Kodak Portra 400 film-inspired cinematic portrait style instead of the previous digital illustration style. Avatars now generate as warm, authentic-feeling portraits with shallow depth of field, muted pastel tones, lifted shadows, creamy highlights, and subtle film grain.

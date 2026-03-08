@@ -208,6 +208,27 @@ project_trinity/
 - **Admin Login**: Password-based login for admin user (username fixed as 'admin')
 - **Email Whitelist**: Manage allowed emails in Settings → Email Whitelist
 
+### API Authentication Pattern
+
+All authenticated API calls require a JWT Bearer token. To get one:
+
+```bash
+# 1. Login (form-encoded, NOT JSON)
+curl -s -X POST http://localhost:8000/api/token \
+  -d 'username=admin&password=${ADMIN_PASSWORD}'
+# Returns: {"access_token": "eyJ...", "token_type": "bearer"}
+
+# 2. Use token in Authorization header
+curl -s -H "Authorization: Bearer <token>" http://localhost:8000/api/agents
+```
+
+**Key facts:**
+- Login endpoint: `POST /api/token` (OAuth2 form-encoded: `username=...&password=...`)
+- Admin password: Set via `ADMIN_PASSWORD` env var in `.env` (see `CLAUDE.local.md` for actual value)
+- Token lifetime: 7 days, invalidated on backend restart
+- MCP API keys (`trinity_mcp_*`) also work as Bearer tokens
+- Unauthenticated endpoints: `/api/auth/mode`, `/api/setup/status`, `/api/token`
+
 ---
 
 ## Quick Reference

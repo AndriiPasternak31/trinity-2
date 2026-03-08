@@ -3,9 +3,25 @@
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
       <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Agent Avatar</h3>
 
-      <!-- Current avatar preview -->
-      <div class="flex justify-center mb-4">
-        <AgentAvatar :name="agentName" :avatar-url="currentAvatarUrl" size="xl" />
+      <!-- Reference image + current avatar preview -->
+      <div class="flex justify-center items-center gap-4 mb-4">
+        <div v-if="hasReference" class="text-center">
+          <img
+            :src="`/api/agents/${agentName}/avatar/reference?v=${Date.now()}`"
+            class="w-16 h-16 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
+            alt="Reference"
+          />
+          <span class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Reference</span>
+        </div>
+        <div v-if="hasReference" class="text-gray-300 dark:text-gray-600">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+        <div class="text-center">
+          <AgentAvatar :name="agentName" :avatar-url="currentAvatarUrl" size="xl" />
+          <span v-if="hasReference" class="text-[10px] text-gray-400 dark:text-gray-500 mt-1 block">Current</span>
+        </div>
       </div>
 
       <!-- Identity prompt input -->
@@ -54,7 +70,7 @@
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            {{ generating ? 'Generating...' : 'Generate' }}
+            {{ generating ? 'Generating...' : (hasReference ? 'New Reference' : 'Generate') }}
           </button>
         </div>
       </div>
@@ -71,7 +87,8 @@ const props = defineProps({
   show: { type: Boolean, default: false },
   agentName: { type: String, required: true },
   initialPrompt: { type: String, default: '' },
-  currentAvatarUrl: { type: String, default: null }
+  currentAvatarUrl: { type: String, default: null },
+  hasReference: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close', 'updated'])

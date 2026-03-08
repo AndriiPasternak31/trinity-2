@@ -58,6 +58,9 @@
             @remove-tag="removeTag"
             @rename="renameAgent"
             @open-avatar-modal="showAvatarModal = true"
+            @cycle-emotion="cycleEmotion"
+            :has-avatar-prompt="!!avatarIdentityPrompt"
+            :emotion-avatar-url="emotionAvatarUrl"
           />
 
           <!-- Tabs -->
@@ -223,6 +226,7 @@
       :agent-name="agent?.name || ''"
       :initial-prompt="avatarIdentityPrompt"
       :current-avatar-url="agent?.avatar_url || null"
+      :has-reference="avatarHasReference"
       @close="showAvatarModal = false"
       @updated="onAvatarUpdated"
     />
@@ -310,6 +314,12 @@ const activeTab = ref('tasks')
 const showResourceModal = ref(false)
 const showAvatarModal = ref(false)
 const avatarIdentityPrompt = ref('')
+const avatarHasReference = ref(false)
+// Emotion avatar cycling state (AVATAR-002)
+const availableEmotions = ref([])
+const emotionAvatarUrl = ref(null)
+const emotionCycleTimer = ref(null)
+
 const taskPrefillMessage = ref('')
 const schedulePrefillMessage = ref('')
 const hasDashboard = ref(false)
@@ -636,6 +646,7 @@ async function loadAvatarIdentity() {
       headers: authStore.authHeader
     })
     avatarIdentityPrompt.value = response.data.identity_prompt || ''
+    avatarHasReference.value = response.data.has_reference || false
   } catch (err) {
     // Not critical
   }
@@ -644,6 +655,56 @@ async function loadAvatarIdentity() {
 async function onAvatarUpdated() {
   await loadAgent()
   await loadAvatarIdentity()
+  // Stop current cycling — new avatar means old emotions are deleted
+  stopEmotionCycling()
+  availableEmotions.value = []
+  // Poll for new emotions to appear (generated in background, ~15s each)
+  let attempts = 0
+  const pollInterval = setInterval(async () => {
+    attempts++
+    await loadAvailableEmotions()
+    if (availableEmotions.value.length > 0) {
+      startEmotionCycling()
+    }
+    if (attempts >= 12 || availableEmotions.value.length >= 8) {
+      clearInterval(pollInterval)
+    }
+  }, 15000)
+}
+
+// Emotion avatar cycling (AVATAR-002)
+async function loadAvailableEmotions() {
+  if (!agent.value?.name) return
+  try {
+    const response = await axios.get(`/api/agents/${agent.value.name}/avatar/emotions`)
+    availableEmotions.value = response.data.emotions || []
+  } catch (err) {
+    availableEmotions.value = []
+  }
+}
+
+function cycleEmotion() {
+  if (availableEmotions.value.length === 0) {
+    emotionAvatarUrl.value = null
+    return
+  }
+  const emotion = availableEmotions.value[Math.floor(Math.random() * availableEmotions.value.length)]
+  emotionAvatarUrl.value = `/api/agents/${agent.value.name}/avatar/emotion/${emotion}?v=${Date.now()}`
+}
+
+function startEmotionCycling() {
+  stopEmotionCycling()
+  if (availableEmotions.value.length === 0) return
+  cycleEmotion()
+  emotionCycleTimer.value = setInterval(cycleEmotion, 30000)
+}
+
+function stopEmotionCycling() {
+  if (emotionCycleTimer.value) {
+    clearInterval(emotionCycleTimer.value)
+    emotionCycleTimer.value = null
+  }
+  emotionAvatarUrl.value = null
 }
 
 // Tags management (ORG-001)
@@ -842,6 +903,9 @@ onMounted(async () => {
   await loadAllTags()
   // Load avatar identity (AVATAR-001)
   await loadAvatarIdentity()
+  // Load emotion variants and start cycling (AVATAR-002)
+  await loadAvailableEmotions()
+  startEmotionCycling()
   // Load auth status
   await loadAuthStatus()
   // Check for dashboard if agent is running
@@ -866,6 +930,9 @@ onActivated(async () => {
   startAllPolling()
   // Refresh agent data
   await loadAgent()
+  // Reload emotions and restart cycling (AVATAR-002)
+  await loadAvailableEmotions()
+  startEmotionCycling()
   // Re-check for dashboard if agent is running
   if (agent.value?.status === 'running') {
     await checkDashboardExists()
@@ -895,11 +962,13 @@ onActivated(async () => {
 onDeactivated(() => {
   // Stop polling when navigating away (but keep WebSocket connection alive)
   stopAllPolling()
+  stopEmotionCycling()
 })
 
 // onUnmounted fires when component is actually destroyed
 onUnmounted(() => {
   stopAllPolling()
+  stopEmotionCycling()
 })
 
 // Handle item click from Info tab - switch to Tasks tab with prefilled message

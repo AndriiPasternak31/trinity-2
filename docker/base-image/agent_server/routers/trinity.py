@@ -74,10 +74,21 @@ async def inject_trinity(request: TrinityInjectRequest = TrinityInjectRequest())
     # Check if already injected
     current_status = check_trinity_injection_status()
     if current_status["injected"] and not request.force:
-        return TrinityInjectResponse(
-            status="already_injected",
-            already_injected=True
-        )
+        # Check if source prompt.md has changed (e.g. new sections added)
+        prompt_src = TRINITY_META_PROMPT_DIR / "prompt.md"
+        prompt_dst = workspace / ".trinity" / "prompt.md"
+        prompt_stale = False
+        if prompt_src.exists() and prompt_dst.exists():
+            try:
+                prompt_stale = prompt_src.read_text() != prompt_dst.read_text()
+            except Exception:
+                pass
+        if not prompt_stale:
+            return TrinityInjectResponse(
+                status="already_injected",
+                already_injected=True
+            )
+        logger.info(f"Meta-prompt has changed, re-injecting")
 
     files_created = []
     directories_created = []
@@ -131,7 +142,7 @@ This script runs automatically on container start. Always update it when install
 
 ### Trinity System Prompt
 
-Additional platform instructions are available in `.trinity/prompt.md`.
+See @.trinity/prompt.md for platform instructions including operator communication protocol.
 """
 
         # Build the custom instructions section if provided
@@ -166,16 +177,16 @@ Additional platform instructions are available in `.trinity/prompt.md`.
                     f.write(custom_section)
                 claude_md_updated = True
                 logger.info("Appended Trinity section to CLAUDE.md")
-            elif custom_section or had_custom_instructions:
-                # Trinity section exists, update file if custom section changed
+            else:
+                # Trinity section exists — replace it (may have changed)
+                parts = content.split("## Trinity Agent System")
+                content = parts[0].rstrip()
                 with open(claude_md_path, "w") as f:
                     f.write(content)
+                    f.write(trinity_section)
                     f.write(custom_section)
                 claude_md_updated = True
-                if custom_section:
-                    logger.info("Updated Custom Instructions in CLAUDE.md")
-                else:
-                    logger.info("Removed Custom Instructions from CLAUDE.md")
+                logger.info("Updated Trinity section in CLAUDE.md")
         else:
             # Create minimal CLAUDE.md
             agent_name = os.getenv("AGENT_NAME", "Agent")

@@ -182,16 +182,18 @@ from the user's description exactly as given.
 
 Every refined prompt MUST end with this exact technical block (copy it verbatim):
 
-"Framing: tight head-and-shoulders crop, subject centered, filling 75% of frame,
-front-facing with eyes looking directly at camera. Background: smooth soft-focus gradient
-wash from warm dusty rose (#D4A5A0) on the left to warm cream (#F0DDD0) on the right,
-no objects, no environment, no patterns, just a gentle warm tonal wash. Lighting: single
-soft key light from upper-left at 45 degrees, warm color temperature 3800K, gentle shadow
-falling to lower-right, subtle warm rim light on the right edge of the subject. Color
-grading: Kodak Portra 400 film emulation, muted low-saturation palette, lifted shadows
-at 18%, creamy highlight rolloff, warm midtones, subtle film grain. Lens: 85mm f/1.4
-prime, shallow depth of field only on background. Style: cinematic portrait photograph,
-photographic realism, not illustration, not CGI. No text, no watermarks, no labels."
+"Framing: extreme close-up portrait crop, face filling 85-90% of frame, subject centered,
+front-facing with eyes looking directly at camera, crop just above the top of the head
+and at the chin or upper neck. Background: smooth dark gradient from deep slate-navy
+(#1a1f2e) on the left to dark charcoal (#111827) on the right, no objects, no environment,
+no patterns, just a subtle dark tonal wash. Lighting: single soft key light from upper-left
+at 45 degrees, cool color temperature 5600K, gentle shadow falling to lower-right, subtle
+cool indigo-blue rim light (#6366f1) on the right edge of the subject providing separation
+from the dark background. Color grading: modern digital, cool desaturated palette, deep
+rich shadows, clean highlight rolloff, neutral-to-cool midtones, no film grain, sharp and
+clean. Lens: 85mm f/1.4 prime, shallow depth of field only on background. Style: modern
+studio portrait photograph, photographic realism, not illustration, not CGI. No text, no
+watermarks, no labels."
 
 ## Subject Description Rules
 
@@ -235,3 +237,29 @@ USE_CASE_PROMPTS = {
 
 VALID_USE_CASES = list(USE_CASE_PROMPTS.keys())
 VALID_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"]
+
+# ---------------------------------------------------------------------------
+# Emotion avatar variants (AVATAR-002)
+# ---------------------------------------------------------------------------
+
+AVATAR_EMOTIONS = [
+    "happy",
+    "thoughtful",
+    "surprised",
+    "determined",
+    "calm",
+    "amused",
+    "curious",
+    "confident",
+]
+
+AVATAR_EMOTION_PROMPTS = {
+    "happy": "a warm, genuine smile with slightly raised cheeks and bright, joyful eyes",
+    "thoughtful": "a reflective, contemplative expression with slightly narrowed eyes and a subtle, pensive gaze directed slightly upward",
+    "surprised": "wide, alert eyes with slightly raised eyebrows and a subtly parted mouth conveying pleasant surprise",
+    "determined": "a firm, resolute expression with a strong jawline, focused eyes, and slightly furrowed brows conveying confidence and resolve",
+    "calm": "a serene, relaxed expression with soft eyes, a gentle neutral mouth, and an overall sense of peaceful composure",
+    "amused": "a playful half-smile with a hint of a smirk, sparkling eyes suggesting lighthearted humor",
+    "curious": "an inquisitive expression with one eyebrow slightly raised, attentive wide eyes, and a slight head tilt suggesting interest",
+    "confident": "a self-assured expression with a steady, direct gaze, a subtle knowing smile, and a slightly lifted chin",
+}

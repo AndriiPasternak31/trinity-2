@@ -38,7 +38,7 @@ As an operator, I want a single inbox where I can see and respond to all agent r
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/frontend/src/views/OperatingRoom.vue` | 1-109 | Main page -- card feed with Open/Resolved tabs, starts polling on mount |
+| `src/frontend/src/views/OperatingRoom.vue` | 1-133 | Main page -- card feed with Open/Resolved tabs, refresh button, starts polling on mount |
 | `src/frontend/src/components/operator/QueueCard.vue` | 1-257 | Expandable card -- agent avatar, markdown body, inline response controls |
 | `src/frontend/src/components/operator/ResolvedCard.vue` | 1-68 | Compact resolved item -- checkmark, response text, timestamp |
 | `src/frontend/src/components/operator/QueueList.vue` | 1-195 | Filterable list view (type, priority, agent, status) with priority indicators |
@@ -144,13 +144,14 @@ Event handling in the store (`handleWebSocketEvent`, line 137-157):
 
 ### UX Behaviors
 
-1. **Auto-expand first item** on page load -- `watch` on `openItems.length` in `OperatingRoom.vue:104-108`
+1. **Auto-expand first item** on page load -- `watch` on `openItems.length` in `OperatingRoom.vue:127-131`
 2. **Auto-advance** after responding -- next open item expands automatically (store `respondToItem` line 119-122)
 3. **Collapse on click** -- X button in QueueCard header (`@click.stop="store.toggleExpand(item.id)"` line 52)
 4. **Context collapsible** -- "Show details" toggle in QueueCard (line 70-94)
 5. **Badge in NavBar** -- Orange for pending, red+pulse for critical
 6. **Polling fallback** -- 10s interval from OperatingRoom.vue, 15s default in store
 7. **Form reset** -- `watch(isExpanded)` in QueueCard resets selectedOption, responseText, showContext on collapse (line 191-197)
+8. **Manual refresh** -- Refresh button next to tabs (`OperatingRoom.vue:46-60`). Shows spinning icon (`animate-spin`) while `store.loading` is true. Calls `store.fetchItems()`. Disabled during loading. Positioned via `ml-auto` to sit at the right edge of the tab bar.
 
 ---
 
@@ -213,9 +214,9 @@ class OperatorResponse(BaseModel):
 
 ### Sync Service
 
-**File**: `src/backend/services/operator_queue_service.py` (239 lines)
+**File**: `src/backend/services/operator_queue_service.py` (269 lines)
 
-Background async service that bridges agent containers and the database. Global singleton instance at line 238.
+Background async service that bridges agent containers and the database. Global singleton instance at line 268.
 
 **Constants**:
 - `QUEUE_FILE_PATH = ".trinity/operator-queue.json"` (line 30)
@@ -227,20 +228,26 @@ Background async service that bridges agent containers and the database. Global 
 3. Calls `db.mark_operator_queue_expired()` for items past `expires_at`
 4. Concurrently syncs each agent via `asyncio.gather(*tasks)`
 
-**Agent sync** (`_sync_agent`, line 102-188):
+**Agent sync** (`_sync_agent`, line 102-191):
 1. Creates `AgentClient(agent_name)` and reads `~/.trinity/operator-queue.json` via `client.read_file()` with 5s timeout
-2. Parses JSON, iterates `requests` array
-3. For each request with `status=pending` not already in DB: creates DB record via `db.create_operator_queue_item()`, adds to `new_items` list
-4. For each request with `status=acknowledged`: marks acknowledged in DB via `db.mark_operator_queue_acknowledged()`
-5. Broadcasts `operator_queue_new` WebSocket events for new items (line 155-170)
-6. Broadcasts `operator_queue_acknowledged` WebSocket events for acknowledged items (line 172-183)
-7. Checks for `responded` items via `db.get_operator_queue_responded_for_agent()`, writes responses back to agent
+2. **Restart resilience** (line 113-127): If the file does not exist (e.g., container restart wiped filesystem), the service no longer returns early. Instead it creates an empty `queue_data = {"$schema": "operator-queue-v1", "requests": []}` and continues, tracking `file_exists = False`. This allows responded items in the DB to be reconstructed and delivered back to the agent.
+3. Parses JSON (if file existed), iterates `requests` array
+4. For each request with `status=pending` not already in DB: creates DB record via `db.create_operator_queue_item()`, adds to `new_items` list
+5. For each request with `status=acknowledged`: marks acknowledged in DB via `db.mark_operator_queue_acknowledged()`
+6. Broadcasts `operator_queue_new` WebSocket events for new items (line 156-171)
+7. Broadcasts `operator_queue_acknowledged` WebSocket events for acknowledged items (line 173-184)
+8. Checks for `responded` items via `db.get_operator_queue_responded_for_agent()`, writes responses back to agent. Passes `file_exists` flag to `_write_responses_to_agent()` (line 187-191).
 
-**Response write-back** (`_write_responses_to_agent`, line 190-234):
+**Response write-back** (`_write_responses_to_agent`, line 193-265):
+
+Accepts a `file_exists` parameter (default `True`) to handle the case where the agent's queue file is missing after a container restart.
+
 1. Builds lookup map of responded items by ID
 2. Iterates agent's JSON requests, updates matching pending items with response data
-3. Writes updated JSON back to agent via `client.write_file(QUEUE_FILE_PATH, content, timeout=10.0, platform=True)`
-4. Sets `status=responded`, `response`, `response_text`, `responded_by`, `responded_at` fields in the agent's JSON
+3. **Reconstruction of missing items** (line 223-241): For any responded item in the DB whose ID is not found in the agent's `requests` array (tracked via `seen_ids` set), the service reconstructs a full request entry from DB data and appends it to the `requests` array. Reconstructed fields include: `id`, `type`, `status` (set to `"responded"`), `priority`, `title`, `question`, `options`, `context`, `created_at`, `response`, `response_text`, `responded_by`, `responded_at`.
+4. Writes updated JSON back to agent via `client.write_file(QUEUE_FILE_PATH, content, timeout=10.0, platform=True)`
+5. Sets `status=responded`, `response`, `response_text`, `responded_by`, `responded_at` fields in the agent's JSON
+6. The agent server's `write_file` endpoint (`docker/base-image/agent_server/routers/files.py:360`) automatically creates parent directories (`mkdir(parents=True, exist_ok=True)`), so `.trinity/` is created if it doesn't exist.
 
 **WebSocket broadcast payloads**:
 
@@ -411,6 +418,12 @@ Contains "Operator Communication" section that instructs agents on:
 - How to check for and acknowledge responses
 - File hygiene rules (keep minimal items in JSON)
 
+**Stale prompt detection** (`docker/base-image/agent_server/routers/trinity.py:76-91`):
+
+The `/api/trinity/inject` endpoint compares the source `prompt.md` (at `/trinity-meta-prompt/prompt.md`) with the injected copy (at `~/.trinity/prompt.md`). If the contents differ, re-injection proceeds automatically even when `check_trinity_injection_status()` reports `injected=True`. This ensures that when `prompt.md` is updated (e.g., adding the Operator Communication section), existing agents receive the updated version on the next injection call rather than being stuck with a stale copy. The endpoint logs "Meta-prompt has changed, re-injecting" when staleness is detected (line 91).
+
+**Note**: This logic runs inside the agent's base image. A base image rebuild (`./scripts/deploy/build-base-image.sh`) is required for new containers to pick up this change.
+
 ---
 
 ## Side Effects
@@ -497,8 +510,8 @@ Contains "Operator Communication" section that instructs agents on:
 6. Router broadcasts WebSocket: {type: "operator_queue_responded", data: {...}}
 7. Store optimistic update: item.status = 'responded'
 8. Store auto-advances: expands next open item
-9. Next sync cycle: _sync_agent() finds responded items
-10. _write_responses_to_agent() writes response back to agent's JSON file
+9. Next sync cycle: _sync_agent() finds responded items via db.get_operator_queue_responded_for_agent()
+10. _write_responses_to_agent() updates matching items in agent JSON, or reconstructs missing items from DB
 11. Agent reads updated JSON, processes response, sets status=acknowledged
 12. Next sync cycle detects acknowledged -> db.mark_operator_queue_acknowledged()
 13. WebSocket broadcast: {type: "operator_queue_acknowledged", data: {...}}
@@ -513,6 +526,22 @@ Contains "Operator Communication" section that instructs agents on:
 4. Item no longer appears in open items on next fetch
 ```
 
+### Flow 4: Response Delivery After Container Restart
+
+```
+1. Operator responds to item while agent is running (response stored in DB as status=responded)
+2. Agent container restarts -- filesystem wiped, ~/.trinity/operator-queue.json lost
+3. Next sync cycle: _sync_agent() reads file -> not found (file_exists=False)
+4. Service creates empty queue_data instead of returning early
+5. db.get_operator_queue_responded_for_agent() finds responded items in DB
+6. _write_responses_to_agent(file_exists=False) called
+7. No items in agent's requests array -> all responded items are "missing" from seen_ids
+8. Reconstruction loop appends full request entries (from DB data) to requests array
+9. client.write_file() writes new operator-queue.json to agent
+10. Agent server's files.py:360 creates .trinity/ directory automatically (mkdir parents=True)
+11. Agent reads reconstructed JSON, finds responded items, processes them normally
+```
+
 ---
 
 ## UI Layout
@@ -522,7 +551,7 @@ Contains "Operator Communication" section that instructs agents on:
 | Operating Room                            |
 | Your agents need your input on N items    |
 |                                           |
-| [Open (5)]  [Resolved]                    |
+| [Open (5)]  [Resolved]       [↻ Refresh] |
 |                                           |
 | +-- Card (expanded) --------------------+ |
 | | (DA) deploy-agent . 2m ago         X  | |
@@ -571,16 +600,23 @@ Contains "Operator Communication" section that instructs agents on:
 |------|-------|---------|
 | `src/backend/main.py` | 70, 82, 193-194, 254-258, 290-294, 357 | Router/service imports, WS injection, lifespan start/stop, router registration |
 | `src/backend/routers/operator_queue.py` | 164 | REST API endpoints (6 endpoints) |
-| `src/backend/services/operator_queue_service.py` | 239 | Background sync service (poll, create, write-back) |
+| `src/backend/services/operator_queue_service.py` | 269 | Background sync service (poll, create, write-back, restart resilience) |
 | `src/backend/db/operator_queue.py` | 335 | Database operations class (12 methods) |
 | `src/backend/db/schema.py` | 529-553, 699-704 | Table definition + 5 indexes |
 | `src/backend/database.py` | 127, 254, 1195-1230 | Import, init, delegation methods (10 methods) |
+
+### Agent Base Image Files
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `docker/base-image/agent_server/routers/trinity.py` | 76-91 | Stale meta-prompt detection in `/api/trinity/inject` |
+| `docker/base-image/agent_server/routers/files.py` | 358-360 | `write_file` endpoint creates parent directories automatically |
 
 ### Frontend Files
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/frontend/src/views/OperatingRoom.vue` | 109 | Main page with tabs, polling lifecycle |
+| `src/frontend/src/views/OperatingRoom.vue` | 133 | Main page with tabs, refresh button, polling lifecycle |
 | `src/frontend/src/stores/operatorQueue.js` | 194 | Pinia store (state, getters, actions, WS handler) |
 | `src/frontend/src/components/operator/QueueCard.vue` | 257 | Expandable card with response controls |
 | `src/frontend/src/components/operator/ResolvedCard.vue` | 68 | Compact resolved card |

@@ -32,7 +32,8 @@ DEFAULT_BLOCKED_PATTERNS = [
 
 DEFAULT_ALLOWED_PATTERNS = [
     "content/*", "output/*", "reports/*", "exports/*",
-    "*.log", "*.txt"
+    "*.log", "*.txt",
+    ".trinity/operator-queue.json"
 ]
 
 

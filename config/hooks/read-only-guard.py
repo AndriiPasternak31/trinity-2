@@ -27,7 +27,8 @@ DEFAULT_BLOCKED = [
 
 DEFAULT_ALLOWED = [
     "content/*", "output/*", "reports/*", "exports/*",
-    "*.log", "*.txt"
+    "*.log", "*.txt",
+    ".trinity/operator-queue.json"
 ]
 
 

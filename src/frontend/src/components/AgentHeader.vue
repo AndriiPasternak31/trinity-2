@@ -2,19 +2,50 @@
   <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg mb-4 relative">
     <!-- Overlapping Avatar (AVATAR-001) - centered on left edge of card (50% in, 50% out) -->
     <div class="absolute left-0 top-3 z-10 group -translate-x-1/2">
-      <div class="rounded-full border-[3px] border-indigo-400 dark:border-indigo-500 shadow-lg cursor-pointer" @click="agent.can_share && !agent.is_system ? $emit('open-avatar-modal') : null">
-        <AgentAvatar :name="agent.name" :avatar-url="agent.avatar_url" size="2xl" />
+      <div class="rounded-full border-[3px] border-indigo-400 dark:border-indigo-500 shadow-lg overflow-hidden">
+        <div class="relative w-24 h-24">
+          <Transition name="avatar-crossfade">
+            <div :key="emotionAvatarUrl || agent.avatar_url" class="absolute inset-0">
+              <AgentAvatar :name="agent.name" :avatar-url="emotionAvatarUrl || agent.avatar_url" size="2xl" />
+            </div>
+          </Transition>
+        </div>
       </div>
-      <!-- Camera icon overlay on hover (owner only) -->
+      <!-- Hover overlay (owner only) -->
       <div
         v-if="agent.can_share && !agent.is_system"
-        class="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 group-hover:bg-black/40 transition-colors cursor-pointer border-[3px] border-transparent"
-        @click="$emit('open-avatar-modal')"
+        class="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 group-hover:bg-black/40 transition-colors border-[3px] border-transparent"
       >
-        <svg class="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
+        <!-- Two-button hover UI when avatar exists with prompt -->
+        <div v-if="agent.avatar_url && hasAvatarPrompt" class="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+          <!-- Cycle emotion button -->
+          <button
+            @click="$emit('cycle-emotion')"
+            class="p-1.5 rounded-full bg-white/20 hover:bg-white/40 transition-colors"
+            title="Next emotion"
+          >
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <!-- Edit prompt button -->
+          <button
+            @click="$emit('open-avatar-modal')"
+            class="p-1.5 rounded-full bg-white/20 hover:bg-white/40 transition-colors"
+            title="Change avatar prompt"
+          >
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        </div>
+        <!-- Camera icon when no avatar (open modal) -->
+        <button v-else @click="$emit('open-avatar-modal')" class="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -419,6 +450,15 @@ const props = defineProps({
   allTags: {
     type: Array,
     default: () => []
+  },
+  // Avatar props (AVATAR-001, AVATAR-002)
+  hasAvatarPrompt: {
+    type: Boolean,
+    default: false
+  },
+  emotionAvatarUrl: {
+    type: String,
+    default: null
   }
 })
 
@@ -435,7 +475,8 @@ const emit = defineEmits([
   'add-tag',
   'remove-tag',
   'rename',
-  'open-avatar-modal'
+  'open-avatar-modal',
+  'cycle-emotion'
 ])
 
 // Name editing functions
@@ -477,3 +518,16 @@ function saveName() {
 
 const { formatBytes, formatUptime, formatRelativeTime } = useFormatters()
 </script>
+
+<style scoped>
+.avatar-crossfade-enter-active,
+.avatar-crossfade-leave-active {
+  transition: opacity 1s ease;
+}
+.avatar-crossfade-enter-from {
+  opacity: 0;
+}
+.avatar-crossfade-leave-to {
+  opacity: 0;
+}
+</style>
