@@ -11,6 +11,10 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-08 | — | Fix `--session-id` UUID validation failure in headless task execution | [parallel-headless-execution.md](feature-flows/parallel-headless-execution.md) |
+| 2026-03-07 | OPS-001 | Operating Room — full implementation (backend, sync service, frontend, meta-prompt) | [operating-room.md](feature-flows/operating-room.md) |
+| 2026-03-07 | AVATAR-001 | AI-generated agent avatars with Gemini image generation | [agent-avatars.md](feature-flows/agent-avatars.md) |
+| 2026-03-07 | IMG-001 | Platform image generation via Gemini two-step pipeline | [image-generation.md](feature-flows/image-generation.md) |
 | 2026-03-06 | — | Headless task session isolation + permission mode validation | [parallel-headless-execution.md](feature-flows/parallel-headless-execution.md) |
 | 2026-03-04 | TMPL-001 | Admin-configurable GitHub template repositories via Settings UI | [platform-settings.md](feature-flows/platform-settings.md), [templates-page.md](feature-flows/templates-page.md) |
 | 2026-03-04 | THINK-001 | Dynamic thinking status extended to Public Chat (async mode + SSE) | [public-agent-links.md](feature-flows/public-agent-links.md) |
@@ -98,6 +102,7 @@
 | Execution Log Viewer | [execution-log-viewer.md](feature-flows/execution-log-viewer.md) | Modal for viewing execution transcripts |
 | Execution Detail Page | [execution-detail-page.md](feature-flows/execution-detail-page.md) | Dedicated page for execution details |
 | Continue Execution as Chat | [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md) | Resume executions as interactive chat (EXEC-023) |
+| Agent Avatars | [agent-avatars.md](feature-flows/agent-avatars.md) | AI-generated circular avatars with Gemini (AVATAR-001) |
 | Agent Info Display | [agent-info-display.md](feature-flows/agent-info-display.md) | Template metadata in Info tab |
 | Per-Agent File Manager | [file-browser.md](feature-flows/file-browser.md) | Two-panel file manager in Agent Detail Files tab |
 | File Manager (Deprecated) | [file-manager.md](feature-flows/file-manager.md) | Former standalone `/files` page — replaced by per-agent Files tab |
@@ -131,6 +136,12 @@
 | Slack Integration | [slack-integration.md](feature-flows/slack-integration.md) | Slack as delivery channel for public links (SLACK-001) |
 | Nevermined x402 Payments | [nevermined-payments.md](feature-flows/nevermined-payments.md) | Per-agent paid API via x402 payment protocol (NVM-001) |
 
+### Platform Services
+
+| Flow | Document | Description |
+|------|----------|-------------|
+| Image Generation | [image-generation.md](feature-flows/image-generation.md) | Gemini-powered two-step image generation pipeline (IMG-001) |
+
 ### MCP & Integration
 
 | Flow | Document | Description |
@@ -163,6 +174,7 @@
 |------|----------|-------------|
 | Agent Notifications | [agent-notifications.md](feature-flows/agent-notifications.md) | Agent-to-platform notifications (NOTIF-001) |
 | Events Page UI | [events-page.md](feature-flows/events-page.md) | View and manage notifications |
+| Operating Room | [operating-room.md](feature-flows/operating-room.md) | Operator inbox for agent requests (OPS-001) |
 
 ### Configuration & Settings
 

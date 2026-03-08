@@ -289,6 +289,17 @@ def process_stream_line(line: str, execution_log: List[ExecutionLogEntry], metad
         metadata.duration_ms = msg.get("duration_ms")
         metadata.num_turns = msg.get("num_turns")
         result_text = msg.get("result", "")
+
+        # Detect error results (e.g., rate limit, auth failures)
+        if msg.get("is_error") and not metadata.error_type:
+            # Try to classify from the result text
+            metadata.error_message = result_text
+            if _is_rate_limit_message(result_text):
+                metadata.error_type = "rate_limit"
+            else:
+                metadata.error_type = "execution_error"
+            logger.warning(f"Claude Code result is_error=true: type={metadata.error_type}, message={result_text}")
+
         if result_text:
             response_parts.clear()
             response_parts.append(result_text)
@@ -316,6 +327,17 @@ def process_stream_line(line: str, execution_log: List[ExecutionLogEntry], metad
         logger.debug(f"Result message parsed: usage={usage}, modelUsage={model_usage}, input_tokens={metadata.input_tokens}")
 
     elif msg_type == "assistant" or msg_type == "user":
+        # Detect error classification on assistant messages (e.g., rate_limit, auth errors)
+        if msg_type == "assistant" and msg.get("error"):
+            metadata.error_type = msg["error"]
+            # Extract the error text from content
+            error_content = msg.get("message", {}).get("content", [])
+            for block in error_content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    metadata.error_message = block.get("text", "")
+                    break
+            logger.warning(f"Claude Code error detected: type={metadata.error_type}, message={metadata.error_message}")
+
         # Handle both assistant and user message types
         # tool_use appears in assistant messages, tool_result may appear in either
         message = msg.get("message", {})
@@ -523,11 +545,26 @@ async def execute_claude_code(prompt: str, stream: bool = False, model: Optional
         try:
             stderr_output, return_code = await loop.run_in_executor(_executor, read_subprocess_output)
 
+            # Check for rate limit detected during stream parsing (takes priority)
+            if metadata.error_type == "rate_limit":
+                error_detail = _format_rate_limit_error(metadata)
+                logger.error(f"Claude Code rate limit: {error_detail}")
+                raise HTTPException(
+                    status_code=429,
+                    detail=error_detail
+                )
+
             # Check for errors
             if return_code != 0:
                 error_detail = stderr_output[:500] if stderr_output else ""
                 if not error_detail:
-                    error_detail = _diagnose_exit_failure(return_code)
+                    error_detail = _diagnose_exit_failure(return_code, metadata)
+                # Also check if stderr contains a rate limit message
+                if _is_rate_limit_message(error_detail) or _is_rate_limit_message(stderr_output):
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Subscription usage limit: {error_detail[:300]}"
+                    )
                 logger.error(f"Claude Code failed (exit {return_code}): {error_detail}")
                 raise HTTPException(
                     status_code=500,
@@ -566,8 +603,40 @@ async def execute_claude_code(prompt: str, stream: bool = False, model: Optional
         raise HTTPException(status_code=500, detail=f"Execution error: {str(e)}")
 
 
-def _diagnose_exit_failure(return_code: int) -> str:
+def _is_rate_limit_message(text: str) -> bool:
+    """Check if a message indicates a subscription usage/rate limit error."""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(pattern in lower for pattern in [
+        "out of extra usage",
+        "out of usage",
+        "usage limit",
+        "rate limit",
+        "rate_limit",
+        "resets ",  # "resets 1am (America/New_York)"
+        "exceeded your",
+        "quota exceeded",
+    ])
+
+
+def _format_rate_limit_error(metadata: 'ExecutionMetadata') -> str:
+    """Format a clear, actionable rate limit error message."""
+    base_msg = metadata.error_message or "Subscription usage limit reached"
+    return (
+        f"Subscription usage limit: {base_msg}. "
+        f"To resolve: (1) wait for the usage reset, "
+        f"(2) set an ANTHROPIC_API_KEY on this agent for pay-per-use billing, "
+        f"or (3) assign a different subscription token in Settings → Subscriptions."
+    )
+
+
+def _diagnose_exit_failure(return_code: int, metadata: Optional['ExecutionMetadata'] = None) -> str:
     """Diagnose common Claude Code exit failures when stderr is empty."""
+    # Check for rate limit detected during stream parsing
+    if metadata and metadata.error_type == "rate_limit":
+        return _format_rate_limit_error(metadata)
+
     # Check for missing credentials
     has_api_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_oauth_token = bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"))
@@ -653,8 +722,9 @@ async def execute_headless_task(
             # --no-session-persistence avoids shared state in ~/.claude/projects/
             # --session-id ensures unique namespace per task execution
             cmd.append("--no-session-persistence")
-            task_unique_id = execution_id or str(uuid.uuid4())
-            cmd.extend(["--session-id", task_unique_id])
+            # Claude Code requires --session-id to be a valid UUID.
+            # execution_id is a base64url token (not a UUID), so always generate one.
+            cmd.extend(["--session-id", str(uuid.uuid4())])
 
         # Add MCP config if .mcp.json exists (for agent-to-agent collaboration via Trinity MCP)
         mcp_config_path = Path.home() / ".mcp.json"
@@ -818,12 +888,27 @@ async def execute_headless_task(
             verbose_output_lines = [sanitize_text(line) for line in verbose_output_lines]
             verbose_transcript = "\n".join(verbose_output_lines)
 
+            # Check for rate limit detected during stream parsing (takes priority)
+            if metadata.error_type == "rate_limit":
+                error_detail = _format_rate_limit_error(metadata)
+                logger.error(f"[Headless Task] Rate limit: {error_detail}")
+                raise HTTPException(
+                    status_code=429,
+                    detail=error_detail
+                )
+
             # Check for errors
             if return_code != 0:
                 error_preview = verbose_transcript[:500] if verbose_transcript else ""
                 if not error_preview:
                     # Try to provide a meaningful fallback based on common failure patterns
-                    error_preview = _diagnose_exit_failure(return_code)
+                    error_preview = _diagnose_exit_failure(return_code, metadata)
+                # Also check if stderr contains a rate limit message
+                if _is_rate_limit_message(error_preview) or _is_rate_limit_message(verbose_transcript):
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Subscription usage limit: {error_preview[:300]}"
+                    )
                 logger.error(f"[Headless Task] Task {task_session_id} failed (exit {return_code}): {error_preview}")
                 raise HTTPException(
                     status_code=500,
