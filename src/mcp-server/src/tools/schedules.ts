@@ -160,6 +160,20 @@ export function createScheduleTools(
           .optional()
           .default(true)
           .describe("Whether to enable the schedule immediately (default: true)"),
+        timeout_seconds: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Execution timeout in seconds (default: 900 = 15 minutes)"),
+        allowed_tools: z
+          .array(z.string())
+          .optional()
+          .describe("List of tools the agent is allowed to use during execution. If omitted, all tools are allowed."),
+        model: z
+          .string()
+          .optional()
+          .describe("Model override for this schedule's executions (e.g., 'claude-sonnet-4-20250514'). If omitted, uses agent default."),
       }),
       execute: async (
         args: {
@@ -170,6 +184,9 @@ export function createScheduleTools(
           timezone?: string;
           description?: string;
           enabled?: boolean;
+          timeout_seconds?: number;
+          allowed_tools?: string[];
+          model?: string;
         },
         context?: { session?: McpAuthContext }
       ) => {
@@ -194,6 +211,9 @@ export function createScheduleTools(
           timezone: args.timezone,
           description: args.description,
           enabled: args.enabled,
+          timeout_seconds: args.timeout_seconds,
+          allowed_tools: args.allowed_tools,
+          model: args.model,
         });
 
         console.log(`[create_agent_schedule] Created schedule '${schedule.name}' (${schedule.id}) for agent '${args.agent_name}'`);
@@ -267,6 +287,20 @@ export function createScheduleTools(
         timezone: z.string().optional().describe("New timezone"),
         description: z.string().optional().describe("New description"),
         enabled: z.boolean().optional().describe("Enable/disable schedule"),
+        timeout_seconds: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("New execution timeout in seconds"),
+        allowed_tools: z
+          .array(z.string())
+          .optional()
+          .describe("New list of allowed tools. If omitted, keeps current value."),
+        model: z
+          .string()
+          .optional()
+          .describe("New model override for executions"),
       }),
       execute: async (
         args: {
@@ -278,6 +312,9 @@ export function createScheduleTools(
           timezone?: string;
           description?: string;
           enabled?: boolean;
+          timeout_seconds?: number;
+          allowed_tools?: string[];
+          model?: string;
         },
         context?: { session?: McpAuthContext }
       ) => {
@@ -303,6 +340,9 @@ export function createScheduleTools(
         if (args.timezone !== undefined) updates.timezone = args.timezone;
         if (args.description !== undefined) updates.description = args.description;
         if (args.enabled !== undefined) updates.enabled = args.enabled;
+        if (args.timeout_seconds !== undefined) updates.timeout_seconds = args.timeout_seconds;
+        if (args.allowed_tools !== undefined) updates.allowed_tools = args.allowed_tools;
+        if (args.model !== undefined) updates.model = args.model;
 
         const schedule = await apiClient.updateAgentSchedule(
           args.agent_name,

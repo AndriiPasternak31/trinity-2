@@ -1,3 +1,14 @@
+### 2026-03-09
+🔧 **Fix: MCP schedule tools missing timeout_seconds, allowed_tools, and model parameters (#85)**
+
+MCP server's `create_agent_schedule` and `update_agent_schedule` tools now expose `timeout_seconds`, `allowed_tools`, and `model` parameters that the backend already supported. Users can now set custom execution timeouts, restrict tools, and override models when managing schedules via MCP.
+
+**Modified files:**
+- `src/mcp-server/src/types.ts` — Added fields to `Schedule`, `ScheduleCreate`, `ScheduleUpdate` interfaces
+- `src/mcp-server/src/tools/schedules.ts` — Added Zod schema params and pass-through logic for both create and update tools
+
+---
+
 ### 2026-03-08
 🎨 **Enhancement: Meaningful Default Avatars from Templates (AVATAR-003)**
 

@@ -151,6 +151,9 @@ export interface Schedule {
   updated_at: string;
   last_run_at?: string;
   next_run_at?: string;
+  timeout_seconds: number;
+  allowed_tools?: string[];
+  model?: string;
 }
 
 export interface ScheduleCreate {
@@ -160,6 +163,9 @@ export interface ScheduleCreate {
   timezone?: string;
   description?: string;
   enabled?: boolean;
+  timeout_seconds?: number;
+  allowed_tools?: string[];
+  model?: string;
 }
 
 export interface ScheduleUpdate {
@@ -169,6 +175,9 @@ export interface ScheduleUpdate {
   timezone?: string;
   description?: string;
   enabled?: boolean;
+  timeout_seconds?: number;
+  allowed_tools?: string[];
+  model?: string;
 }
 
 export interface ScheduleExecution {

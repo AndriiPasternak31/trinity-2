@@ -885,6 +885,18 @@ Schedule management is now available via MCP tools, enabling programmatic contro
 | `trigger_agent_schedule` | Manually trigger execution |
 | `get_schedule_executions` | Get execution history |
 
+### MCP Tool Parameters
+
+Both `create_agent_schedule` and `update_agent_schedule` support the full schedule configuration:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `timeout_seconds` | number | 900 | Execution timeout in seconds |
+| `allowed_tools` | string[] | null (all) | Restrict tools available during execution |
+| `model` | string | null (agent default) | Model override for executions |
+
+**Files**: `src/mcp-server/src/tools/schedules.ts` (Zod schemas), `src/mcp-server/src/types.ts` (TypeScript interfaces)
+
 ### Example: Orchestrator Creating Worker Schedule
 
 ```javascript
@@ -895,7 +907,10 @@ await mcp.call("create_agent_schedule", {
   cron_expression: "0 9 * * 1-5",  // Weekdays at 9am
   message: "Generate the daily sales report and email to team",
   timezone: "America/New_York",
-  enabled: true
+  enabled: true,
+  timeout_seconds: 1800,                       // 30 min timeout
+  allowed_tools: ["Read", "Glob", "Grep", "WebFetch"],  // Read-only + web
+  model: "claude-sonnet-4-20250514"             // Use Sonnet for cost efficiency
 });
 ```
 
@@ -966,6 +981,7 @@ POST /schedules  ------>  db/schedules.py:create_schedule()
 ---
 
 ## Status
+**Updated 2026-03-09** - **MCP Tool Parity (#85)**: Added `timeout_seconds`, `allowed_tools`, and `model` parameters to MCP `create_agent_schedule` and `update_agent_schedule` tools. TypeScript interfaces updated in `src/mcp-server/src/types.ts`, Zod schemas updated in `src/mcp-server/src/tools/schedules.ts`.
 **Updated 2026-03-02** - **MODEL-001 Model Selection**: Per-schedule model override. New `model` column on `agent_schedules`, `model_used` column on `schedule_executions`. ModelSelector.vue component in create/edit form. Model forwarded through scheduler service to agent container. model_used recorded on every execution for audit. See [model-selection.md](model-selection.md).
 **Updated 2026-02-22** - **Dashboard Schedule Stats**: Added `get_all_agents_schedule_counts()` method to `db/schedules.py:719-743`. Returns schedule counts (total and enabled) per agent. Used by `GET /api/agents/execution-stats` endpoint to populate `schedules_total` and `schedules_enabled` fields. Dashboard AgentNode now displays "X/Y schedules" with "(paused)" indicator when autonomy disabled.
 
