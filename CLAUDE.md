@@ -150,7 +150,7 @@ project_trinity/
 ├── src/
 │   ├── backend/          # FastAPI backend (main.py, database.py)
 │   ├── frontend/         # Vue.js 3 + Tailwind CSS
-│   └── mcp-server/       # Trinity MCP server (12 tools)
+│   └── mcp-server/       # Trinity MCP server (59 tools)
 ├── docker/
 │   ├── base-image/       # Universal agent base (agent-server.py)
 │   ├── backend/          # Backend Dockerfile
@@ -171,7 +171,7 @@ project_trinity/
 
 | Category | File | Description |
 |----------|------|-------------|
-| Backend | `src/backend/main.py` | FastAPI app, 35+ endpoints |
+| Backend | `src/backend/main.py` | FastAPI app, 300+ endpoints across 40+ routers |
 | Backend | `src/backend/database.py` | SQLite persistence |
 | Backend | `src/backend/routers/credentials.py` | Credential injection (CRED-002) |
 | Frontend | `src/frontend/src/views/AgentDetail.vue` | Agent detail page |
@@ -298,6 +298,6 @@ The `abilities` repo contains **all Trinity skills** bundled in the `trinity-onb
 - **All Requirements**: `.claude/memory/requirements.md`
 - **Current Roadmap**: https://github.com/abilityai/trinity/issues
 - **Recent Changes**: `.claude/memory/changelog.md`
-- **Template Spec**: `docs/AGENT_TEMPLATE_SPEC.md`
+- **Agent Guide**: `docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md`
 - **Agent Network Demo**: `docs/AGENT_NETWORK_DEMO.md`
 - **Claude Code Plugins**: https://github.com/abilityai/abilities

@@ -1,5 +1,3 @@
-> **Nevermined Hackathon Participants:** See the [Hackathon Getting Started Guide](hackathon_context.md) for instance access, agent templates, and instructions.
-
 <div align="center">
   <img src="docs/assets/trinity-logo.svg" alt="Trinity" width="120"/>
   <h1>Trinity</h1>
@@ -58,8 +56,8 @@ Trinity supports three primary workflows depending on your starting point:
 
 ```bash
 # In Claude Code, install the Trinity plugin
-/plugin marketplace add abilityai/trinity
-/plugin install trinity-onboard@abilityai-trinity
+/plugin marketplace add abilityai/abilities
+/plugin install trinity-onboard@abilityai-abilities
 
 # Run the onboarding wizard
 /trinity-onboard:onboard
@@ -115,7 +113,7 @@ See the [Multi-Agent System Guide](docs/MULTI_AGENT_SYSTEM_GUIDE.md) for pattern
 
 If you're an AI agent given this repository:
 
-1. **This repo is a Claude Code plugin** — Run `/plugin marketplace add abilityai/trinity` to install Trinity management skills
+1. **This repo is a Claude Code plugin** — Run `/plugin marketplace add abilityai/abilities` to install Trinity management skills
 2. **To deploy yourself to Trinity** — Run `/trinity-onboard:onboard` after installing the plugin
 3. **To interact with a Trinity instance** — Use the MCP tools (list_agents, chat_with_agent, etc.) after configuring the MCP server connection
 4. **To contribute to Trinity itself** — Read `CLAUDE.md` for development guidelines
@@ -394,7 +392,7 @@ The Trinity Onboard Plugin enables zero-friction deployment of any Claude Code a
 /trinity-schedules list               # View scheduled tasks
 ```
 
-For detailed plugin documentation, see [plugins/trinity-onboard/README.md](plugins/trinity-onboard/README.md).
+For detailed plugin documentation, see the [abilities repository](https://github.com/abilityai/abilities).
 
 ## MCP Integration
 
