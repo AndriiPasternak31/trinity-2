@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-08 | AVATAR-003 | Default avatar generation — admin button in Settings, robot/android aesthetic | [agent-avatars.md](feature-flows/agent-avatars.md), [platform-settings.md](feature-flows/platform-settings.md) |
 | 2026-03-08 | OPS-001 | Operating Room — consolidated Events + Cost Alerts into 4-tab layout | [operating-room.md](feature-flows/operating-room.md) |
 | 2026-03-08 | OPS-001 | Operating Room — restart-resilient sync, refresh button, stale prompt detection | [operating-room.md](feature-flows/operating-room.md) |
 | 2026-03-08 | — | Fix `--session-id` UUID validation failure in headless task execution | [parallel-headless-execution.md](feature-flows/parallel-headless-execution.md) |
@@ -105,7 +106,7 @@
 | Execution Log Viewer | [execution-log-viewer.md](feature-flows/execution-log-viewer.md) | Modal for viewing execution transcripts |
 | Execution Detail Page | [execution-detail-page.md](feature-flows/execution-detail-page.md) | Dedicated page for execution details |
 | Continue Execution as Chat | [continue-execution-as-chat.md](feature-flows/continue-execution-as-chat.md) | Resume executions as interactive chat (EXEC-023) |
-| Agent Avatars | [agent-avatars.md](feature-flows/agent-avatars.md) | AI-generated avatars with reference images and variation regeneration (AVATAR-001) |
+| Agent Avatars | [agent-avatars.md](feature-flows/agent-avatars.md) | AI-generated avatars with reference images, emotion variants, and default generation (AVATAR-001/002/003) |
 | Agent Info Display | [agent-info-display.md](feature-flows/agent-info-display.md) | Template metadata in Info tab |
 | Per-Agent File Manager | [file-browser.md](feature-flows/file-browser.md) | Two-panel file manager in Agent Detail Files tab |
 | File Manager (Deprecated) | [file-manager.md](feature-flows/file-manager.md) | Former standalone `/files` page — replaced by per-agent Files tab |

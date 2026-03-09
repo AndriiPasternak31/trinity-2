@@ -4,6 +4,8 @@ description: Market research specialist that discovers trends, analyzes competit
 type: research-agent
 priority: 20
 
+avatar_prompt: A sharp-eyed explorer with binoculars and a weathered field journal, wearing a safari vest over a crisp shirt, confident and alert expression, warm golden-hour lighting
+
 capabilities:
   - web-search
   - market-research

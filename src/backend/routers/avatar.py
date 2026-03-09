@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -25,9 +26,168 @@ logger = logging.getLogger(__name__)
 
 AVATAR_DIR = Path("/data/avatars")
 
+# Diverse visual styles for default avatars — deterministically assigned from agent name hash
+# so each agent gets a unique look even when they share the same Docker type.
+_DEFAULT_AVATAR_STYLES = [
+    "A sleek humanoid robot with a polished chrome and dark navy metallic face, glowing indigo eyes, minimal geometric features, clean modern design like a luxury android executive",
+    "A stylized android with a matte black face panel covered in faintly glowing teal circuit traces, bright cyan eyes, angular geometric features like a futuristic coding machine",
+    "A refined robot with a brushed silver metallic face, warm amber glowing eyes behind thin geometric spectacle frames, scholarly and dignified mechanical appearance",
+    "A vibrant android with an iridescent holographic face surface that shifts between purple and pink, bright magenta eyes, expressive geometric features with artistic flair",
+    "A precise robot with a dark gunmetal face featuring subtle grid lines, sharp green glowing eyes, clean angular features like a high-precision analytical instrument",
+    "A weathered bronze steampunk automaton with intricate clockwork gears visible through a translucent faceplate, glowing amber eyes, Victorian-era mechanical elegance",
+    "A crystalline android with a faceted translucent face like cut gemstone, refracting soft rainbow light, prismatic violet eyes, ethereal and otherworldly presence",
+    "A military-spec robot with matte olive drab armor plating, glowing red tactical visor, angular aggressive features, rugged battlefield command unit aesthetic",
+    "A sleek white porcelain android with delicate gold filigree tracery, calm pearl-white eyes with soft glow, serene and graceful ceramic-doll mechanical beauty",
+    "A neon-edged cyberpunk android with jet black face and electric blue wireframe contour lines, piercing white eyes, sharp angular features from a dystopian future",
+    "A nature-inspired bio-mechanical android with a face textured like dark polished wood with bioluminescent green veins, warm emerald eyes, organic and living machine fusion",
+    "A retro-futuristic robot with a rounded brushed copper face, large circular glowing turquoise eyes, friendly bulbous features like a 1960s space-age vision of the future",
+]
+
+
+def _get_style_for_agent(agent_name: str) -> str:
+    """Deterministically pick a visual style from the agent name."""
+    h = hash(agent_name)
+    return _DEFAULT_AVATAR_STYLES[h % len(_DEFAULT_AVATAR_STYLES)]
+
 
 class AvatarGenerateRequest(BaseModel):
     identity_prompt: str
+
+
+async def _get_prompt_from_template(agent_name: str) -> Optional[str]:
+    """Fetch avatar_prompt or build from description via agent's template.yaml.
+
+    Returns a meaningful identity prompt from the running agent's template,
+    or None if the agent is unreachable or has no useful template data.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"http://agent-{agent_name}:8000/api/template/info")
+            if resp.status_code == 200:
+                data = resp.json()
+                # Priority 1: explicit avatar_prompt from template
+                if data.get("avatar_prompt"):
+                    return data["avatar_prompt"]
+                # Priority 2: build from description + display_name
+                desc = data.get("description", "")
+                display = data.get("display_name", "")
+                if desc:
+                    return f"{display or agent_name}: {desc}"
+    except Exception:
+        pass
+    return None
+
+
+# ---- AVATAR-003: Generate defaults (must come BEFORE /{agent_name} routes) ----
+
+@router.post("/avatars/generate-defaults")
+async def generate_default_avatars(
+    current_user: User = Depends(get_current_user),
+):
+    """Generate default avatars for all agents that don't have a custom one.
+
+    Admin-only. Uses the same Gemini pipeline as custom avatars with an
+    auto-generated prompt derived from each agent's name and type.
+    No emotion variants or reference images for defaults.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can generate default avatars")
+
+    service = get_image_generation_service()
+    if not service.available:
+        raise HTTPException(
+            status_code=501,
+            detail="Image generation not available: GEMINI_API_KEY not configured",
+        )
+
+    # Get agents needing default avatars from DB
+    agents_needing = db.get_agents_without_custom_avatar()
+    agent_names_needing = {a["agent_name"] for a in agents_needing}
+
+    if not agent_names_needing:
+        return {
+            "generated": 0,
+            "failed": 0,
+            "skipped": 0,
+            "agents": [],
+            "errors": [],
+            "message": "All agents already have custom avatars",
+        }
+
+    # Get agent types from Docker labels
+    from services.docker_service import list_all_agents_fast
+
+    all_agents = list_all_agents_fast()
+    agent_type_map = {a.name: a.type for a in all_agents}
+
+    generated = []
+    errors = []
+    skipped = 0
+
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+
+    for agent_name in sorted(agent_names_needing):
+        # Skip agents that don't exist in Docker
+        if agent_name not in agent_type_map:
+            skipped += 1
+            continue
+
+        # AVATAR-003: Smart prompt priority chain
+        # 1. Check if DB already has a seeded prompt (from template on creation)
+        existing = db.get_avatar_identity(agent_name)
+        if existing and existing.get("identity_prompt"):
+            identity_prompt = existing["identity_prompt"]
+        else:
+            # 2. Try to fetch from running agent's template.yaml
+            template_prompt = await _get_prompt_from_template(agent_name)
+            if template_prompt:
+                identity_prompt = template_prompt
+            else:
+                # 3. Fallback — pick a unique style from the agent name
+                style_desc = _get_style_for_agent(agent_name)
+                identity_prompt = f"{style_desc} named {agent_name}"
+
+        try:
+            result = await service.generate_image(
+                prompt=identity_prompt,
+                use_case="avatar",
+                aspect_ratio="1:1",
+                refine_prompt=True,
+                agent_name=agent_name,
+            )
+
+            if not result.success:
+                errors.append({"agent": agent_name, "error": result.error})
+                logger.warning(f"[AVATAR-003] Default avatar failed for {agent_name}: {result.error}")
+                continue
+
+            # Save PNG (no reference image, no emotion variants for defaults)
+            avatar_path = AVATAR_DIR / f"{agent_name}.png"
+            avatar_path.write_bytes(result.image_data)
+
+            now = datetime.now(timezone.utc).isoformat()
+            db.set_default_avatar(agent_name, identity_prompt, now)
+
+            generated.append(agent_name)
+            logger.info(
+                f"[AVATAR-003] Generated default avatar for {agent_name}: "
+                f"{len(result.image_data)} bytes"
+            )
+
+        except Exception as e:
+            errors.append({"agent": agent_name, "error": str(e)})
+            logger.warning(f"[AVATAR-003] Default avatar error for {agent_name}: {e}")
+
+    return {
+        "generated": len(generated),
+        "failed": len(errors),
+        "skipped": skipped,
+        "agents": generated,
+        "errors": errors,
+        "message": f"Generated {len(generated)} default avatars"
+        + (f", {len(errors)} failed" if errors else "")
+        + (f", {skipped} skipped (not in Docker)" if skipped else ""),
+    }
 
 
 @router.get("/{agent_name}/avatar")

@@ -1051,6 +1051,46 @@ Example:
             </div>
           </div>
 
+          <!-- Default Avatars (AVATAR-003) -->
+          <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-lg font-medium text-gray-900 dark:text-white">Default Avatars</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Generate AI avatars for all agents that don't have a custom one yet.
+                Uses the same Gemini image generation pipeline as custom avatars.
+              </p>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+              <!-- Result message -->
+              <div v-if="defaultAvatarResult" class="rounded-md p-3" :class="{
+                'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300': defaultAvatarResult.generated > 0 && defaultAvatarResult.failed === 0,
+                'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300': defaultAvatarResult.failed > 0,
+                'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300': defaultAvatarResult.generated === 0 && defaultAvatarResult.failed === 0
+              }">
+                <p class="text-sm font-medium">{{ defaultAvatarResult.message }}</p>
+                <ul v-if="defaultAvatarResult.agents.length" class="mt-1 text-xs space-y-0.5">
+                  <li v-for="name in defaultAvatarResult.agents" :key="name">Generated: {{ name }}</li>
+                </ul>
+                <ul v-if="defaultAvatarResult.errors.length" class="mt-1 text-xs space-y-0.5">
+                  <li v-for="err in defaultAvatarResult.errors" :key="err.agent" class="text-red-600 dark:text-red-400">Failed: {{ err.agent }} - {{ err.error }}</li>
+                </ul>
+              </div>
+
+              <!-- Generate button -->
+              <button
+                @click="generateDefaultAvatars"
+                :disabled="generatingDefaultAvatars"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <svg v-if="generatingDefaultAvatars" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {{ generatingDefaultAvatars ? 'Generating...' : 'Generate Default Avatars' }}
+              </button>
+            </div>
+          </div>
+
           <!-- Info Box -->
           <div class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div class="flex">
@@ -1204,6 +1244,10 @@ const skillsLibraryStatus = ref({
 })
 const syncingSkillsLibrary = ref(false)
 const savingSkillsLibrary = ref(false)
+
+// Default Avatars state (AVATAR-003)
+const generatingDefaultAvatars = ref(false)
+const defaultAvatarResult = ref(null)
 
 // Subscriptions state (SUB-002)
 const subscriptions = ref([])
@@ -1762,6 +1806,24 @@ async function syncSkillsLibrary() {
     error.value = e.response?.data?.detail || 'Failed to sync skills library'
   } finally {
     syncingSkillsLibrary.value = false
+  }
+}
+
+// Default Avatars methods (AVATAR-003)
+async function generateDefaultAvatars() {
+  generatingDefaultAvatars.value = true
+  defaultAvatarResult.value = null
+  error.value = null
+  try {
+    const response = await axios.post('/api/agents/avatars/generate-defaults', {}, {
+      headers: authStore.authHeader,
+      timeout: 300000 // 5 min timeout for sequential generation
+    })
+    defaultAvatarResult.value = response.data
+  } catch (e) {
+    error.value = e.response?.data?.detail || 'Failed to generate default avatars'
+  } finally {
+    generatingDefaultAvatars.value = false
   }
 }
 

@@ -424,6 +424,12 @@ class DatabaseManager:
     def clear_avatar_identity(self, agent_name: str):
         return self._agent_ops.clear_avatar_identity(agent_name)
 
+    def get_agents_without_custom_avatar(self):
+        return self._agent_ops.get_agents_without_custom_avatar()
+
+    def set_default_avatar(self, agent_name: str, identity_prompt: str, updated_at: str):
+        return self._agent_ops.set_default_avatar(agent_name, identity_prompt, updated_at)
+
     # =========================================================================
     # MCP API Key Management (delegated to db/mcp_keys.py)
     # =========================================================================

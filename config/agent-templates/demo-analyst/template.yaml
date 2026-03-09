@@ -5,6 +5,8 @@ tagline: Strategic insights from research
 version: "1.0.0"
 author: Trinity Demo
 
+avatar_prompt: A thoughtful analyst surrounded by floating data visualizations and charts, wearing smart-casual attire with reading glasses, warm studio lighting, contemplative expression
+
 resources:
   cpu: "1"
   memory: "2g"

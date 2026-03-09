@@ -2,7 +2,7 @@
 
 ## Overview
 
-Admin-only page for managing system-wide configuration including API keys (Anthropic, GitHub), Trinity Prompt, email whitelist, SSH access toggle, ops configuration settings, and GitHub template configuration (TMPL-001).
+Admin-only page for managing system-wide configuration including API keys (Anthropic, GitHub), Trinity Prompt, email whitelist, SSH access toggle, ops configuration settings, GitHub template configuration (TMPL-001), and default avatar generation (AVATAR-003).
 
 ## User Stories
 
@@ -13,6 +13,7 @@ Admin-only page for managing system-wide configuration including API keys (Anthr
 | SET-010 | As an admin, I want to view ops configuration so that I can see current thresholds and limits | Implemented |
 | SET-011 | As an admin, I want to update ops settings so that I can tune context warnings, cost limits, and other thresholds | Implemented |
 | SET-012 | As an admin, I want to reset ops settings to defaults so that I can restore standard configuration | Implemented |
+| AVATAR-003 | As an admin, I want to generate default avatars for all agents so that agents without custom avatars get AI-generated ones | Implemented |
 
 ## Entry Points
 
@@ -29,6 +30,7 @@ Admin-only page for managing system-wide configuration including API keys (Anthr
   - `GET /api/settings/github-templates` - Get GitHub templates config (TMPL-001)
   - `PUT /api/settings/github-templates` - Set GitHub templates (TMPL-001)
   - `DELETE /api/settings/github-templates` - Reset templates to defaults (TMPL-001)
+  - `POST /api/agents/avatars/generate-defaults` - Generate avatars for agents without one (AVATAR-003, see [agent-avatars.md](agent-avatars.md))
 
 ---
 
@@ -45,6 +47,7 @@ Admin-only page for managing system-wide configuration including API keys (Anthr
 | Trinity Prompt | 224-289 | Textarea for custom agent instructions |
 | Email Whitelist | 291-390 | Table of whitelisted emails with add/remove |
 | SSH Access Toggle | 392-430 | Toggle switch for enabling SSH access |
+| Default Avatars | 1054-1092 | Generate AI avatars for agents without custom ones (AVATAR-003) |
 
 **Key Reactive State**
 
@@ -65,6 +68,10 @@ const githubPatStatus = ref({
 // SSH Access state (lines 542-543)
 const sshAccessEnabled = ref(false)
 const savingSshAccess = ref(false)
+
+// Default Avatars state (lines 1248-1250)
+const generatingDefaultAvatars = ref(false)
+const defaultAvatarResult = ref(null)
 ```
 
 ### State Management
@@ -129,6 +136,25 @@ async function toggleSshAccess() {
   sshAccessEnabled.value = newValue
 }
 ```
+
+**Generate Default Avatars** (Settings.vue lines 1812-1828)
+```javascript
+async function generateDefaultAvatars() {
+  generatingDefaultAvatars.value = true
+  defaultAvatarResult.value = null
+  const response = await axios.post('/api/agents/avatars/generate-defaults', {}, {
+    headers: authStore.authHeader,
+    timeout: 300000 // 5 min timeout for sequential generation
+  })
+  defaultAvatarResult.value = response.data
+}
+```
+
+Response data shape: `{ message, generated, failed, skipped, agents: [name, ...], errors: [{agent, error}, ...] }`
+
+The UI displays a colored result card: green (all succeeded), yellow (some failed), gray (all skipped). Lists generated agent names and any error details.
+
+Backend endpoint details are documented in [agent-avatars.md](agent-avatars.md) under the "Generate Default Avatars" section.
 
 ---
 
@@ -380,6 +406,7 @@ Templates stored as JSON in `system_settings` table under key `github_templates`
 - **Downstream**: [templates-page.md](templates-page.md) - Templates page uses configured list
 - **Related**: [internal-system-agent.md](internal-system-agent.md) - Ops settings affect fleet health checks
 - **Related**: [ssh-access.md](ssh-access.md) - `ssh_access_enabled` setting controls MCP tool availability
+- **Related**: [agent-avatars.md](agent-avatars.md) - Default avatar generation endpoint and image generation pipeline (AVATAR-003)
 
 ---
 
@@ -432,6 +459,16 @@ Templates stored as JSON in `system_settings` table under key `github_templates`
 | 1 | Call reset API directly | `POST /api/settings/ops/reset` | Response shows `{"success": true, "reset": [...]}` |
 | 2 | Verify ops settings | `GET /api/settings/ops/config` | All values show `is_default: true` |
 
+**AVATAR-003: Generate Default Avatars**
+
+| Step | Action | Expected | Verify |
+|------|--------|----------|--------|
+| 1 | Navigate to Settings page | "Default Avatars" card visible after Skills Library | Card has "Generate Default Avatars" button |
+| 2 | Click "Generate Default Avatars" | Button shows spinner and "Generating..." text | Button is disabled while generating |
+| 3a | Agents without avatars exist | Green result card showing generated count and agent names | `generated > 0` in response |
+| 3b | All agents already have avatars | Gray result card showing "all agents already have avatars" | `skipped > 0`, `generated === 0` |
+| 4 | Non-admin user | Endpoint returns 403 | "Admin access required" or "Not enough permissions" |
+
 ### Edge Cases
 
 1. **Empty PAT**: Save button should be disabled
@@ -448,6 +485,7 @@ Templates stored as JSON in `system_settings` table under key `github_templates`
 | SET-010 | Implemented |
 | SET-011 | Implemented |
 | SET-012 | Implemented |
+| AVATAR-003 | Implemented |
 
 ---
 
@@ -455,5 +493,6 @@ Templates stored as JSON in `system_settings` table under key `github_templates`
 
 | Date | Change |
 |------|--------|
+| 2026-03-08 | **AVATAR-003 Default Avatars**: Added Default Avatars card documentation. New UI section (lines 1054-1092), state refs, generateDefaultAvatars() method, test case. Backend endpoint documented in agent-avatars.md. |
 | 2026-03-04 | **TMPL-001 GitHub Templates Configuration**: Added admin UI and API endpoints for configuring which GitHub repos appear as agent templates. New section with data flow, endpoints, service layer, and storage details. Updated overview, entry points, related flows. |
 | 2026-01-13 | Initial documentation for Platform Settings feature flow |

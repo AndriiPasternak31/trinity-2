@@ -182,9 +182,9 @@ from the user's description exactly as given.
 
 Every refined prompt MUST end with this exact technical block (copy it verbatim):
 
-"Framing: extreme close-up portrait crop, face filling 85-90% of frame, subject centered,
-front-facing with eyes looking directly at camera, crop just above the top of the head
-and at the chin or upper neck. Background: smooth dark gradient from deep slate-navy
+"Framing: head-and-shoulders portrait, full head visible with clear space above the crown,
+face filling roughly 60-70% of frame height, subject centered, front-facing with eyes
+looking directly at camera, crop at mid-chest level. Background: smooth dark gradient from deep slate-navy
 (#1a1f2e) on the left to dark charcoal (#111827) on the right, no objects, no environment,
 no patterns, just a subtle dark tonal wash. Lighting: single soft key light from upper-left
 at 45 degrees, cool color temperature 5600K, gentle shadow falling to lower-right, subtle
@@ -216,8 +216,9 @@ When rewriting the user's character description:
    10 degrees). Eyes looking directly at camera. Head slightly tilted (2-3 degrees max).
    Neutral to slightly warm expression.
 
-5. **Circular crop safe** — Nothing important in the corners. All key visual elements
-   within a centered circle. Generous margin at edges.
+5. **Circular crop safe** — The entire head must fit comfortably inside a centered circle
+   with breathing room above the crown. Nothing important in the corners. Shoulders can
+   extend to edges since corners will be cropped to a circle.
 
 ## Output Format
 

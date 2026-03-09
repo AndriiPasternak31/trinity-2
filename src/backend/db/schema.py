@@ -64,6 +64,7 @@ TABLES = {
             max_parallel_tasks INTEGER DEFAULT 3,
             avatar_identity_prompt TEXT,
             avatar_updated_at TEXT,
+            is_default_avatar INTEGER DEFAULT 0,
             FOREIGN KEY (owner_id) REFERENCES users(id),
             FOREIGN KEY (subscription_id) REFERENCES subscription_credentials(id)
         )

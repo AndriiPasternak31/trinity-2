@@ -5,6 +5,8 @@ tagline: Know thy enemy
 version: "1.0.0"
 author: Trinity VC Demo
 
+avatar_prompt: A sharp competitive strategist in a dark suit, studying a wall of competitor profiles and market maps, intense focused gaze, modern war-room setting with screens and charts
+
 resources:
   cpu: "2"
   memory: "4g"

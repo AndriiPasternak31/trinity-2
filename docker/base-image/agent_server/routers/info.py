@@ -137,6 +137,8 @@ async def get_template_info():
         "skills": template_data.get("skills", []),
         # MCP servers (can be strings or {name, description} objects)
         "mcp_servers": mcp_servers_raw,
+        # Avatar customization
+        "avatar_prompt": template_data.get("avatar_prompt"),
     }
 
 

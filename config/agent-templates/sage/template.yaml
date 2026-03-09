@@ -4,6 +4,8 @@ description: Strategic advisor that synthesizes research and provides actionable
 type: strategy-agent
 priority: 20
 
+avatar_prompt: A wise elder advisor in a tailored charcoal suit, silver-haired with knowing eyes, seated in a mahogany-paneled study surrounded by strategic frameworks and books, warm authoritative presence
+
 capabilities:
   - strategic-analysis
   - synthesis

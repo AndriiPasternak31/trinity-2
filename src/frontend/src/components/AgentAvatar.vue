@@ -35,7 +35,7 @@ const props = defineProps({
   size: {
     type: String,
     default: 'md',
-    validator: v => ['sm', 'md', 'lg', 'xl', '2xl'].includes(v)
+    validator: v => ['sm', 'md', 'lg', 'xl', '2xl', '3xl'].includes(v)
   }
 })
 
@@ -51,7 +51,8 @@ const sizeClasses = computed(() => {
     md: 'w-8 h-8',
     lg: 'w-12 h-12',
     xl: 'w-16 h-16',
-    '2xl': 'w-24 h-24'
+    '2xl': 'w-24 h-24',
+    '3xl': 'w-28 h-28'
   }
   return map[props.size]
 })
@@ -62,7 +63,8 @@ const textSizeClass = computed(() => {
     md: 'text-xs',
     lg: 'text-sm',
     xl: 'text-base',
-    '2xl': 'text-2xl'
+    '2xl': 'text-2xl',
+    '3xl': 'text-3xl'
   }
   return map[props.size]
 })

@@ -488,6 +488,16 @@ async def create_agent_internal(
 
             db.register_agent_owner(config.name, current_user.username)
 
+            # AVATAR-003: Seed avatar prompt from template
+            _avatar_prompt = template_data.get("avatar_prompt") if template_data else None
+            if _avatar_prompt:
+                try:
+                    from datetime import datetime, timezone
+                    db.set_default_avatar(config.name, _avatar_prompt, datetime.now(timezone.utc).isoformat())
+                    logger.info(f"[AVATAR-003] Seeded avatar prompt from template for {config.name}")
+                except Exception as e:
+                    logger.warning(f"[AVATAR-003] Failed to seed avatar prompt for {config.name}: {e}")
+
             # Phase 9.10: Grant default permissions (Option B - same-owner agents)
             try:
                 permissions_count = db.grant_default_permissions(config.name, current_user.username)

@@ -1,4 +1,33 @@
 ### 2026-03-08
+🎨 **Enhancement: Meaningful Default Avatars from Templates (AVATAR-003)**
+
+Default avatar generation now uses a smart prompt priority chain instead of generic type-based robot descriptions. Templates can specify an `avatar_prompt` field for explicit avatar descriptions. On agent creation from a template with `avatar_prompt`, the prompt is seeded into the DB. When generating defaults, the system checks: (1) DB-seeded prompt from template, (2) running agent's template.yaml (avatar_prompt or description), (3) type-based fallback. Added `avatar_prompt` to `/api/template/info` response.
+
+**Modified files:**
+- `docker/base-image/agent_server/routers/info.py` — Added `avatar_prompt` to template info response
+- `src/backend/routers/avatar.py` — Smart prompt priority chain + `_get_prompt_from_template()` helper
+- `src/backend/services/agent_service/crud.py` — Seed avatar prompt from template on agent creation
+- `config/agent-templates/scout/template.yaml` — Added `avatar_prompt`
+- `config/agent-templates/dd-competitor/template.yaml` — Added `avatar_prompt`
+- `config/agent-templates/demo-analyst/template.yaml` — Added `avatar_prompt`
+- `config/agent-templates/sage/template.yaml` — Added `avatar_prompt`
+
+---
+
+🎨 **Feature: Generate Default Avatars (AVATAR-003)**
+
+Admin button in Settings to generate Gemini-powered placeholder avatars for all agents that don't have a custom one. Uses same image generation pipeline as custom avatars with auto-generated prompts from agent name and type. Tracks default vs custom avatars via `is_default_avatar` column so re-runs skip custom avatars and overwrite stale defaults.
+
+**New/modified files:**
+- `src/backend/routers/avatar.py` — `POST /api/agents/avatars/generate-defaults` endpoint
+- `src/backend/db/schema.py` — `is_default_avatar` column on `agent_ownership`
+- `src/backend/db/migrations.py` — Migration #26 `_migrate_agent_ownership_default_avatar`
+- `src/backend/db/agents.py` — `get_agents_without_custom_avatar()`, `set_default_avatar()`, updated `set_avatar_identity()` and `clear_avatar_identity()`
+- `src/backend/database.py` — Delegation methods for new DB operations
+- `src/frontend/src/views/Settings.vue` — Default Avatars card with Generate button
+
+---
+
 🔀 **Feature: Consolidate Ops / Events / Cost Alerts into Operating Room**
 
 Merged three separate sections (Operating Room, Events, Cost Alerts) into a single unified Operating Room view with 4 tabs: Needs Response, Notifications, Cost Alerts, Resolved. Removed the Events and Alerts bell icons from NavBar. The Ops badge now shows a combined count across all three data sources with critical highlighting. Old routes `/events` and `/alerts` redirect to `/operating-room` with the appropriate tab query parameter.

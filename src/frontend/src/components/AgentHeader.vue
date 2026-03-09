@@ -3,10 +3,10 @@
     <!-- Overlapping Avatar (AVATAR-001) - centered on left edge of card (50% in, 50% out) -->
     <div class="absolute left-0 top-3 z-10 group -translate-x-1/2">
       <div class="rounded-full border-[3px] border-indigo-400 dark:border-indigo-500 shadow-lg overflow-hidden">
-        <div class="relative w-24 h-24">
+        <div class="relative w-28 h-28">
           <Transition name="avatar-crossfade">
             <div :key="emotionAvatarUrl || agent.avatar_url" class="absolute inset-0">
-              <AgentAvatar :name="agent.name" :avatar-url="emotionAvatarUrl || agent.avatar_url" size="2xl" />
+              <AgentAvatar :name="agent.name" :avatar-url="emotionAvatarUrl || agent.avatar_url" size="3xl" />
             </div>
           </Transition>
         </div>
@@ -50,7 +50,7 @@
     </div>
 
     <!-- ROW 1: Identity + Primary Action -->
-    <div class="p-4 pb-3 pl-14">
+    <div class="p-4 pb-3 pl-16">
       <div class="flex justify-between items-start">
         <!-- Left: Agent Identity -->
         <div>
@@ -156,7 +156,7 @@
     </div>
 
     <!-- ROW 2: Settings + Stats (combined) -->
-    <div class="pl-14 pr-4 py-2.5 border-t border-gray-100 dark:border-gray-700 flex items-center">
+    <div class="pl-16 pr-4 py-2.5 border-t border-gray-100 dark:border-gray-700 flex items-center">
       <!-- Left side: Mode toggles + Tags -->
       <div class="flex items-center">
         <!-- Autonomy Toggle (not for system agents) -->

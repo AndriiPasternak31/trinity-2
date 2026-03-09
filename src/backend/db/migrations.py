@@ -30,6 +30,7 @@ Migration Order (as of 2026-02-28):
 23. nevermined_tables - NVM-001 Nevermined payment integration tables
 24. agent_avatar_columns - AVATAR-001 AI-generated agent avatar support
 25. operator_queue_table - OPS-001 Operator Queue & Operating Room
+26. agent_ownership_default_avatar - AVATAR-003 default avatar flag
 """
 
 
@@ -65,6 +66,7 @@ def run_all_migrations(cursor, conn):
         ("nevermined_tables", _migrate_nevermined_tables),
         ("agent_avatar_columns", _migrate_agent_avatar_columns),
         ("operator_queue_table", _migrate_operator_queue_table),
+        ("agent_ownership_default_avatar", _migrate_agent_ownership_default_avatar),
     ]
 
     for name, migration_fn in migrations:
@@ -700,4 +702,20 @@ def _migrate_operator_queue_table(cursor, conn):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_operator_queue_priority ON operator_queue(priority)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_operator_queue_type ON operator_queue(type)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_operator_queue_created ON operator_queue(created_at DESC)")
+    conn.commit()
+
+
+def _migrate_agent_ownership_default_avatar(cursor, conn):
+    """Add is_default_avatar column to agent_ownership table (AVATAR-003).
+
+    Tracks whether an agent's avatar was auto-generated (default) vs custom.
+    Allows re-runs to skip custom avatars and overwrite stale defaults.
+    """
+    cursor.execute("PRAGMA table_info(agent_ownership)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "is_default_avatar" not in columns:
+        print("Adding is_default_avatar column to agent_ownership for default avatar support...")
+        cursor.execute("ALTER TABLE agent_ownership ADD COLUMN is_default_avatar INTEGER DEFAULT 0")
+
     conn.commit()

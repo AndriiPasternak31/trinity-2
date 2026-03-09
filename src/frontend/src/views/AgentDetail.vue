@@ -22,7 +22,7 @@
           {{ error }}
         </div>
 
-        <div v-if="agent" class="ml-14">
+        <div v-if="agent" class="ml-16">
           <!-- Agent Header Component -->
           <AgentHeader
             :agent="agent"

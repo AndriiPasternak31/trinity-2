@@ -1,4 +1,4 @@
-# Feature: Agent Avatars (AVATAR-001, AVATAR-002)
+# Feature: Agent Avatars (AVATAR-001, AVATAR-002, AVATAR-003)
 
 ## Overview
 AI-generated circular avatars for agents using Gemini image generation, with a reference image system for quick variations, two-button hover UI, and fallback to deterministic gradient initials.
@@ -64,7 +64,7 @@ As an agent owner, I want to generate a custom avatar for my agent from a text d
 | Location | File | Line | Size | Context |
 |----------|------|------|------|---------|
 | Agent Detail Header | `src/frontend/src/components/AgentHeader.vue` | 6 | 2xl | Overlapping left edge of card, ring border, hover overlay |
-| Dashboard Graph Nodes | `src/frontend/src/components/AgentNode.vue` | 28 | md | In node header, before agent name label |
+| Dashboard Graph Nodes | `src/frontend/src/components/AgentNode.vue` | 24-30 | xl | Absolutely positioned on left edge of tile (50% in, 50% out), `border-2` ring (indigo or purple for system agents), `shadow-md`; top rows use `pl-5` to clear avatar |
 | Agents List (desktop) | `src/frontend/src/views/Agents.vue` | 272 | sm | In agent row, before name link |
 | Agents List (tablet) | `src/frontend/src/views/Agents.vue` | 442 | sm | In agent row, after status dot |
 | Agents List (mobile) | `src/frontend/src/views/Agents.vue` | 585 | sm | In agent row, after status dot |
@@ -128,7 +128,8 @@ The `avatar_url` field is included in agent data returned by both `GET /api/agen
 ```
 helpers.py:get_accessible_agents() -> agent_dict["avatar_url"]
   -> stores/network.js:460 -> avatarUrl: agent.avatar_url || null
-    -> AgentNode.vue:28 -> <AgentAvatar :avatar-url="data.avatarUrl" />
+    -> AgentNode.vue:24-30 -> <AgentAvatar :avatar-url="data.avatarUrl" size="xl" />
+       (absolutely positioned on left edge, matching AgentHeader.vue pattern)
 ```
 
 System agents also get avatarUrl at `stores/network.js:426`.
@@ -566,6 +567,105 @@ Files per agent (in addition to base + ref):
 - **No cycling on Agents page or Dashboard** — only AgentDetail
 - **No DB schema changes** — emotion state is purely file-based
 - **No changes to AvatarGenerateModal** — emotion generation is automatic
+
+---
+
+## Default Avatars (AVATAR-003)
+
+### Overview
+
+Admin button in Settings to generate Gemini-powered avatars for all agents without a custom one. Same pipeline as custom avatars — same prompt refinement, same technical spec block — but with auto-generated prompts based on agent name and type.
+
+### Entry Points
+- **UI**: `src/frontend/src/views/Settings.vue` — "Default Avatars" card with Generate button
+- **API**: `POST /api/agents/avatars/generate-defaults` — Admin-only endpoint
+
+### Default Identity Prompt Construction
+
+Smart prompt priority chain (highest priority first):
+
+1. **DB-seeded prompt** — If the agent was created from a template with `avatar_prompt`, it was seeded into the DB at creation time. Used as-is.
+2. **Running agent's template.yaml** — Fetched via `GET http://agent-{name}:8000/api/template/info`:
+   - `avatar_prompt` field → used as-is (explicit, highest quality)
+   - `description` + `display_name` → built as `"{display_name}: {description}"`
+3. **Type-based fallback** — Built from Docker label type. Robot/android aesthetic, visually distinct from custom avatars:
+
+| Agent Type | Description |
+|------------|-------------|
+| `business-assistant` | Sleek chrome and navy metallic android executive |
+| `code-assistant` | Matte black android with glowing teal circuit traces |
+| `research-assistant` | Brushed silver robot with amber eyes and spectacle frames |
+| `creative-assistant` | Iridescent holographic android with purple-pink surface |
+| `data-analyst` | Gunmetal robot with grid lines and green glowing eyes |
+| (other/unknown) | Smooth dark metallic android with indigo glowing eyes |
+
+Type-based prompt format: `"{type_description} named {agent_name}"`
+
+### Template Avatar Prompt Seeding
+
+Templates can include an `avatar_prompt` field in `template.yaml`:
+
+```yaml
+name: scout
+display_name: Scout - Market Research Analyst
+avatar_prompt: A sharp-eyed explorer with binoculars and a weathered field journal...
+```
+
+On agent creation from a local template with `avatar_prompt`, the prompt is stored in the DB via `db.set_default_avatar()`. This means even if the agent is stopped when generate-defaults runs, the meaningful prompt is already available.
+
+### DB Tracking
+
+**New column**: `is_default_avatar INTEGER DEFAULT 0` in `agent_ownership`
+- `1` = auto-generated default avatar
+- `0` = custom avatar (or no avatar)
+
+**Migration #26**: `_migrate_agent_ownership_default_avatar`
+
+**New DB operations** (`src/backend/db/agents.py`):
+- `get_agents_without_custom_avatar()` — returns agents where `avatar_updated_at IS NULL OR is_default_avatar = 1`
+- `set_default_avatar(agent_name, prompt, updated_at)` — sets avatar fields + `is_default_avatar = 1`
+
+**Modified operations**:
+- `set_avatar_identity()` — now also sets `is_default_avatar = 0` (custom overrides default)
+- `clear_avatar_identity()` — now also sets `is_default_avatar = 0`
+
+### Data Flow
+
+```
+Settings.vue button click
+  -> POST /api/agents/avatars/generate-defaults
+    -> require admin role
+    -> db.get_agents_without_custom_avatar()
+       (WHERE avatar_updated_at IS NULL OR is_default_avatar = 1)
+    -> list_all_agents_fast() for agent types from Docker labels
+    -> For each agent (sorted, sequential):
+       1. Smart prompt priority chain:
+          a. Check DB for seeded prompt (from template creation)
+          b. Fetch from running agent's template.yaml (avatar_prompt or description)
+          c. Fallback: "{type_description} named {agent_name}"
+       2. image_generation_service.generate_image(prompt, use_case="avatar")
+          -> Gemini Flash refines prompt (same AVATAR_BEST_PRACTICES)
+          -> Gemini Image model generates portrait
+       3. Save PNG to /data/avatars/{name}.png (no _ref.png, no emotions)
+       4. db.set_default_avatar(name, prompt, now)
+    -> Return summary {generated, failed, skipped, agents, errors, message}
+```
+
+### Scope Limitations
+- **No emotion variants** — defaults get base avatar only
+- **No reference images** — no `_ref.png` saved for defaults
+- **No regeneration support** — defaults can only be overwritten by custom avatars or re-running defaults
+- **Sequential generation** — one at a time to respect Gemini rate limits
+- **Admin-only** — only admins can trigger default generation
+
+### When Custom Avatar Overrides Default
+
+```
+POST /api/agents/{name}/avatar/generate
+  -> db.set_avatar_identity() sets is_default_avatar = 0
+  -> Agent now has a custom avatar
+  -> Re-running generate-defaults skips this agent
+```
 
 ---
 
