@@ -823,6 +823,8 @@ watch(() => route.params.name, async (newName, oldName) => {
     await loadResourceLimits()
     await loadTags()
     await loadAuthStatus()
+    // Load avatar identity for new agent (AVATAR-001)
+    await loadAvatarIdentity()
     // Check if new agent has dashboard (only when running)
     if (agent.value?.status === 'running') {
       await checkDashboardExists()
