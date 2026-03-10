@@ -20,6 +20,7 @@ from dependencies import get_current_user
 from models import User
 from services.image_generation_prompts import AVATAR_EMOTIONS, AVATAR_EMOTION_PROMPTS
 from services.image_generation_service import get_image_generation_service
+from utils.image_optimize import optimize_avatar
 
 router = APIRouter(prefix="/api/agents", tags=["avatars"])
 logger = logging.getLogger(__name__)
@@ -161,9 +162,9 @@ async def generate_default_avatars(
                 logger.warning(f"[AVATAR-003] Default avatar failed for {agent_name}: {result.error}")
                 continue
 
-            # Save PNG (no reference image, no emotion variants for defaults)
-            avatar_path = AVATAR_DIR / f"{agent_name}.png"
-            avatar_path.write_bytes(result.image_data)
+            # Save optimized WebP (no reference image, no emotion variants for defaults)
+            avatar_path = AVATAR_DIR / f"{agent_name}.webp"
+            avatar_path.write_bytes(optimize_avatar(result.image_data))
 
             now = datetime.now(timezone.utc).isoformat()
             db.set_default_avatar(agent_name, identity_prompt, now)
@@ -192,16 +193,24 @@ async def generate_default_avatars(
 
 @router.get("/{agent_name}/avatar")
 async def get_avatar(agent_name: str):
-    """Serve cached avatar PNG for an agent. No auth required — avatars are public assets."""
-    avatar_path = AVATAR_DIR / f"{agent_name}.png"
-    if not avatar_path.exists():
-        raise HTTPException(status_code=404, detail="No avatar found")
+    """Serve cached avatar for an agent. No auth required — avatars are public assets."""
+    webp_path = AVATAR_DIR / f"{agent_name}.webp"
+    png_path = AVATAR_DIR / f"{agent_name}.png"
 
-    return FileResponse(
-        avatar_path,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    if webp_path.exists():
+        return FileResponse(
+            webp_path,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    if png_path.exists():
+        return FileResponse(
+            png_path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    raise HTTPException(status_code=404, detail="No avatar found")
 
 
 @router.get("/{agent_name}/avatar/reference")
@@ -228,15 +237,15 @@ async def get_avatar_identity(
         raise HTTPException(status_code=403, detail="Access denied")
 
     identity = db.get_avatar_identity(agent_name)
-    avatar_path = AVATAR_DIR / f"{agent_name}.png"
-    ref_path = AVATAR_DIR / f"{agent_name}_ref.png"
+    has_avatar = (AVATAR_DIR / f"{agent_name}.webp").exists() or (AVATAR_DIR / f"{agent_name}.png").exists()
+    has_reference = (AVATAR_DIR / f"{agent_name}_ref.png").exists()
 
     return {
         "agent_name": agent_name,
         "identity_prompt": identity["identity_prompt"] if identity else None,
         "updated_at": identity["updated_at"] if identity else None,
-        "has_avatar": avatar_path.exists(),
-        "has_reference": ref_path.exists(),
+        "has_avatar": has_avatar,
+        "has_reference": has_reference,
     }
 
 
@@ -280,8 +289,8 @@ async def _generate_emotions_background(
                 agent_name=agent_name,
             )
             if result.success and result.image_data:
-                emotion_path = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png"
-                emotion_path.write_bytes(result.image_data)
+                emotion_path = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.webp"
+                emotion_path.write_bytes(optimize_avatar(result.image_data))
                 logger.info(
                     f"[AVATAR-002] Saved emotion '{emotion}' for {agent_name}: "
                     f"{len(result.image_data)} bytes"
@@ -304,7 +313,9 @@ async def get_avatar_emotions(agent_name: str):
     """Return which emotion variant PNGs exist on disk for an agent. No auth required."""
     available = []
     for emotion in AVATAR_EMOTIONS:
-        if (AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png").exists():
+        if (AVATAR_DIR / f"{agent_name}_emotion_{emotion}.webp").exists():
+            available.append(emotion)
+        elif (AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png").exists():
             available.append(emotion)
     return {"agent_name": agent_name, "emotions": available}
 
@@ -318,15 +329,23 @@ async def get_avatar_emotion(agent_name: str, emotion: str):
             detail=f"Invalid emotion. Must be one of: {AVATAR_EMOTIONS}",
         )
 
-    emotion_path = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png"
-    if not emotion_path.exists():
-        raise HTTPException(status_code=404, detail="Emotion variant not found")
+    webp_path = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.webp"
+    png_path = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png"
 
-    return FileResponse(
-        emotion_path,
-        media_type="image/png",
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    if webp_path.exists():
+        return FileResponse(
+            webp_path,
+            media_type="image/webp",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    if png_path.exists():
+        return FileResponse(
+            png_path,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    raise HTTPException(status_code=404, detail="Emotion variant not found")
 
 
 @router.post("/{agent_name}/avatar/generate")
@@ -371,18 +390,24 @@ async def generate_avatar(
     if not result.success:
         raise HTTPException(status_code=422, detail=result.error)
 
-    # Save avatar and reference image to disk
+    # Save optimized display avatar (.webp) and full-quality reference (.png)
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
-    avatar_path = AVATAR_DIR / f"{agent_name}.png"
+    avatar_path = AVATAR_DIR / f"{agent_name}.webp"
     ref_path = AVATAR_DIR / f"{agent_name}_ref.png"
-    avatar_path.write_bytes(result.image_data)
-    ref_path.write_bytes(result.image_data)  # First generation = reference
+    avatar_path.write_bytes(optimize_avatar(result.image_data))
+    ref_path.write_bytes(result.image_data)  # Full quality PNG for Gemini input
+
+    # Remove legacy .png display avatar if present
+    legacy_avatar = AVATAR_DIR / f"{agent_name}.png"
+    if legacy_avatar.exists():
+        legacy_avatar.unlink()
 
     # Delete any existing emotion files (AVATAR-002) — new reference invalidates them
     for emotion in AVATAR_EMOTIONS:
-        ep = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png"
-        if ep.exists():
-            ep.unlink()
+        for ext in (".webp", ".png"):
+            ep = AVATAR_DIR / f"{agent_name}_emotion_{emotion}{ext}"
+            if ep.exists():
+                ep.unlink()
 
     # Kick off background emotion generation (AVATAR-002)
     asyncio.create_task(
@@ -445,9 +470,9 @@ async def regenerate_avatar(
     if not result.success:
         raise HTTPException(status_code=422, detail=result.error)
 
-    # Save as display avatar only (reference stays the same)
-    avatar_path = AVATAR_DIR / f"{agent_name}.png"
-    avatar_path.write_bytes(result.image_data)
+    # Save as optimized display avatar only (reference stays the same)
+    avatar_path = AVATAR_DIR / f"{agent_name}.webp"
+    avatar_path.write_bytes(optimize_avatar(result.image_data))
 
     now = datetime.now(timezone.utc).isoformat()
     db.set_avatar_identity(agent_name, identity["identity_prompt"], now)
@@ -476,17 +501,19 @@ async def delete_avatar(
     if not (is_admin or is_owner):
         raise HTTPException(status_code=403, detail="Only the agent owner can remove avatars")
 
-    # Delete files (display + reference + emotion variants)
-    avatar_path = AVATAR_DIR / f"{agent_name}.png"
+    # Delete files (display + reference + emotion variants, both formats)
+    for ext in (".webp", ".png"):
+        p = AVATAR_DIR / f"{agent_name}{ext}"
+        if p.exists():
+            p.unlink()
     ref_path = AVATAR_DIR / f"{agent_name}_ref.png"
-    if avatar_path.exists():
-        avatar_path.unlink()
     if ref_path.exists():
         ref_path.unlink()
     for emotion in AVATAR_EMOTIONS:
-        ep = AVATAR_DIR / f"{agent_name}_emotion_{emotion}.png"
-        if ep.exists():
-            ep.unlink()
+        for ext in (".webp", ".png"):
+            ep = AVATAR_DIR / f"{agent_name}_emotion_{emotion}{ext}"
+            if ep.exists():
+                ep.unlink()
 
     # Clear DB
     db.clear_avatar_identity(agent_name)

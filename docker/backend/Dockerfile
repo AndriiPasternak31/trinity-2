@@ -23,7 +23,8 @@ RUN pip install --no-cache-dir \
     croniter==5.0.1 \
     pytz==2024.2 \
     psutil==6.1.1 \
-    payments-py==1.2.1
+    payments-py==1.2.1 \
+    Pillow==11.1.0
 
 # Copy all backend source files
 COPY ../../src/backend/main.py /app/

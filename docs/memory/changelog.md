@@ -1,4 +1,39 @@
 ### 2026-03-09
+🔧 **Fix: Scheduled tasks now show in capacity meter (slot tracking)**
+
+Scheduled task executions (cron and manual triggers) were not appearing in the Dashboard capacity meter because the scheduler called agent containers directly, bypassing the backend's `SlotService`. Now the scheduler routes through the backend's `POST /api/internal/execute-task` endpoint, which delegates to `TaskExecutionService` for unified slot management, activity tracking, credential sanitization, and Dashboard visibility.
+
+- Added `POST /api/internal/execute-task` endpoint to `src/backend/routers/internal.py`
+- Updated `src/scheduler/service.py` to call backend internal API instead of agent directly
+- Removed unused `_track_activity_start()`, `_complete_activity()` methods and `AgentClient` import from scheduler
+- Added `_call_backend_execute_task()` method using `httpx` with shared-secret auth
+
+**Modified files:**
+- `src/backend/routers/internal.py` — New `InternalTaskExecutionRequest` model and `/execute-task` endpoint
+- `src/scheduler/service.py` — Route execution through backend, remove direct agent calls
+
+---
+
+⚡ **Performance: Avatar image optimization — WebP conversion + cache-busting fix**
+
+Avatars now stored as optimized WebP (~30-50KB) instead of raw PNG (~1.2-2.0MB). Reduces per-agent storage from ~18MB to ~500KB and eliminates redundant 2MB network re-downloads during emotion cycling.
+
+- Added Pillow dependency for image processing
+- New `utils/image_optimize.py`: resizes to 512x512, converts to WebP quality=85
+- Display avatars + emotions saved as `.webp`; reference images stay full-quality `.png` (Gemini input)
+- All serving endpoints return `image/webp` with `.png` fallback for existing avatars
+- Emotion cycling uses stable `?v={updated_at}` cache key instead of `Date.now()` per cycle
+- Delete/rename operations handle both `.webp` and `.png` formats
+
+**Modified files:**
+- `docker/backend/Dockerfile` — Add Pillow==11.1.0
+- `src/backend/utils/image_optimize.py` — NEW: optimize_avatar() function
+- `src/backend/routers/avatar.py` — WebP saves, optimized serving, format fallbacks
+- `src/backend/routers/agents.py` — WebP-aware delete/rename with .png fallback
+- `src/frontend/src/views/AgentDetail.vue` — Stable emotion cache key
+
+---
+
 🔒 **Security: Implement immediate actions from security analysis (C-001, C-002, C-003, M-004, M-006, H-002, H-005)**
 
 Seven security fixes from the OWASP-based security analysis:

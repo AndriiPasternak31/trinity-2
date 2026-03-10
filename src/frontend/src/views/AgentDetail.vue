@@ -689,7 +689,8 @@ function cycleEmotion() {
     return
   }
   const emotion = availableEmotions.value[Math.floor(Math.random() * availableEmotions.value.length)]
-  emotionAvatarUrl.value = `/api/agents/${agent.value.name}/avatar/emotion/${emotion}?v=${Date.now()}`
+  const avatarVersion = agent.value.avatar_url?.split('v=')[1] || '1'
+  emotionAvatarUrl.value = `/api/agents/${agent.value.name}/avatar/emotion/${emotion}?v=${avatarVersion}`
 }
 
 function startEmotionCycling() {

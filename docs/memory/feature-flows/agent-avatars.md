@@ -1,7 +1,7 @@
 # Feature: Agent Avatars (AVATAR-001, AVATAR-002, AVATAR-003)
 
 ## Overview
-AI-generated circular avatars for agents using Gemini image generation, with a reference image system for quick variations, two-button hover UI, and fallback to deterministic gradient initials.
+AI-generated circular avatars for agents using Gemini image generation, with a reference image system for quick variations, two-button hover UI, and fallback to deterministic gradient initials. Display images are optimized to WebP format (~30-50KB) via Pillow; reference images stay as full-quality PNG for Gemini input.
 
 ## User Story
 As an agent owner, I want to generate a custom avatar for my agent from a text description, and quickly regenerate variations without re-entering my prompt, so that my agents are visually distinguishable across the platform.
@@ -154,8 +154,10 @@ AgentHeader emits 'cycle-emotion'
   -> AgentDetail.vue @cycle-emotion="cycleEmotion"
     -> cycleEmotion():
       1. Pick random emotion from availableEmotions
-      2. Set emotionAvatarUrl to /api/agents/{name}/avatar/emotion/{emotion}?v={timestamp}
-      3. AgentHeader crossfade transition renders new image (1s ease)
+      2. Extract stable version from agent.avatar_url (?v={updated_at})
+      3. Set emotionAvatarUrl to /api/agents/{name}/avatar/emotion/{emotion}?v={updated_at}
+         (stable key enables browser caching — same emotion URL until avatar is regenerated)
+      4. AgentHeader crossfade transition renders new image (1s ease)
 ```
 
 ---
@@ -171,11 +173,12 @@ app.include_router(avatar_router)  # Agent Avatars (AVATAR-001)
 
 Prefix: `/api/agents`, Tags: `["avatars"]`
 
-#### Endpoint: GET `/{agent_name}/avatar` (line 31)
+#### Endpoint: GET `/{agent_name}/avatar`
 - **Auth**: None (public asset)
-- **Returns**: `FileResponse` with PNG from `/data/avatars/{agent_name}.png`
+- **Returns**: `FileResponse` — checks `.webp` first, falls back to `.png` for legacy avatars
+- **Content-Type**: `image/webp` (new avatars) or `image/png` (legacy fallback)
 - **Cache**: `Cache-Control: public, max-age=86400` (24 hours)
-- **Error**: 404 if no avatar file exists
+- **Error**: 404 if neither `.webp` nor `.png` file exists
 
 #### Endpoint: GET `/{agent_name}/avatar/reference` (line 45)
 - **Auth**: None (public asset)
@@ -183,47 +186,54 @@ Prefix: `/api/agents`, Tags: `["avatars"]`
 - **Cache**: `Cache-Control: no-cache` (always fresh -- reference may change on re-generate)
 - **Error**: 404 if no reference image exists
 
-#### Endpoint: GET `/{agent_name}/avatar/identity` (line 59)
+#### Endpoint: GET `/{agent_name}/avatar/identity`
 - **Auth**: Required (access control check via `can_user_access_agent`)
 - **Returns**: `{agent_name, identity_prompt, updated_at, has_avatar, has_reference}`
-- **`has_reference`** (line 77): checks `Path("/data/avatars/{agent_name}_ref.png").exists()`
+- **`has_avatar`**: checks `.webp` OR `.png` existence
+- **`has_reference`**: checks `{agent_name}_ref.png` existence
 - **Error**: 403 if user cannot access agent
 
-#### Endpoint: POST `/{agent_name}/avatar/generate` (line 81)
+#### Endpoint: POST `/{agent_name}/avatar/generate`
 - **Auth**: Required (owner or admin only)
 - **Request Body**: `{identity_prompt: string}` (max 500 chars)
 - **Flow**:
-  1. Validate ownership (owner or admin, line 88-96)
-  2. Validate prompt (non-empty, <= 500 chars, lines 98-103)
-  3. Check image generation service availability (GEMINI_API_KEY, lines 105-110)
-  4. Call `service.generate_image(prompt, use_case="avatar", aspect_ratio="1:1", refine_prompt=True, agent_name=agent_name)` (lines 112-118)
-  5. Save PNG to BOTH `/data/avatars/{agent_name}.png` AND `/data/avatars/{agent_name}_ref.png` (lines 124-128)
-  6. Update DB: `db.set_avatar_identity(agent_name, prompt, timestamp)` (lines 131-132)
+  1. Validate ownership (owner or admin)
+  2. Validate prompt (non-empty, <= 500 chars)
+  3. Check image generation service availability (GEMINI_API_KEY)
+  4. Call `service.generate_image(prompt, use_case="avatar", aspect_ratio="1:1", refine_prompt=True, agent_name=agent_name)`
+  5. Save optimized WebP display avatar: `/data/avatars/{agent_name}.webp` via `optimize_avatar()`
+  6. Save full-quality PNG reference: `/data/avatars/{agent_name}_ref.png` (raw Gemini output)
+  7. Remove legacy `.png` display avatar if present
+  8. Delete existing emotion files (both `.webp` and `.png`)
+  9. Kick off background emotion generation
+  10. Update DB: `db.set_avatar_identity(agent_name, prompt, timestamp)`
 - **Returns**: `{agent_name, identity_prompt, refined_prompt, updated_at}`
-- **Key**: First generation saves same image as both display and reference. Subsequent regenerations only update display.
+- **Key**: Display avatar is optimized WebP (~30-50KB). Reference stays full-quality PNG for Gemini variation input.
 - **Errors**: 404 (not found), 403 (not owner), 400 (empty/too long), 501 (no API key), 422 (generation failed)
 
-#### Endpoint: POST `/{agent_name}/avatar/regenerate` (line 144)
+#### Endpoint: POST `/{agent_name}/avatar/regenerate`
 - **Auth**: Required (owner or admin only)
 - **Request Body**: None (empty POST)
 - **Flow**:
-  1. Validate ownership (lines 150-157)
-  2. Check reference image exists at `/data/avatars/{agent_name}_ref.png` (lines 160-162)
-  3. Check stored identity prompt exists in DB (lines 164-166)
-  4. Check image generation service availability (lines 168-173)
-  5. Read reference bytes: `ref_path.read_bytes()` (line 175)
-  6. Call `service.generate_variation(prompt, reference_image=reference_bytes, aspect_ratio="1:1", agent_name=agent_name)` (lines 176-181)
-  7. Save PNG to display only: `/data/avatars/{agent_name}.png` (lines 187-188) -- reference stays unchanged
-  8. Update DB timestamp: `db.set_avatar_identity(agent_name, identity["identity_prompt"], now)` (line 191)
+  1. Validate ownership
+  2. Check reference image exists at `/data/avatars/{agent_name}_ref.png`
+  3. Check stored identity prompt exists in DB
+  4. Check image generation service availability
+  5. Read reference bytes: `ref_path.read_bytes()`
+  6. Call `service.generate_variation(prompt, reference_image=reference_bytes, aspect_ratio="1:1", agent_name=agent_name)`
+  7. Save optimized WebP to display only: `/data/avatars/{agent_name}.webp` via `optimize_avatar()` — reference stays unchanged
+  8. Update DB timestamp
 - **Returns**: `{agent_name, identity_prompt, updated_at}`
 - **Errors**: 404 (agent not found / no reference image / no identity prompt), 403, 501, 422
 
-#### Endpoint: DELETE `/{agent_name}/avatar` (line 202)
+#### Endpoint: DELETE `/{agent_name}/avatar`
 - **Auth**: Required (owner or admin only)
 - **Flow**:
-  1. Validate ownership (lines 208-215)
-  2. Delete both files: `/data/avatars/{agent_name}.png` AND `/data/avatars/{agent_name}_ref.png` (lines 218-223)
-  3. Clear DB: `db.clear_avatar_identity(agent_name)` (line 226)
+  1. Validate ownership
+  2. Delete display avatar (both `.webp` and `.png`)
+  3. Delete reference: `{agent_name}_ref.png`
+  4. Delete emotion variants (both `.webp` and `.png` for each emotion)
+  5. Clear DB: `db.clear_avatar_identity(agent_name)`
 - **Returns**: `{message: "Avatar removed for {agent_name}"}`
 
 ### Image Generation Pipeline
@@ -254,6 +264,22 @@ The avatar generation uses the shared image generation service (IMG-001).
 - Accepts optional `reference_image: bytes` and `reference_mime_type: str` parameters
 - When reference provided, it is included as an `inlineData` part before the text prompt (lines 256-262)
 - The parts list is: `[{inlineData: {mimeType, data: base64}}, {text: prompt}]`
+
+### Image Optimization Pipeline
+
+**File**: `src/backend/utils/image_optimize.py`
+**Dependency**: `Pillow==11.1.0` (added to `docker/backend/Dockerfile`)
+
+```python
+optimize_avatar(image_bytes: bytes, max_size: int = 512) -> bytes
+```
+
+1. Opens raw image bytes (PNG from Gemini, typically ~1024x1024, 1.2-2.0 MB)
+2. Resizes to fit within `max_size x max_size` preserving aspect ratio (via `Image.thumbnail` with `LANCZOS`)
+3. Converts to WebP format with quality=85
+4. Returns WebP bytes (~30-50KB)
+
+**Applied to**: Display avatars (main + emotions). **NOT applied to**: Reference images (Gemini needs full-quality input).
 
 ### Avatar Prompt Engineering (Dark Mode Style)
 
@@ -295,22 +321,15 @@ Two code paths construct the `avatar_url` field:
 
 ### Avatar Cleanup on Agent Operations
 
-**On Delete** (`src/backend/routers/agents.py:422-428`):
-```python
-avatar_path = Path("/data/avatars") / f"{agent_name}.png"
-if avatar_path.exists():
-    avatar_path.unlink()
-```
-**NOTE**: The delete path only removes `{agent_name}.png`. It does NOT remove `{agent_name}_ref.png`. However, the avatar router's own `DELETE /{agent_name}/avatar` endpoint (line 202) does clean up both files. The gap is in the agent deletion code path in `agents.py`.
+**On Delete** (`src/backend/routers/agents.py`):
+- Deletes display avatar (both `.webp` and `.png`)
+- Deletes reference: `{agent_name}_ref.png`
+- Deletes all emotion variants (both `.webp` and `.png` for each emotion)
 
-**On Rename** (`src/backend/routers/agents.py:1511-1518`):
-```python
-old_avatar = Path("/data/avatars") / f"{agent_name}.png"
-new_avatar = Path("/data/avatars") / f"{sanitized_name}.png"
-if old_avatar.exists():
-    old_avatar.rename(new_avatar)
-```
-**NOTE**: The rename path only renames `{agent_name}.png`. It does NOT rename `{agent_name}_ref.png`. This means after a rename, the reference image is orphaned and regeneration will fail (404 "No reference image found").
+**On Rename** (`src/backend/routers/agents.py`):
+- Renames display avatar (both `.webp` and `.png` if they exist)
+- Renames reference: `{agent_name}_ref.png` → `{new_name}_ref.png`
+- Renames all emotion variants (both `.webp` and `.png` for each emotion)
 
 ### Configuration
 
@@ -322,8 +341,11 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", 
 Avatar directory: `/data/avatars/` (created on first generate, bind-mounted from host)
 
 Files per agent:
-- `/data/avatars/{agent_name}.png` -- display avatar (served by `GET /avatar`)
-- `/data/avatars/{agent_name}_ref.png` -- reference image (served by `GET /avatar/reference`)
+- `/data/avatars/{agent_name}.webp` — optimized display avatar (~30-50KB, served by `GET /avatar`)
+- `/data/avatars/{agent_name}_ref.png` — full-quality reference image (served by `GET /avatar/reference`, used as Gemini input)
+- `/data/avatars/{agent_name}_emotion_{emotion}.webp` — optimized emotion variants (8 files, ~30-50KB each)
+
+Legacy `.png` display/emotion files are served via fallback until the avatar is regenerated.
 
 ---
 
@@ -383,11 +405,13 @@ The `get_all_agent_metadata()` method (`src/backend/db/agents.py:846`) includes 
 
 ## Side Effects
 
-- **File System**: Avatar PNGs stored at `/data/avatars/{agent_name}.png` (display) and `/data/avatars/{agent_name}_ref.png` (reference)
+- **File System**: Display avatars stored as optimized WebP at `/data/avatars/{agent_name}.webp` (~30-50KB); reference images as full-quality PNG at `/data/avatars/{agent_name}_ref.png`; emotion variants as WebP at `/data/avatars/{agent_name}_emotion_{emotion}.webp`
+- **Image Optimization**: All display images (avatar + emotions) are processed by `utils/image_optimize.py`: resized to 512x512 max, converted to WebP quality=85 via Pillow. Reference images are NOT optimized (Gemini needs high-quality input).
 - **No WebSocket**: Avatar changes do not broadcast WebSocket events (user refreshes to see update)
 - **No Activity Tracking**: Avatar generation is not tracked as an agent activity
-- **Cache-busting**: `?v={updated_at}` query param forces browser cache invalidation on re-generation
+- **Cache-busting**: `?v={updated_at}` query param forces browser cache invalidation on re-generation. Emotion cycling uses this same stable key (not `Date.now()`), enabling browser caching of previously-loaded emotions.
 - **Reference image no-cache**: Reference endpoint uses `Cache-Control: no-cache` to always serve fresh content
+- **Backward compatibility**: Serving endpoints fall back to `.png` if `.webp` doesn't exist, supporting pre-optimization avatars without migration
 
 ---
 
@@ -424,7 +448,7 @@ The `get_all_agent_metadata()` method (`src/backend/db/agents.py:846`) includes 
 1. **Generate Avatar (First Time)**
    **Action**: Navigate to agent detail, hover over avatar area (left edge of header), click camera icon, enter "a wise owl with spectacles", click Generate
    **Expected**: Modal shows spinner, then closes. Avatar appears in header with indigo ring border.
-   **Verify**: `GET /api/agents/{name}/avatar` returns PNG. `GET /api/agents/{name}/avatar/reference` also returns PNG (same image). Avatar displays in agent list, dashboard nodes.
+   **Verify**: `GET /api/agents/{name}/avatar` returns WebP (~30-50KB). `GET /api/agents/{name}/avatar/reference` returns PNG (full quality). Avatar displays in agent list, dashboard nodes.
 
 2. **Regenerate Variation (Two-Button UI)**
    **Action**: Hover over avatar. Two buttons appear (refresh + pencil). Click the refresh icon (left button).
@@ -452,13 +476,11 @@ The `get_all_agent_metadata()` method (`src/backend/db/agents.py:846`) includes 
 
 7. **Avatar Survives Rename**
    **Action**: Rename agent from "my-agent" to "new-agent"
-   **Expected**: Display avatar file renamed from `my-agent.png` to `new-agent.png`. Avatar still displays after rename.
-   **Known Gap**: Reference file `my-agent_ref.png` is NOT renamed. Regeneration will fail after rename until a new avatar is generated.
+   **Expected**: Display avatar (`.webp`), reference (`.png`), and all emotion variants renamed. Avatar still displays after rename.
 
 8. **Avatar Cleaned Up on Delete**
    **Action**: Delete agent with avatar
-   **Expected**: Display avatar file removed from `/data/avatars/`.
-   **Known Gap**: Reference file `{agent}_ref.png` is NOT cleaned up by the agent delete path in `agents.py:424`. It remains as an orphan.
+   **Expected**: All avatar files (`.webp` display, `.png` reference, emotion variants in both formats) removed from `/data/avatars/`.
 
 9. **No API Key**
    **Action**: Remove GEMINI_API_KEY, try to generate avatar
@@ -506,7 +528,8 @@ After generating a new avatar, the backend automatically generates 8 emotion var
 ### Storage
 
 Files per agent (in addition to base + ref):
-- `/data/avatars/{agent_name}_emotion_{emotion}.png` (8 files)
+- `/data/avatars/{agent_name}_emotion_{emotion}.webp` (8 files, optimized ~30-50KB each)
+- Legacy `.png` emotion files are served via fallback until regenerated
 
 ### Backend
 
@@ -526,16 +549,16 @@ Files per agent (in addition to base + ref):
 - Individual failures logged but don't stop the loop
 
 **New endpoints**:
-- `GET /{agent_name}/avatar/emotions` — No auth. Returns `{"agent_name", "emotions": ["happy", ...]}`
-- `GET /{agent_name}/avatar/emotion/{emotion}` — No auth. Serves PNG with 24h cache. Validates emotion name.
+- `GET /{agent_name}/avatar/emotions` — No auth. Returns `{"agent_name", "emotions": ["happy", ...]}`. Checks both `.webp` and `.png`.
+- `GET /{agent_name}/avatar/emotion/{emotion}` — No auth. Serves WebP (or PNG fallback) with 24h cache. Validates emotion name.
 
 **Modified endpoints**:
-- `POST /{agent_name}/avatar/generate` — After saving avatar+ref, deletes old emotion files, kicks off background emotion generation
-- `DELETE /{agent_name}/avatar` — Also deletes all `_emotion_{name}.png` files
+- `POST /{agent_name}/avatar/generate` — Saves optimized WebP + full-quality ref PNG, deletes old emotion files (both formats), kicks off background emotion generation
+- `DELETE /{agent_name}/avatar` — Deletes all emotion files (both `.webp` and `.png`)
 
 #### Agent Operations (`src/backend/routers/agents.py`)
-- **Delete** — Also deletes `_emotion_{name}.png` files
-- **Rename** — Also renames `_emotion_{name}.png` files
+- **Delete** — Deletes display (`.webp` + `.png`), reference, and all emotion files (both formats)
+- **Rename** — Renames display (`.webp` + `.png`), reference, and all emotion files (both formats)
 
 ### Frontend
 
@@ -552,7 +575,7 @@ Files per agent (in addition to base + ref):
 
 **Functions**:
 - `loadAvailableEmotions()` — GET `/api/agents/{name}/avatar/emotions`
-- `cycleEmotion()` — picks random emotion, sets URL with cache-bust
+- `cycleEmotion()` — picks random emotion, sets URL with stable `?v={updated_at}` cache key (enables browser caching)
 - `startEmotionCycling()` — clears old timer, calls `cycleEmotion()`, sets 30s interval
 - `stopEmotionCycling()` — clears interval, resets URL to null
 
@@ -646,7 +669,7 @@ Settings.vue button click
        2. image_generation_service.generate_image(prompt, use_case="avatar")
           -> Gemini Flash refines prompt (same AVATAR_BEST_PRACTICES)
           -> Gemini Image model generates portrait
-       3. Save PNG to /data/avatars/{name}.png (no _ref.png, no emotions)
+       3. Save optimized WebP to /data/avatars/{name}.webp via optimize_avatar() (no _ref.png, no emotions)
        4. db.set_default_avatar(name, prompt, now)
     -> Return summary {generated, failed, skipped, agents, errors, message}
 ```

@@ -422,14 +422,18 @@ async def delete_agent_endpoint(agent_name: str, request: Request, current_user:
 
     # Delete cached avatar, reference, and emotion images (AVATAR-001, AVATAR-002)
     try:
-        for suffix in (f"{agent_name}.png", f"{agent_name}_ref.png"):
-            p = Path("/data/avatars") / suffix
+        for ext in (".webp", ".png"):
+            p = Path("/data/avatars") / f"{agent_name}{ext}"
             if p.exists():
                 p.unlink()
+        ref = Path("/data/avatars") / f"{agent_name}_ref.png"
+        if ref.exists():
+            ref.unlink()
         for emotion in AVATAR_EMOTIONS:
-            p = Path("/data/avatars") / f"{agent_name}_emotion_{emotion}.png"
-            if p.exists():
-                p.unlink()
+            for ext in (".webp", ".png"):
+                p = Path("/data/avatars") / f"{agent_name}_emotion_{emotion}{ext}"
+                if p.exists():
+                    p.unlink()
     except Exception as e:
         logger.warning(f"Failed to delete avatar for agent {agent_name}: {e}")
 
@@ -1516,16 +1520,22 @@ async def rename_agent_endpoint(
 
         # Rename cached avatar, reference, and emotion image files (AVATAR-001, AVATAR-002)
         try:
-            for suffix in ("", "_ref"):
-                old_path = Path("/data/avatars") / f"{agent_name}{suffix}.png"
-                new_path = Path("/data/avatars") / f"{sanitized_name}{suffix}.png"
+            for ext in (".webp", ".png"):
+                old_path = Path("/data/avatars") / f"{agent_name}{ext}"
+                new_path = Path("/data/avatars") / f"{sanitized_name}{ext}"
                 if old_path.exists():
                     old_path.rename(new_path)
+            # Reference stays .png
+            old_ref = Path("/data/avatars") / f"{agent_name}_ref.png"
+            new_ref = Path("/data/avatars") / f"{sanitized_name}_ref.png"
+            if old_ref.exists():
+                old_ref.rename(new_ref)
             for emotion in AVATAR_EMOTIONS:
-                old_path = Path("/data/avatars") / f"{agent_name}_emotion_{emotion}.png"
-                new_path = Path("/data/avatars") / f"{sanitized_name}_emotion_{emotion}.png"
-                if old_path.exists():
-                    old_path.rename(new_path)
+                for ext in (".webp", ".png"):
+                    old_path = Path("/data/avatars") / f"{agent_name}_emotion_{emotion}{ext}"
+                    new_path = Path("/data/avatars") / f"{sanitized_name}_emotion_{emotion}{ext}"
+                    if old_path.exists():
+                        old_path.rename(new_path)
         except Exception as e:
             logger.warning(f"Failed to rename avatar for agent {agent_name}: {e}")
 
