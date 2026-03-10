@@ -622,6 +622,7 @@ EMAIL_PROVIDER=console  # Use 'resend' or 'smtp' for production
 - [Gemini Support Guide](docs/GEMINI_SUPPORT.md) — Using Gemini CLI runtime for cost optimization
 - [Trinity Compatible Agent Guide](docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md) — Creating Trinity-compatible agents
 - [Multi-Agent System Guide](docs/MULTI_AGENT_SYSTEM_GUIDE.md) — Building multi-agent systems with coordinated workflows
+- [Use Cases & Evaluation](docs/use-cases-evaluation.md) — Categorized autonomous multi-agent use cases with comparative analysis
 - [Process Engine Design](docs/PROCESS_DRIVEN_PLATFORM/) — Process Engine architecture and design documents
 - [Testing Guide](docs/TESTING_GUIDE.md) — Testing approach and standards
 - [Contributing Guide](CONTRIBUTING.md) — How to contribute (PRs, code standards)
