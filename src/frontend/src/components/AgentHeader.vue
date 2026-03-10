@@ -94,8 +94,6 @@
             </span>
             <!-- Runtime badge (Claude/Gemini) -->
             <RuntimeBadge :runtime="agent.runtime" />
-            <!-- Agent type -->
-            <span class="text-xs text-gray-400 dark:text-gray-500">{{ agent.type }}</span>
             <!-- System agent badge -->
             <span
               v-if="agent.is_system"

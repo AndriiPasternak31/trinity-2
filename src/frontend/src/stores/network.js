@@ -447,7 +447,6 @@ export const useNetworkStore = defineStore('network', () => {
           data: {
             label: agent.name,
             status: agent.status,
-            type: agent.type || 'business-assistant',
             owner: agent.owner,
             runtime: agent.runtime || 'claude-code',
             githubRepo: agent.github_repo || null,
