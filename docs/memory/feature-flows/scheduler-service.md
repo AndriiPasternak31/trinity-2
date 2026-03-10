@@ -56,7 +56,7 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 2. Scheduler reads schedules from SQLite on startup
 3. APScheduler triggers jobs at cron times
 4. Scheduler acquires Redis lock before execution
-5. Scheduler sends task to agent via HTTP
+5. Scheduler calls backend's `POST /api/internal/execute-task` which routes through `TaskExecutionService` for slot management, activity tracking, agent HTTP call, and credential sanitization
 6. Scheduler publishes events to Redis for WebSocket relay
 
 ---
@@ -187,9 +187,11 @@ CronTrigger fires   -->         _execute_schedule()   -->       try_acquire_sche
                                                                 Publish "started" event
                                                                 |
                                                                 v
-                                                                agent_client.py:101
-                                                                client.task(message)
-                                                                POST /api/task
+                                                                POST /api/internal/execute-task
+                                                                (backend TaskExecutionService)
+                                                                → slot acquire, activity track,
+                                                                  agent HTTP call, sanitize,
+                                                                  slot release
                                                                 |
                                                                 v
                                                                 database.py:205
@@ -262,24 +264,27 @@ async def _execute_schedule_with_lock(self, schedule_id: str):
     })
 
     try:
-        # Send task to agent (MODEL-001: pass model to agent)
-        client = get_agent_client(schedule.agent_name)
-        task_response = await client.task(
-            schedule.message,
+        # Execute task via backend's unified TaskExecutionService
+        # This handles: slot acquire, activity tracking, agent HTTP call,
+        # credential sanitization, and slot release
+        result = await self._call_backend_execute_task(
+            agent_name=schedule.agent_name,
+            message=schedule.message,
+            triggered_by="schedule",
+            model=schedule.model,
+            timeout_seconds=schedule.timeout_seconds or config.agent_timeout,
+            allowed_tools=schedule.allowed_tools,
             execution_id=execution.id,
-            model=schedule.model
         )
 
-        # Update execution status with parsed response
+        # Update execution status from backend response
         self.db.update_execution_status(
             execution_id=execution.id,
             status="success",
-            response=task_response.response_text,
-            context_used=task_response.metrics.context_used,
-            context_max=task_response.metrics.context_max,
-            cost=task_response.metrics.cost_usd,
-            tool_calls=task_response.metrics.tool_calls_json,
-            execution_log=task_response.metrics.execution_log_json
+            response=result.get("response", ""),
+            context_used=result.get("context_used"),
+            context_max=result.get("context_max"),
+            cost=result.get("cost"),
         )
 
         # Update schedule last run time
@@ -298,8 +303,8 @@ async def _execute_schedule_with_lock(self, schedule_id: str):
             "status": "success"
         })
 
-    except AgentNotReachableError as e:
-        error_msg = f"Agent not reachable: {str(e)}"
+    except Exception as e:
+        error_msg = str(e)
         logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
 
         self.db.update_execution_status(
@@ -419,136 +424,29 @@ def _renewal_loop(self):
 
 ---
 
-## Flow 4: Agent Communication
+## Flow 4: Agent Communication (via Backend Internal API)
 
-**Purpose**: Send scheduled task to agent container via HTTP
+**Purpose**: Send scheduled task to backend's `TaskExecutionService`, which handles the full execution lifecycle (slot management, activity tracking, agent HTTP call, credential sanitization).
+
+> **Note**: Prior to 2026-03-09, the scheduler called agent containers directly via `AgentClient.task()`. This bypassed the `SlotService`, so scheduled executions did not appear in the capacity meter. The scheduler now routes through the backend's internal API.
 
 ```
-agent_client.py:101             agent-{name}:8000               Agent Server
-AgentClient.task()   -->        POST /api/task          -->     Execute Claude Code
-|                               {message, timeout,              |
-|                                execution_id,                  v
-|                                allowed_tools?}                Return response
-v                                                               with metrics
-_parse_task_response()  <-------  200 OK  <-----------------
-|                               {response, metadata,
-v                                execution_log}
-AgentTaskResponse
-(response_text, metrics)
+service.py                      Backend Internal API             TaskExecutionService
+_call_backend_execute_task()     POST /api/internal/              execute_task()
+  --> httpx.post()      -->     execute-task           -->       |
+      {agent_name,               internal.py                     +-- acquire slot
+       message,                                                  +-- track activity
+       triggered_by,                                             +-- POST agent /api/task
+       model?,                                                   +-- sanitize credentials
+       timeout_seconds,                                          +-- update execution
+       allowed_tools?,                                           +-- release slot
+       execution_id?}                                            |
+                                                                 v
+  <-- 200 OK  <---------------------------------------------   TaskExecutionResult
+      {execution_id, status, response, cost, ...}
 ```
 
-**Agent Client** (`agent_client.py:44-100`):
-```python
-class AgentClient:
-    """
-    HTTP client for agent container communication.
-
-    Designed for scheduler use - focuses on task execution.
-    """
-
-    def __init__(self, agent_name: str, timeout: float = None):
-        self.agent_name = agent_name
-        self.base_url = f"http://agent-{agent_name}:8000"
-        self.timeout = timeout or config.agent_timeout
-
-    async def task(
-        self,
-        message: str,
-        timeout: float = None,
-        execution_id: Optional[str] = None,
-        allowed_tools: Optional[List[str]] = None,
-        model: Optional[str] = None          # MODEL-001
-    ) -> AgentTaskResponse:
-        """
-        Execute a stateless task on the agent.
-
-        This endpoint:
-        - Does NOT maintain conversation history
-        - Each call is independent
-        - Returns raw Claude Code execution log
-        - Supports per-schedule timeout, tool restrictions (2026-02-20), and model override (2026-03-02)
-        """
-        timeout = timeout or self.timeout
-
-        payload = {"message": message, "timeout_seconds": int(timeout)}
-        if execution_id:
-            payload["execution_id"] = execution_id
-        if allowed_tools:
-            payload["allowed_tools"] = allowed_tools
-        if model:
-            payload["model"] = model           # MODEL-001
-
-        response = await self._request(
-            "POST",
-            "/api/task",
-            json=payload,
-            timeout=timeout + 10  # Add buffer to agent timeout
-        )
-
-        if response.status_code >= 400:
-            error_msg = self._extract_error_detail(response)
-            raise AgentRequestError(error_msg, status_code=response.status_code)
-
-        result = response.json()
-        return self._parse_task_response(result)
-```
-
-**Response Parsing** (`agent_client.py:176-228`):
-```python
-def _parse_task_response(self, result: Dict[str, Any]) -> AgentTaskResponse:
-    """
-    Parse agent task response into structured data.
-
-    Extracts:
-    - Response text
-    - Context usage
-    - Cost
-    - Execution log
-    - Session ID (for --resume support, EXEC-023)
-    """
-    # Extract response text
-    response_text = result.get("response", str(result))
-    if len(response_text) > 10000:
-        response_text = response_text[:10000] + "... (truncated)"
-
-    # Extract observability data
-    metadata = result.get("metadata", {})
-    execution_log = result.get("execution_log")
-
-    # Context usage
-    context_used = metadata.get("input_tokens", 0)
-    context_max = metadata.get("context_window", 200000)
-    context_percent = round(context_used / max(context_max, 1) * 100, 1)
-
-    # Cost
-    cost = metadata.get("cost_usd")
-
-    # Claude Code session ID for --resume support (EXEC-023)
-    session_id = result.get("session_id") or metadata.get("session_id")
-
-    # Execution log - raw Claude Code transcript
-    tool_calls_json = None
-    execution_log_json = None
-    if execution_log is not None:
-        execution_log_json = json.dumps(execution_log)
-        tool_calls_json = execution_log_json
-
-    metrics = AgentTaskMetrics(
-        context_used=context_used,
-        context_max=context_max,
-        context_percent=context_percent,
-        cost_usd=cost,
-        tool_calls_json=tool_calls_json,
-        execution_log_json=execution_log_json,
-        session_id=session_id  # EXEC-023
-    )
-
-    return AgentTaskResponse(
-        response_text=response_text,
-        metrics=metrics,
-        raw_response=result
-    )
-```
+The `agent_client.py` module still exists for reference but is no longer used in the main execution path. The `TaskExecutionService` in the backend handles the actual agent HTTP calls via `agent_post_with_retry()`.
 
 ---
 
@@ -1111,12 +1009,12 @@ schedules.py:trigger_schedule    main.py:_trigger_handler        internal.py:tra
                                    → create_task(_execute_manual)   → WebSocket broadcast
                                    → return immediately             |
                                                                     v
-                                   _execute_manual_trigger()     POST /api/internal/
-                                     → acquire lock               activities/{id}/complete
+                                   _execute_manual_trigger()
+                                     → acquire lock
                                      → _execute_schedule_with_lock
-                                       → _track_activity_start
-                                       → send task to agent
-                                       → _complete_activity
+                                       → POST /api/internal/execute-task
+                                         (TaskExecutionService handles
+                                          slots, activity, agent call)
 ```
 
 **Endpoint**: `POST /api/schedules/{schedule_id}/trigger` (scheduler service port 8001)
@@ -1134,49 +1032,31 @@ schedules.py:trigger_schedule    main.py:_trigger_handler        internal.py:tra
 
 ---
 
-## Flow 8: Activity Tracking via Internal API
+## Flow 8: Activity Tracking (via TaskExecutionService)
 
 **Purpose**: Create `agent_activities` records for Timeline dashboard visibility
 
 **Trigger**: Both cron-triggered and manual schedule executions
 
+> **Note**: As of 2026-03-09, activity tracking for scheduled executions is handled automatically by `TaskExecutionService` when the scheduler calls `POST /api/internal/execute-task`. The scheduler no longer calls the activity tracking endpoints directly. The activity endpoints (`/api/internal/activities/track` and `/api/internal/activities/{id}/complete`) still exist for other internal callers.
+
 ```
 Scheduler Service                     Backend Internal API
-_execute_schedule_with_lock()   -->   POST /api/internal/activities/track
-|                                     {agent_name, activity_type, ...}
+_execute_schedule_with_lock()   -->   POST /api/internal/execute-task
+|                                     {agent_name, message, ...}
 v                                     |
-Send task to agent                    v
-|                                     Creates agent_activities record
-v                                     Broadcasts via WebSocket
-_complete_activity()            -->   POST /api/internal/activities/{id}/complete
-                                      {status, details, error}
+(scheduler waits for response)        v
+                                      TaskExecutionService.execute_task()
+                                        → activity_service.track_activity(CHAT_START)
+                                        → POST to agent /api/task
+                                        → activity_service.complete_activity()
+                                        → slot_service.release_slot()
                                       |
                                       v
-                                      Updates activity record
-                                      Broadcasts completion via WebSocket
+<-- 200 OK  <----------------------   {execution_id, status, response, ...}
 ```
 
-**Internal API Endpoints** (no authentication - internal Docker network only):
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/internal/activities/track` | POST | Start tracking an activity |
-| `/api/internal/activities/{id}/complete` | POST | Mark activity as completed/failed |
-
-**Request Model** (`ActivityTrackRequest`):
-```python
-{
-    "agent_name": "my-agent",
-    "activity_type": "schedule_start",
-    "user_id": 1,  # optional
-    "triggered_by": "schedule",  # or "manual"
-    "related_execution_id": "exec-123",
-    "details": {
-        "schedule_id": "abc123",
-        "schedule_name": "Daily Report"
-    }
-}
-```
+**Slot management + activity tracking** are now unified with all other execution paths (sync, async, public) through the `TaskExecutionService`. This ensures scheduled executions appear on the Dashboard timeline capacity meter.
 
 ---
 
@@ -1245,6 +1125,7 @@ No immediate notification is needed from the backend.
 
 | Date | Change |
 |------|--------|
+| 2026-03-09 | **Unified Execution via TaskExecutionService**: Scheduler now calls `POST /api/internal/execute-task` instead of agent containers directly. This routes through `TaskExecutionService` for slot management, activity tracking, credential sanitization, and Dashboard capacity meter visibility. Removed direct `AgentClient` usage and manual activity tracking methods. See [parallel-capacity.md](parallel-capacity.md) and [task-execution-service.md](task-execution-service.md). |
 | 2026-03-02 | **MODEL-001 Model Selection**: `Schedule` dataclass has `model` field. `AgentClient.task()` accepts `model` parameter. `create_execution()` records `model_used`. `service.py` passes `schedule.model` to both execution record and agent client. See [model-selection.md](model-selection.md). |
 | 2026-03-01 | **Skipped Execution Recording (Issue #46)**: Added APScheduler event listener for `EVENT_JOB_MAX_INSTANCES`. Skipped executions are now recorded in database with `status='skipped'` instead of being silently dropped. Added `create_skipped_execution()` and `create_skipped_process_schedule_execution()` database methods. WebSocket event `schedule_execution_skipped` broadcast for real-time UI. Frontend displays skipped status with purple styling. |
 | 2026-02-21 | **Session ID Capture (EXEC-023)**: Added `claude_session_id` capture for "Continue as Chat" support. `AgentTaskMetrics` now includes `session_id` field. `_parse_task_response()` extracts from agent response. `update_execution_status()` stores in database. Scheduled executions now support "Continue as Chat" like manual executions. |

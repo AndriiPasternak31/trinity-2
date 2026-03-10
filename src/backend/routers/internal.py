@@ -3,7 +3,7 @@ Internal endpoints with shared-secret authentication (C-003).
 
 These endpoints are called by:
 - Agent containers on the Docker network to communicate back to the backend
-- Dedicated scheduler service (trinity-scheduler) for activity tracking
+- Dedicated scheduler service (trinity-scheduler) for task execution and activity tracking
 
 Security: Requires X-Internal-Secret header matching INTERNAL_API_SECRET env var.
 Falls back to SECRET_KEY if INTERNAL_API_SECRET is not set.
@@ -12,11 +12,12 @@ import os
 import hmac
 from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import logging
 
 from models import ActivityType
 from services.activity_service import activity_service
+from services.task_execution_service import get_task_execution_service
 
 logger = logging.getLogger(__name__)
 
@@ -163,4 +164,60 @@ async def complete_activity(activity_id: str, request: ActivityCompleteRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to complete activity: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Task Execution Endpoint (for dedicated scheduler)
+# =============================================================================
+
+class InternalTaskExecutionRequest(BaseModel):
+    """Request model for internal task execution via TaskExecutionService."""
+    agent_name: str
+    message: str
+    triggered_by: str = "schedule"
+    model: Optional[str] = None
+    timeout_seconds: int = 900
+    allowed_tools: Optional[List[str]] = None
+    execution_id: Optional[str] = None
+
+
+@router.post("/execute-task")
+async def execute_task_internal(request: InternalTaskExecutionRequest):
+    """
+    Execute a task via the unified TaskExecutionService.
+
+    Called by the dedicated scheduler for cron-triggered and manually-triggered
+    schedule executions. Routes through the same code path as authenticated
+    /task and public chat endpoints, ensuring consistent slot management,
+    activity tracking, credential sanitization, and dashboard visibility.
+
+    The scheduler creates the execution record before calling this endpoint
+    and passes the execution_id so the service skips record creation.
+    """
+    try:
+        task_service = get_task_execution_service()
+        result = await task_service.execute_task(
+            agent_name=request.agent_name,
+            message=request.message,
+            triggered_by=request.triggered_by,
+            model=request.model,
+            timeout_seconds=request.timeout_seconds,
+            allowed_tools=request.allowed_tools,
+            execution_id=request.execution_id,
+        )
+
+        return {
+            "execution_id": result.execution_id,
+            "status": result.status,
+            "response": result.response,
+            "cost": result.cost,
+            "context_used": result.context_used,
+            "context_max": result.context_max,
+            "session_id": result.session_id,
+            "error": result.error,
+        }
+
+    except Exception as e:
+        logger.error(f"Internal task execution failed for {request.agent_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

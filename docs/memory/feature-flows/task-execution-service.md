@@ -14,7 +14,7 @@ This is a **backend service** -- no direct UI entry point. Callers are:
 |--------|------|----------|-----------------|
 | Authenticated sync task | `src/backend/routers/chat.py:714` | `POST /api/agents/{name}/task` | `"manual"` or `"agent"` |
 | Public link chat | `src/backend/routers/public.py:316` | `POST /api/public/chat/{token}` | `"public"` |
-| (Future) Scheduler | `src/backend/services/scheduler_service.py` | Internal | `"schedule"` |
+| Dedicated Scheduler | `src/backend/routers/internal.py:186` | `POST /api/internal/execute-task` | `"schedule"` |
 
 ## Backend Layer
 
@@ -243,7 +243,7 @@ Cancel protection (lines 293-294, 325-326, 350-351): Before writing "failed" sta
 ## Execution Lifecycle Diagram
 
 ```
-Caller (chat.py or public.py)
+Caller (chat.py, public.py, or internal.py)
   |
   v
 execute_task()
@@ -351,3 +351,4 @@ Expected response from agent:
 - [tasks-tab.md](tasks-tab.md) -- UI that displays execution records
 - [dashboard-timeline-view.md](dashboard-timeline-view.md) -- timeline that shows execution events
 - [continue-execution-as-chat.md](continue-execution-as-chat.md) -- EXEC-023, resume_session_id support
+- [scheduler-service.md](scheduler-service.md) -- dedicated scheduler that calls this service via internal API

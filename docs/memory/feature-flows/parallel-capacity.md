@@ -10,6 +10,7 @@
 
 | Date | Changes |
 |------|---------|
+| 2026-03-09 | Scheduled tasks now route through TaskExecutionService via internal API — capacity meter shows slot usage for cron/manual schedule executions |
 | 2026-03-04 | EXEC-024: Slot management split - sync path delegated to TaskExecutionService, public links gain slot enforcement |
 | 2026-03-03 | Phase 2: Frontend UI - CapacityMeter component, store plumbing, Agents page + Dashboard timeline integration |
 | 2026-02-28 | Initial implementation - Database, Redis slots, REST API, task endpoint integration |
@@ -65,6 +66,13 @@ The frontend displays slot usage as a vertical capacity meter bar on the Agents 
 │  │     ├── Creates execution record + acquires slot internally     │     │
 │  │     └── Release slot in finally block                           │     │
 │  │  2. Router translates failed result → 429 (public.py:326-330)  │     │
+│  │                                                                  │     │
+│  │  SCHEDULED path (internal.py → task_execution_service.py):      │     │
+│  │  1. Scheduler calls POST /api/internal/execute-task              │     │
+│  │  2. Delegate to TaskExecutionService.execute_task()              │     │
+│  │     ├── Skips record creation (execution_id pre-created)        │     │
+│  │     ├── Acquires slot + tracks activity internally              │     │
+│  │     └── Release slot in finally block                           │     │
 │  └────────────────────────────────────────────────────────────────┘     │
 │                                                                          │
 │  ┌─────────────────────┐         ┌─────────────────────────────────┐    │
@@ -93,7 +101,7 @@ The frontend displays slot usage as a vertical capacity meter bar on the Agents 
 
 ### 1. Slot Acquisition (Task Start)
 
-There are now three paths that acquire slots, depending on the caller:
+There are now four paths that acquire slots, depending on the caller:
 
 **Sync mode** (authenticated `/task` endpoint, `async_mode=false`):
 ```
@@ -136,6 +144,17 @@ POST /api/public/chat/{token}
        │
        v
   public.py:315-322 — delegates to TaskExecutionService
+       │
+       v
+  task_execution_service.py:162-184  (same as sync above)
+```
+
+**Scheduled** (cron/manual via dedicated scheduler):
+```
+Scheduler Service
+       │
+       v
+  POST /api/internal/execute-task  (internal.py)
        │
        v
   task_execution_service.py:162-184  (same as sync above)
@@ -257,6 +276,14 @@ Every 5 seconds (agents store / network store):
 | `src/backend/routers/public.py` | 26 | Import get_task_execution_service |
 | `src/backend/routers/public.py` | 311-322 | Public chat delegates to TaskExecutionService |
 | `src/backend/routers/public.py` | 326-330 | Translates "at capacity" result to 429 |
+
+**internal.py** (scheduled execution path):
+
+| File | Line | Purpose |
+|------|------|---------|
+| `src/backend/routers/internal.py` | 20 | Import get_task_execution_service |
+| `src/backend/routers/internal.py` | 174-182 | `InternalTaskExecutionRequest` model |
+| `src/backend/routers/internal.py` | 186-223 | `POST /api/internal/execute-task` delegates to TaskExecutionService |
 
 ### Pydantic Models
 
@@ -513,8 +540,9 @@ As of EXEC-024, slot acquisition/release is handled by different code paths depe
 | **Sync** (authenticated `/task`) | `TaskExecutionService.execute_task()` (line 164) | `TaskExecutionService` finally block (line 372) |
 | **Async** (authenticated `/task`, `async_mode=true`) | `chat.py` router directly (line 646) | `_execute_task_background()` finally (line 557) |
 | **Public** (`/api/public/chat/{token}`) | `TaskExecutionService.execute_task()` (line 164) | `TaskExecutionService` finally block (line 372) |
+| **Scheduled** (cron/manual via scheduler) | `TaskExecutionService.execute_task()` via `POST /api/internal/execute-task` | `TaskExecutionService` finally block (line 372) |
 
-**Note**: Prior to EXEC-024, public link executions bypassed slot management entirely. They now go through `TaskExecutionService` and are subject to the same capacity limits as authenticated requests.
+**Note**: Prior to EXEC-024, public link executions bypassed slot management entirely. They now go through `TaskExecutionService` and are subject to the same capacity limits as authenticated requests. As of 2026-03-09, scheduled executions also route through `TaskExecutionService` via the internal API, fixing the bug where scheduled tasks did not appear in the capacity meter.
 
 ### 1. Slot Acquisition Logic
 

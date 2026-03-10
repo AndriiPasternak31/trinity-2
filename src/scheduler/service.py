@@ -24,7 +24,6 @@ import httpx
 from .config import config
 from .models import Schedule, ScheduleExecution, SchedulerStatus, ProcessSchedule
 from .database import SchedulerDatabase
-from .agent_client import get_agent_client, AgentNotReachableError, AgentRequestError
 from .locking import get_lock_manager, LockManager
 
 logger = logging.getLogger(__name__)
@@ -568,15 +567,6 @@ class SchedulerService:
             logger.error(f"Failed to create execution record for schedule {schedule_id}")
             return
 
-        # Track activity start via backend internal API
-        # This creates the agent_activities record and broadcasts via WebSocket
-        activity_id = await self._track_activity_start(
-            agent_name=schedule.agent_name,
-            schedule=schedule,
-            execution_id=execution.id,
-            triggered_by=triggered_by
-        )
-
         # Broadcast execution started
         await self._publish_event({
             "type": "schedule_execution_started",
@@ -587,124 +577,79 @@ class SchedulerService:
             "triggered_by": triggered_by
         })
 
+        # Delegate to backend's TaskExecutionService via internal API.
+        # This ensures scheduled tasks go through the same code path as manual
+        # and public tasks: slot acquisition, activity tracking, credential
+        # sanitization, and dashboard capacity meter visibility.
         try:
-            # Send task to agent with schedule-specific timeout, allowed_tools, and model
-            client = get_agent_client(schedule.agent_name)
-            task_response = await client.task(
-                schedule.message,
-                timeout=schedule.timeout_seconds,
-                execution_id=execution.id,
+            result = await self._call_backend_execute_task(
+                agent_name=schedule.agent_name,
+                message=schedule.message,
+                triggered_by=triggered_by,
+                model=schedule.model,
+                timeout_seconds=schedule.timeout_seconds,
                 allowed_tools=schedule.allowed_tools,
-                model=schedule.model
-            )
-
-            # Update execution status with parsed response
-            self.db.update_execution_status(
                 execution_id=execution.id,
-                status="success",
-                response=task_response.response_text,
-                context_used=task_response.metrics.context_used,
-                context_max=task_response.metrics.context_max,
-                cost=task_response.metrics.cost_usd,
-                tool_calls=task_response.metrics.tool_calls_json,
-                execution_log=task_response.metrics.execution_log_json,
-                claude_session_id=task_response.metrics.session_id  # EXEC-023: For --resume support
             )
 
-            # Update schedule last run time
-            now = datetime.utcnow()
-            next_run = self._get_next_run_time(schedule.cron_expression, schedule.timezone)
-            self.db.update_schedule_run_times(schedule.id, last_run_at=now, next_run_at=next_run)
+            status = result.get("status", "failed")
+            error_msg = result.get("error")
 
-            logger.info(f"Schedule {schedule.name} executed successfully")
+            if status == "success":
+                # Update schedule last run time
+                now = datetime.utcnow()
+                next_run = self._get_next_run_time(schedule.cron_expression, schedule.timezone)
+                self.db.update_schedule_run_times(schedule.id, last_run_at=now, next_run_at=next_run)
 
-            # Complete activity via backend internal API
-            execution_log = task_response.raw_response.get("execution_log")
-            await self._complete_activity(
-                activity_id=activity_id,
-                status="completed",
-                details={
-                    "related_execution_id": execution.id,
-                    "context_used": task_response.metrics.context_used,
-                    "context_max": task_response.metrics.context_max,
-                    "cost_usd": task_response.metrics.cost_usd,
-                    "tool_count": len(execution_log) if execution_log else 0
-                }
-            )
+                logger.info(f"Schedule {schedule.name} executed successfully")
 
-            # Broadcast execution completed
-            await self._publish_event({
-                "type": "schedule_execution_completed",
-                "agent": schedule.agent_name,
-                "schedule_id": schedule.id,
-                "execution_id": execution.id,
-                "status": "success"
-            })
+                # Broadcast execution completed
+                await self._publish_event({
+                    "type": "schedule_execution_completed",
+                    "agent": schedule.agent_name,
+                    "schedule_id": schedule.id,
+                    "execution_id": execution.id,
+                    "status": "success"
+                })
+            else:
+                # TaskExecutionService already updated the execution record
+                # with failure status, but we still need to detect auth errors
+                # for logging and update schedule run times
+                if error_msg:
+                    auth_indicators = [
+                        "credit balance", "unauthorized", "authentication",
+                        "credentials", "forbidden", "401", "403",
+                        "oauth", "token expired", "not authenticated"
+                    ]
+                    error_lower = error_msg.lower()
+                    is_auth_failure = any(ind in error_lower for ind in auth_indicators)
 
-        except AgentNotReachableError as e:
-            error_msg = f"Agent not reachable: {str(e)}"
-            logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
-            # Agent unreachable could indicate container credential issues
-            # if subscription was expected but agent can't authenticate
+                    if is_auth_failure:
+                        logger.error(
+                            f"Schedule {schedule.name} execution failed due to authentication error: {error_msg}"
+                        )
+                    else:
+                        logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
+                else:
+                    logger.error(f"Schedule {schedule.name} execution failed (no error detail)")
 
-            self.db.update_execution_status(
-                execution_id=execution.id,
-                status="failed",
-                error=error_msg
-            )
-
-            # Complete activity as failed
-            await self._complete_activity(
-                activity_id=activity_id,
-                status="failed",
-                error=error_msg,
-                details={"related_execution_id": execution.id}
-            )
-
-            await self._publish_event({
-                "type": "schedule_execution_completed",
-                "agent": schedule.agent_name,
-                "schedule_id": schedule.id,
-                "execution_id": execution.id,
-                "status": "failed",
-                "error": error_msg
-            })
+                await self._publish_event({
+                    "type": "schedule_execution_completed",
+                    "agent": schedule.agent_name,
+                    "schedule_id": schedule.id,
+                    "execution_id": execution.id,
+                    "status": "failed",
+                    "error": error_msg
+                })
 
         except Exception as e:
             error_msg = str(e)
-
-            # Detect auth-specific failures for better error surfacing
-            auth_indicators = [
-                "credit balance", "unauthorized", "authentication",
-                "credentials", "forbidden", "401", "403",
-                "oauth", "token expired", "not authenticated"
-            ]
-            error_lower = error_msg.lower()
-            is_auth_failure = any(ind in error_lower for ind in auth_indicators)
-
-            if is_auth_failure:
-                error_msg = f"[AUTH_ERROR] {error_msg}"
-                logger.error(
-                    f"Schedule {schedule.name} execution failed due to authentication error: {error_msg}"
-                )
-            else:
-                logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
+            logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
 
             self.db.update_execution_status(
                 execution_id=execution.id,
                 status="failed",
                 error=error_msg
-            )
-
-            # Complete activity as failed
-            await self._complete_activity(
-                activity_id=activity_id,
-                status="failed",
-                error=error_msg,
-                details={
-                    "related_execution_id": execution.id,
-                    **({"failure_category": "auth"} if is_auth_failure else {})
-                }
             )
 
             await self._publish_event({
@@ -716,97 +661,63 @@ class SchedulerService:
                 "error": error_msg
             })
 
-    async def _track_activity_start(
+    async def _call_backend_execute_task(
         self,
         agent_name: str,
-        schedule,
-        execution_id: str,
-        triggered_by: str
-    ) -> Optional[str]:
+        message: str,
+        triggered_by: str,
+        model: Optional[str] = None,
+        timeout_seconds: int = 900,
+        allowed_tools: Optional[list] = None,
+        execution_id: Optional[str] = None,
+    ) -> dict:
         """
-        Track activity start via backend internal API.
+        Execute a task via the backend's internal TaskExecutionService endpoint.
 
-        Creates an agent_activities record and broadcasts via WebSocket.
-        Returns the activity_id or None if the call fails.
+        This routes through the same code path as authenticated /task and public
+        chat, ensuring slot management, activity tracking, credential sanitization,
+        and dashboard capacity meter visibility.
+
+        Returns:
+            dict with execution_id, status, response, cost, context_used, etc.
+
+        Raises:
+            Exception on HTTP or connection errors.
         """
-        try:
-            headers = {}
-            if config.internal_api_secret:
-                headers["X-Internal-Secret"] = config.internal_api_secret
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{config.backend_url}/api/internal/activities/track",
-                    headers=headers,
-                    json={
-                        "agent_name": agent_name,
-                        "activity_type": "schedule_start",
-                        "user_id": schedule.owner_id,
-                        "triggered_by": triggered_by,
-                        "related_execution_id": execution_id,
-                        "details": {
-                            "schedule_id": schedule.id,
-                            "schedule_name": schedule.name,
-                            "cron_expression": schedule.cron_expression,
-                            "execution_id": execution_id
-                        }
-                    },
-                    timeout=10.0
-                )
+        headers = {}
+        if config.internal_api_secret:
+            headers["X-Internal-Secret"] = config.internal_api_secret
 
-                if response.status_code == 200:
-                    result = response.json()
-                    activity_id = result.get("activity_id")
-                    logger.debug(f"Activity tracked: {activity_id}")
-                    return activity_id
-                else:
-                    logger.warning(f"Failed to track activity: {response.status_code} - {response.text[:200]}")
-                    return None
+        payload = {
+            "agent_name": agent_name,
+            "message": message,
+            "triggered_by": triggered_by,
+            "timeout_seconds": timeout_seconds,
+        }
+        if model:
+            payload["model"] = model
+        if allowed_tools:
+            payload["allowed_tools"] = allowed_tools
+        if execution_id:
+            payload["execution_id"] = execution_id
 
-        except Exception as e:
-            logger.warning(f"Failed to track activity via backend API: {e}")
-            # Don't fail the execution if activity tracking fails
-            return None
+        # Use a timeout slightly longer than the task timeout to allow for
+        # slot acquisition delay and the agent's own processing buffer.
+        request_timeout = float(timeout_seconds) + 30
 
-    async def _complete_activity(
-        self,
-        activity_id: Optional[str],
-        status: str,
-        details: Optional[dict] = None,
-        error: Optional[str] = None
-    ):
-        """
-        Complete an activity via backend internal API.
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{config.backend_url}/api/internal/execute-task",
+                headers=headers,
+                json=payload,
+                timeout=request_timeout,
+            )
 
-        Updates the agent_activities record and broadcasts via WebSocket.
-        """
-        if not activity_id:
-            # Activity tracking was skipped, nothing to complete
-            return
-
-        try:
-            headers = {}
-            if config.internal_api_secret:
-                headers["X-Internal-Secret"] = config.internal_api_secret
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{config.backend_url}/api/internal/activities/{activity_id}/complete",
-                    headers=headers,
-                    json={
-                        "status": status,
-                        "details": details,
-                        "error": error
-                    },
-                    timeout=10.0
-                )
-
-                if response.status_code == 200:
-                    logger.debug(f"Activity completed: {activity_id} ({status})")
-                else:
-                    logger.warning(f"Failed to complete activity: {response.status_code} - {response.text[:200]}")
-
-        except Exception as e:
-            logger.warning(f"Failed to complete activity via backend API: {e}")
-            # Don't fail the execution if activity completion fails
+            if response.status_code == 200:
+                return response.json()
+            else:
+                error_text = response.text[:500] if response.text else f"HTTP {response.status_code}"
+                raise Exception(f"Backend execute-task returned {response.status_code}: {error_text}")
 
     # =========================================================================
     # Schedule Management (for runtime updates)
