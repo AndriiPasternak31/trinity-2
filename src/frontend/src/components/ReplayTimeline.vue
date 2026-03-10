@@ -127,7 +127,7 @@
             v-for="(row, i) in filteredAgentRows"
             :key="'label-' + i"
             :class="[
-              'px-3 py-2 border-b border-r border-gray-200 dark:border-gray-700',
+              'px-2 py-1.5 border-b border-r border-gray-200 dark:border-gray-700',
               'flex',
               row.isSystemAgent
                 ? 'bg-purple-50/80 dark:bg-purple-900/20'
@@ -135,6 +135,15 @@
             ]"
             :style="{ height: rowHeight + 'px' }"
           >
+            <!-- Avatar (vertically centered, with border ring) -->
+            <div class="flex-shrink-0 flex items-center mr-1.5">
+              <div class="rounded-full border-2 overflow-hidden shadow-sm"
+                   :class="row.isSystemAgent ? 'border-purple-400 dark:border-purple-500' : 'border-indigo-400 dark:border-indigo-500'"
+              >
+                <AgentAvatar :name="row.name" :avatar-url="row.avatarUrl" size="lg" />
+              </div>
+            </div>
+
             <div class="flex flex-col justify-between flex-1 min-w-0">
               <!-- Row 1: Name, badges, status dot -->
               <div class="flex items-center justify-between">
@@ -379,6 +388,7 @@ import { useRouter } from 'vue-router'
 import { parseUTC, getTimestampMs, formatLocalTime } from '@/utils/timestamps'
 import AutonomyToggle from './AutonomyToggle.vue'
 import CapacityMeter from './CapacityMeter.vue'
+import AgentAvatar from './AgentAvatar.vue'
 
 const router = useRouter()
 
@@ -507,7 +517,7 @@ function handleScroll() {
 }
 
 // Layout constants - compact version
-const labelWidth = 288
+const labelWidth = 328
 const headerHeight = 24
 const rowHeight = 72
 const barHeight = 24  // Taller bars for better visibility
@@ -729,6 +739,7 @@ const agentRows = computed(() => {
       githubRepo: nodeData.githubRepo || null,
       memoryLimit: nodeData.memoryLimit || '4g',
       cpuLimit: nodeData.cpuLimit || '2',
+      avatarUrl: nodeData.avatarUrl || null,
       // From context/execution stats
       contextPercent: ctxStats.contextPercent || 0,
       activityState: ctxStats.activityState || (agent.status === 'running' ? 'idle' : 'offline'),

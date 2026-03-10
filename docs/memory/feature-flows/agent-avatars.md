@@ -68,6 +68,7 @@ As an agent owner, I want to generate a custom avatar for my agent from a text d
 | Agents List (desktop) | `src/frontend/src/views/Agents.vue` | 272 | sm | In agent row, before name link |
 | Agents List (tablet) | `src/frontend/src/views/Agents.vue` | 442 | sm | In agent row, after status dot |
 | Agents List (mobile) | `src/frontend/src/views/Agents.vue` | 585 | sm | In agent row, after status dot |
+| Dashboard Timeline | `src/frontend/src/components/ReplayTimeline.vue` | 142 | lg | Vertically centered in tile, `border-2` ring (indigo/purple), `shadow-sm` |
 
 ### State Management
 

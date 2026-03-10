@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-10 | AVATAR | Avatar display in Dashboard Timeline tiles (lg size, border ring) | [agent-avatars.md](feature-flows/agent-avatars.md), [dashboard-timeline-view.md](feature-flows/dashboard-timeline-view.md) |
 | 2026-03-09 | AVATAR | Avatar image optimization — WebP conversion via Pillow, stable emotion cache keys | [agent-avatars.md](feature-flows/agent-avatars.md) |
 | 2026-03-09 | CAPACITY-001 | Scheduled tasks route through TaskExecutionService — capacity meter now tracks cron/manual executions | [parallel-capacity.md](feature-flows/parallel-capacity.md), [scheduler-service.md](feature-flows/scheduler-service.md), [task-execution-service.md](feature-flows/task-execution-service.md) |
 | 2026-03-09 | SEC | Security hardening: WS auth, internal API secret, agent ACL on chat/credentials, DOMPurify | [credential-injection.md](feature-flows/credential-injection.md), [scheduler-service.md](feature-flows/scheduler-service.md) |

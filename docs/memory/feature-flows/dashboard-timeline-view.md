@@ -1,6 +1,6 @@
 # Feature Flow: Dashboard Timeline View
 
-> **Last Updated**: 2026-03-03 (Capacity Meter in Timeline Tiles - CAPACITY-001 Phase 2)
+> **Last Updated**: 2026-03-10 (Avatar display in Timeline Tiles)
 > **Status**: Implemented
 > **Requirements Doc**: `docs/requirements/DASHBOARD_TIMELINE_VIEW.md`, `docs/requirements/TIMELINE_ALL_EXECUTIONS.md`, `docs/requirements/TIMELINE_SCHEDULE_MARKERS.md`
 
@@ -32,8 +32,9 @@ The Dashboard offers two views for monitoring the agent fleet:
    - For 24h range, zoom is 12x (shows ~2 hours of activity)
    - Auto-scrolls to "Now" position
 
-2. **Rich Agent Tiles** (left column, 288px):
-   - Layout: `flex` row with two siblings -- content column and CapacityMeter
+2. **Rich Agent Tiles** (left column, 328px):
+   - Layout: `flex` row with three siblings -- avatar, content column, and CapacityMeter
+   - Avatar (`flex-shrink-0`, vertically centered): `AgentAvatar` at `lg` size (48px) with `border-2` ring (indigo for regular agents, purple for system agents), `shadow-sm`
    - Content column (`flex-col justify-between flex-1 min-w-0`):
      - Row 1: Agent name, system badge (SYS), status dot with active pulse, autonomy toggle
      - Row 2: Success rate bar with percentage (24h primary, 7d fallback, dash if no data)
@@ -546,11 +547,18 @@ newStats[stat.name] = {
 
 Each agent tile includes a vertical `CapacityMeter` showing active vs max parallel execution slots. The tile div changed from `flex-col` to `flex` (horizontal row): the 3-row content sits in a `flex-col justify-between flex-1 min-w-0` wrapper, and CapacityMeter is a sibling.
 
-**Tile Layout** (`ReplayTimeline.vue:118-211`):
+**Tile Layout** (`ReplayTimeline.vue:125-220`):
 ```html
 <!-- Outer tile: flex row -->
-<div class="px-3 py-2 ... flex" :style="{ height: rowHeight + 'px' }">
-  <!-- Left: 3-row content column -->
+<div class="px-2 py-1.5 ... flex" :style="{ height: rowHeight + 'px' }">
+  <!-- Left: Avatar with border ring -->
+  <div class="flex-shrink-0 flex items-center mr-1.5">
+    <div class="rounded-full border-2 overflow-hidden shadow-sm border-indigo-400">
+      <AgentAvatar :name="row.name" :avatar-url="row.avatarUrl" size="lg" />
+    </div>
+  </div>
+
+  <!-- Middle: 3-row content column -->
   <div class="flex flex-col justify-between flex-1 min-w-0">
     <!-- Row 1: Name, badges, status dot, autonomy toggle -->
     <!-- Row 2: Success rate bar -->
