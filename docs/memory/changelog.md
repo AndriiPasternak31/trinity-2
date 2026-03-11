@@ -1,3 +1,50 @@
+### 2026-03-11
+🏷️ **Refactor: Standardize execution status values (#92)**
+
+Introduced canonical `TaskExecutionStatus` enum (`running`, `success`, `failed`, `cancelled`, `skipped`) for all task/schedule execution status values persisted to the database. Renamed the queue-internal `ExecutionStatus` to `QueueItemStatus` to avoid confusion with the process engine's separate `ExecutionStatus` enum.
+
+All hardcoded status string literals across the backend and scheduler now reference their respective enums instead of raw strings, ensuring type safety and single-source-of-truth for status vocabulary.
+
+**Modified files:**
+- `src/backend/models.py` — Added `TaskExecutionStatus` enum, renamed queue-internal `ExecutionStatus` → `QueueItemStatus`
+- `src/backend/services/task_execution_service.py` — Uses `TaskExecutionStatus` and `ActivityState` enums
+- `src/backend/services/execution_queue.py` — Uses `QueueItemStatus` enum
+- `src/backend/services/activity_service.py` — Uses `ActivityState` enum for default status
+- `src/backend/routers/chat.py` — Uses `TaskExecutionStatus` and `ActivityState` enums
+- `src/backend/routers/internal.py` — Uses `ActivityState` enum for default status
+- `src/backend/db/schedules.py` — Uses `TaskExecutionStatus` enum for SQL params
+- `src/backend/db/activities.py` — Uses `ActivityState` enum for SQL params
+- `src/scheduler/database.py` — Uses scheduler's own `ExecutionStatus` enum
+- `src/scheduler/service.py` — Uses scheduler's own `ExecutionStatus` enum
+
+**Not changed (intentionally):**
+- `src/backend/services/process_engine/domain/enums.py` — Separate domain with its own `ExecutionStatus`
+- API response status fields (`deploy.py`, `credentials.py`, `monitoring.py`) — Different concept
+- Docker container status checks — Different domain
+
+---
+
+🧹 **Feature: Cleanup service for stuck executions, activities, and leaked slots (#94)**
+
+Added `CleanupService` — a background service that runs every 5 minutes to automatically recover from stuck intermediate states. Performs a one-shot startup sweep and periodic cycles to:
+- Mark stale executions (`status='running'` > 30 min) as `failed` with duration
+- Mark stale activities (`activity_state='started'` > 30 min) as `failed` with duration
+- Clean up stale Redis slots via existing `SlotService.cleanup_stale_slots()`
+
+Includes admin-only monitoring endpoints: `GET /api/monitoring/cleanup-status` and `POST /api/monitoring/cleanup-trigger`.
+
+**New files:**
+- `src/backend/services/cleanup_service.py` — CleanupService with periodic + startup cleanup
+
+**Modified files:**
+- `src/backend/db/schedules.py` — Added `mark_stale_executions_failed()` method
+- `src/backend/db/activities.py` — Added `mark_stale_activities_failed()` method
+- `src/backend/database.py` — Added cleanup delegation methods
+- `src/backend/main.py` — Register CleanupService in lifespan (start/stop)
+- `src/backend/routers/monitoring.py` — Added cleanup-status and cleanup-trigger endpoints
+
+---
+
 ### 2026-03-09
 🔧 **Fix: Scheduled tasks now show in capacity meter (slot tracking)**
 

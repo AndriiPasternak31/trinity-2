@@ -22,7 +22,7 @@ import redis
 import httpx
 
 from .config import config
-from .models import Schedule, ScheduleExecution, SchedulerStatus, ProcessSchedule
+from .models import Schedule, ScheduleExecution, ExecutionStatus, SchedulerStatus, ProcessSchedule
 from .database import SchedulerDatabase
 from .locking import get_lock_manager, LockManager
 
@@ -592,10 +592,10 @@ class SchedulerService:
                 execution_id=execution.id,
             )
 
-            status = result.get("status", "failed")
+            status = result.get("status", ExecutionStatus.FAILED)
             error_msg = result.get("error")
 
-            if status == "success":
+            if status == ExecutionStatus.SUCCESS:
                 # Update schedule last run time
                 now = datetime.utcnow()
                 next_run = self._get_next_run_time(schedule.cron_expression, schedule.timezone)
@@ -648,7 +648,7 @@ class SchedulerService:
 
             self.db.update_execution_status(
                 execution_id=execution.id,
-                status="failed",
+                status=ExecutionStatus.FAILED,
                 error=error_msg
             )
 
@@ -892,7 +892,7 @@ class SchedulerService:
                     # Update execution status
                     self.db.update_process_schedule_execution(
                         execution_id=execution.id,
-                        status="success",
+                        status=ExecutionStatus.SUCCESS,
                         process_execution_id=process_execution_id
                     )
 
@@ -920,7 +920,7 @@ class SchedulerService:
 
                     self.db.update_process_schedule_execution(
                         execution_id=execution.id,
-                        status="failed",
+                        status=ExecutionStatus.FAILED,
                         error=error_msg
                     )
 
@@ -940,7 +940,7 @@ class SchedulerService:
 
             self.db.update_process_schedule_execution(
                 execution_id=execution.id,
-                status="failed",
+                status=ExecutionStatus.FAILED,
                 error=error_msg
             )
 
@@ -960,7 +960,7 @@ class SchedulerService:
 
             self.db.update_process_schedule_execution(
                 execution_id=execution.id,
-                status="failed",
+                status=ExecutionStatus.FAILED,
                 error=error_msg
             )
 

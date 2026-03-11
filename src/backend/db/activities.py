@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 
 from .connection import get_db_connection
+from models import ActivityState
 from utils.helpers import utc_now_iso, to_utc_iso, parse_iso_timestamp
 
 
@@ -71,7 +72,7 @@ class ActivityOperations:
 
         return activity_id
 
-    def complete_activity(self, activity_id: str, status: str = "completed",
+    def complete_activity(self, activity_id: str, status: str = ActivityState.COMPLETED,
                          details: Optional[Dict] = None, error: Optional[str] = None) -> bool:
         """
         Complete an activity by updating its state, completion time, and duration.
@@ -184,10 +185,52 @@ class ActivityOperations:
             cursor.execute(query, params)
             return [self._row_to_activity(row) for row in cursor.fetchall()]
 
+    def mark_stale_activities_failed(self, timeout_minutes: int = 30) -> int:
+        """Mark started activities older than timeout as failed.
+
+        Uses ActivityState.STARTED / .FAILED for status values.
+
+        Args:
+            timeout_minutes: Activities running longer than this are considered stale.
+
+        Returns:
+            Number of activities marked as failed.
+        """
+        now = utc_now_iso()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Find stale activities for duration calculation
+            cursor.execute("""
+                SELECT id, started_at FROM agent_activities
+                WHERE activity_state = ?
+                AND started_at < datetime('now', ? || ' minutes')
+            """, (ActivityState.STARTED, f"-{timeout_minutes}"))
+            stale_rows = cursor.fetchall()
+
+            if not stale_rows:
+                return 0
+
+            completed_at = parse_iso_timestamp(now)
+            for row in stale_rows:
+                started_at = parse_iso_timestamp(row["started_at"])
+                duration_ms = int((completed_at - started_at).total_seconds() * 1000)
+                cursor.execute("""
+                    UPDATE agent_activities
+                    SET activity_state = ?,
+                        completed_at = ?,
+                        duration_ms = ?,
+                        error = 'Marked as failed by cleanup: exceeded ' || ? || '-minute timeout'
+                    WHERE id = ?
+                """, (ActivityState.FAILED, now, duration_ms, str(timeout_minutes), row["id"]))
+
+            conn.commit()
+            return len(stale_rows)
+
     def get_current_activities(self, agent_name: str) -> List[Dict]:
         """Get all in-progress (started) activities for an agent."""
         return self.get_agent_activities(
             agent_name=agent_name,
-            activity_state="started",
+            activity_state=ActivityState.STARTED,
             limit=50
         )

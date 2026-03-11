@@ -676,6 +676,18 @@ class DatabaseManager:
         return self._activity_ops.get_current_activities(agent_name)
 
     # =========================================================================
+    # Cleanup Operations (for CleanupService)
+    # =========================================================================
+
+    def mark_stale_executions_failed(self, timeout_minutes: int = 30):
+        """Mark executions stuck in 'running' past threshold as failed."""
+        return self._schedule_ops.mark_stale_executions_failed(timeout_minutes)
+
+    def mark_stale_activities_failed(self, timeout_minutes: int = 30):
+        """Mark activities stuck in 'started' past threshold as failed."""
+        return self._activity_ops.mark_stale_activities_failed(timeout_minutes)
+
+    # =========================================================================
     # Agent Permissions (delegated to db/permissions.py) - Phase 9.10
     # =========================================================================
 

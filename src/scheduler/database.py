@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from .config import config
-from .models import Schedule, ScheduleExecution, ProcessSchedule, ProcessScheduleExecution
+from .models import Schedule, ScheduleExecution, ExecutionStatus, ProcessSchedule, ProcessScheduleExecution
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,7 @@ class SchedulerDatabase:
                 execution_id,
                 schedule_id,
                 agent_name,
-                "running",
+                ExecutionStatus.RUNNING,
                 now,
                 message,
                 triggered_by,
@@ -228,7 +228,7 @@ class SchedulerDatabase:
                 id=execution_id,
                 schedule_id=schedule_id,
                 agent_name=agent_name,
-                status="running",
+                status=ExecutionStatus.RUNNING,
                 started_at=datetime.fromisoformat(now),
                 message=message,
                 triggered_by=triggered_by
@@ -273,7 +273,7 @@ class SchedulerDatabase:
                 execution_id,
                 schedule_id,
                 agent_name,
-                "skipped",
+                ExecutionStatus.SKIPPED,
                 now,
                 now,  # completed_at = started_at for skipped
                 0,    # duration_ms = 0 for skipped
@@ -287,7 +287,7 @@ class SchedulerDatabase:
                 id=execution_id,
                 schedule_id=schedule_id,
                 agent_name=agent_name,
-                status="skipped",
+                status=ExecutionStatus.SKIPPED,
                 started_at=datetime.fromisoformat(now),
                 completed_at=datetime.fromisoformat(now),
                 duration_ms=0,
@@ -621,7 +621,7 @@ class SchedulerDatabase:
                 schedule_id,
                 process_id,
                 process_name,
-                "running",
+                ExecutionStatus.RUNNING,
                 now,
                 triggered_by
             ))
@@ -633,7 +633,7 @@ class SchedulerDatabase:
                 process_id=process_id,
                 process_name=process_name,
                 execution_id=None,
-                status="running",
+                status=ExecutionStatus.RUNNING,
                 started_at=datetime.fromisoformat(now),
                 triggered_by=triggered_by
             )
@@ -678,7 +678,7 @@ class SchedulerDatabase:
                 schedule_id,
                 process_id,
                 process_name,
-                "skipped",
+                ExecutionStatus.SKIPPED,
                 now,
                 now,  # completed_at = started_at for skipped
                 0,    # duration_ms = 0 for skipped
@@ -693,7 +693,7 @@ class SchedulerDatabase:
                 process_id=process_id,
                 process_name=process_name,
                 execution_id=None,
-                status="skipped",
+                status=ExecutionStatus.SKIPPED,
                 started_at=datetime.fromisoformat(now),
                 completed_at=datetime.fromisoformat(now),
                 duration_ms=0,

@@ -82,6 +82,9 @@ from services.log_archive_service import log_archive_service
 # Import operator queue sync service
 from services.operator_queue_service import operator_queue_service, set_websocket_manager as set_opqueue_sync_ws_manager
 
+# Import cleanup service
+from services.cleanup_service import cleanup_service
+
 
 # Import process engine WebSocket publisher
 from services.process_engine.events import set_websocket_publisher_broadcast
@@ -258,6 +261,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error starting operator queue sync service: {e}")
 
+    # Start cleanup service for stale executions/activities/slots
+    try:
+        cleanup_service.start()
+        print("Cleanup service started")
+    except Exception as e:
+        print(f"Error starting cleanup service: {e}")
+
     # Run process execution recovery (IT5 P0 reliability feature)
     try:
         recovery_report = await run_execution_recovery()
@@ -286,6 +296,13 @@ async def lifespan(app: FastAPI):
         print("Log archive service stopped")
     except Exception as e:
         print(f"Error stopping log archive service: {e}")
+
+    # Shutdown cleanup service
+    try:
+        cleanup_service.stop()
+        print("Cleanup service stopped")
+    except Exception as e:
+        print(f"Error stopping cleanup service: {e}")
 
     # Shutdown operator queue sync service
     try:

@@ -113,16 +113,18 @@ class ExecutionSource(str, Enum):
     AGENT = "agent"     # Agent-to-agent via MCP
 ```
 
-### ExecutionStatus (Enum)
+### QueueItemStatus (Enum)
 ```python
-class ExecutionStatus(str, Enum):
-    """Status of an execution request."""
+class QueueItemStatus(str, Enum):
+    """Status of an execution request in the in-memory/Redis execution queue."""
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
 ```
+
+> **Note**: Renamed from `ExecutionStatus` to `QueueItemStatus` (#92) to avoid confusion with `TaskExecutionStatus` (DB-persisted execution status: `running/success/failed/cancelled/skipped`) and the process engine's own `ExecutionStatus`.
 
 ### Execution (Model)
 ```python
@@ -137,7 +139,7 @@ class Execution(BaseModel):
     message: str                               # The chat message
     queued_at: datetime                        # UTC timestamp
     started_at: Optional[datetime] = None      # UTC timestamp
-    status: ExecutionStatus = ExecutionStatus.QUEUED
+    status: QueueItemStatus = QueueItemStatus.QUEUED
 ```
 
 > **Timezone Note (2026-01-15)**: All timestamps are stored and transmitted as UTC with 'Z' suffix for consistent cross-timezone behavior. Backend uses `utc_now_iso()` from `utils/helpers.py`. See [Timezone Handling Guide](/docs/TIMEZONE_HANDLING.md).

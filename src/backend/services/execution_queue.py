@@ -24,7 +24,7 @@ from typing import Optional, List
 import redis
 import uuid
 
-from models import Execution, ExecutionSource, ExecutionStatus, QueueStatus
+from models import Execution, ExecutionSource, QueueItemStatus, QueueStatus
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ end
             source_user_email=source_user_email,
             message=message,
             queued_at=datetime.utcnow(),
-            status=ExecutionStatus.QUEUED
+            status=QueueItemStatus.QUEUED
         )
 
     async def submit(
@@ -156,7 +156,7 @@ end
         queue_key = self._queue_key(execution.agent_name)
 
         # Prepare execution for running state
-        execution.status = ExecutionStatus.RUNNING
+        execution.status = QueueItemStatus.RUNNING
         execution.started_at = datetime.utcnow()
         serialized = self._serialize_execution(execution)
 
@@ -180,7 +180,7 @@ end
             raise AgentBusyError(execution.agent_name, current_exec)
 
         # Reset execution state for queuing
-        execution.status = ExecutionStatus.QUEUED
+        execution.status = QueueItemStatus.QUEUED
         execution.started_at = None
 
         # Check queue length and add (queue operations are a separate concern)
@@ -229,7 +229,7 @@ end
         if next_item:
             next_exec = self._deserialize_execution(next_item)
             # Update status in Python object (Redis already has the data)
-            next_exec.status = ExecutionStatus.RUNNING
+            next_exec.status = QueueItemStatus.RUNNING
             next_exec.started_at = datetime.utcnow()
             logger.info(f"[Queue] Agent '{agent_name}' starting next execution: {next_exec.id}")
             return next_exec

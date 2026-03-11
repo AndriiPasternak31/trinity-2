@@ -12,7 +12,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 
-from models import User, ChatMessageRequest, ModelChangeRequest, ParallelTaskRequest, ActivityType, ExecutionSource
+from models import User, ChatMessageRequest, ModelChangeRequest, ParallelTaskRequest, ActivityType, ActivityState, TaskExecutionStatus, ExecutionSource
 from dependencies import get_current_user, get_authorized_agent
 from services.docker_service import get_agent_container
 from services.activity_service import activity_service
@@ -266,7 +266,7 @@ async def chat_with_agent(
         # Track chat completion
         await activity_service.complete_activity(
             activity_id=chat_activity_id,
-            status="completed",
+            status=ActivityState.COMPLETED,
             details={
                 "related_chat_message_id": assistant_message.id,
                 "context_used": session_data.get("context_tokens"),
@@ -282,7 +282,7 @@ async def chat_with_agent(
         if collaboration_activity_id:
             await activity_service.complete_activity(
                 activity_id=collaboration_activity_id,
-                status="completed",
+                status=ActivityState.COMPLETED,
                 details={
                     "related_chat_message_id": assistant_message.id,
                     "response_length": len(response_data.get("response", "")),
@@ -297,7 +297,7 @@ async def chat_with_agent(
             context_used = session_data.get("context_tokens", 0)
             db.update_execution_status(
                 execution_id=task_execution_id,
-                status="success",
+                status=TaskExecutionStatus.SUCCESS,
                 response=sanitized_response,
                 context_used=context_used if context_used > 0 else None,
                 context_max=session_data.get("context_window") or 200000,
@@ -340,7 +340,7 @@ async def chat_with_agent(
         # Track chat failure
         await activity_service.complete_activity(
             activity_id=chat_activity_id,
-            status="failed",
+            status=ActivityState.FAILED,
             error=error_msg
         )
 
@@ -348,7 +348,7 @@ async def chat_with_agent(
         if task_execution_id:
             db.update_execution_status(
                 execution_id=task_execution_id,
-                status="failed",
+                status=TaskExecutionStatus.FAILED,
                 error=error_msg
             )
 
@@ -356,7 +356,7 @@ async def chat_with_agent(
         if collaboration_activity_id:
             await activity_service.complete_activity(
                 activity_id=collaboration_activity_id,
-                status="failed",
+                status=ActivityState.FAILED,
                 error=error_msg
             )
 
@@ -433,7 +433,7 @@ async def _execute_task_background(
 
             db.update_execution_status(
                 execution_id=execution_id,
-                status="success",
+                status=TaskExecutionStatus.SUCCESS,
                 response=sanitized_resp,
                 context_used=context_used if context_used > 0 else None,
                 context_max=metadata.get("context_window") or 200000,
@@ -498,7 +498,7 @@ async def _execute_task_background(
         # Complete activities
         await activity_service.complete_activity(
             activity_id=task_activity_id,
-            status="completed",
+            status=ActivityState.COMPLETED,
             details={
                 "cost_usd": metadata.get("cost_usd"),
                 "execution_time_ms": execution_time_ms,
@@ -510,7 +510,7 @@ async def _execute_task_background(
         if collaboration_activity_id:
             await activity_service.complete_activity(
                 activity_id=collaboration_activity_id,
-                status="completed",
+                status=ActivityState.COMPLETED,
                 details={
                     "response_length": len(response_data.get("response", "")),
                     "execution_time_ms": execution_time_ms,
@@ -536,24 +536,24 @@ async def _execute_task_background(
         # Update execution record with failure
         if execution_id:
             existing = db.get_execution(execution_id)
-            if not existing or existing.status != "cancelled":
+            if not existing or existing.status != TaskExecutionStatus.CANCELLED:
                 db.update_execution_status(
                     execution_id=execution_id,
-                    status="failed",
+                    status=TaskExecutionStatus.FAILED,
                     error=error_msg
                 )
 
         # Complete activities with failure
         await activity_service.complete_activity(
             activity_id=task_activity_id,
-            status="failed",
+            status=ActivityState.FAILED,
             error=error_msg
         )
 
         if collaboration_activity_id:
             await activity_service.complete_activity(
                 activity_id=collaboration_activity_id,
-                status="failed",
+                status=ActivityState.FAILED,
                 error=error_msg
             )
 
@@ -660,7 +660,7 @@ async def execute_parallel_task(
             if execution_id:
                 db.update_execution_status(
                     execution_id=execution_id,
-                    status="failed",
+                    status=TaskExecutionStatus.FAILED,
                     error=f"Agent at capacity ({max_parallel_tasks}/{max_parallel_tasks} parallel tasks running)"
                 )
             raise HTTPException(
@@ -687,9 +687,9 @@ async def execute_parallel_task(
             }
         )
 
-        # Update execution status to "running"
+        # Update execution status to running
         if execution_id:
-            db.update_execution_status(execution_id=execution_id, status="running")
+            db.update_execution_status(execution_id=execution_id, status=TaskExecutionStatus.RUNNING)
 
         # Spawn background task (slot will be released when task completes)
         asyncio.create_task(
@@ -739,12 +739,12 @@ async def execute_parallel_task(
     if collaboration_activity_id:
         await activity_service.complete_activity(
             activity_id=collaboration_activity_id,
-            status="completed" if result.status == "success" else "failed",
+            status=ActivityState.COMPLETED if result.status == TaskExecutionStatus.SUCCESS else ActivityState.FAILED,
             details={
                 "response_length": len(result.response),
                 "execution_id": execution_id,
             },
-            error=result.error if result.status == "failed" else None,
+            error=result.error if result.status == TaskExecutionStatus.FAILED else None,
         )
 
     # Handle failure — translate to HTTP errors
@@ -1315,7 +1315,7 @@ async def terminate_agent_execution(
             if task_execution_id:
                 db.update_execution_status(
                     execution_id=task_execution_id,
-                    status="cancelled",
+                    status=TaskExecutionStatus.CANCELLED,
                     error="Execution terminated by user"
                 )
                 logger.info(f"[Terminate] Updated database execution {task_execution_id} to cancelled")

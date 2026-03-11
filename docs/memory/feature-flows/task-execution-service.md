@@ -28,7 +28,7 @@ This is a **backend service** -- no direct UI entry point. Callers are:
 @dataclass
 class TaskExecutionResult:
     execution_id: str
-    status: str                         # "success" | "failed"
+    status: str                         # TaskExecutionStatus value
     response: str                       # Sanitized response text
     cost: Optional[float] = None
     context_used: Optional[int] = None
@@ -39,7 +39,7 @@ class TaskExecutionResult:
     error: Optional[str] = None
 ```
 
-Callers inspect `result.status` to decide HTTP response. The service never raises for agent-level errors.
+Callers inspect `result.status` to decide HTTP response. Status values come from `TaskExecutionStatus` enum (`models.py`). The service never raises for agent-level errors.
 
 #### agent_post_with_retry() (line 60)
 
@@ -228,17 +228,19 @@ Patterns: OpenAI keys (`sk-*`), Anthropic keys (`sk-ant-*`), GitHub tokens (`ghp
 
 ## Error Handling
 
-The service catches all errors and returns `TaskExecutionResult` with `status="failed"`. Callers translate to HTTP.
+The service catches all errors and returns `TaskExecutionResult` with `status=TaskExecutionStatus.FAILED`. Callers translate to HTTP.
 
 | Error Case | Service Result | chat.py HTTP | public.py HTTP |
 |------------|---------------|--------------|----------------|
-| Slot not acquired | `status="failed", error="Agent at capacity..."` | 429 | 429 |
-| Agent connect timeout | `status="failed", error="timed out..."` | 504 | 504 |
-| Agent HTTP error | `status="failed", error=detail` | 503 | 502 |
-| Unexpected exception | `status="failed", error=str(e)` | 503 | 502 |
-| Cancelled execution | Preserved -- does not overwrite "cancelled" status | N/A | N/A |
+| Slot not acquired | `status=TaskExecutionStatus.FAILED, error="Agent at capacity..."` | 429 | 429 |
+| Agent connect timeout | `status=TaskExecutionStatus.FAILED, error="timed out..."` | 504 | 504 |
+| Agent HTTP error | `status=TaskExecutionStatus.FAILED, error=detail` | 503 | 502 |
+| Unexpected exception | `status=TaskExecutionStatus.FAILED, error=str(e)` | 503 | 502 |
+| Cancelled execution | Preserved -- does not overwrite `TaskExecutionStatus.CANCELLED` | N/A | N/A |
 
-Cancel protection (lines 293-294, 325-326, 350-351): Before writing "failed" status, checks `db.get_execution(execution_id)` -- if status is already "cancelled" (from user termination), the service does not overwrite it.
+Cancel protection (lines 293-294, 325-326, 350-351): Before writing failed status, checks `db.get_execution(execution_id)` -- if status is already `TaskExecutionStatus.CANCELLED` (from user termination), the service does not overwrite it.
+
+> **Status Enums (#92)**: Execution statuses use `TaskExecutionStatus` (`running/success/failed/cancelled/skipped`). Activity statuses use `ActivityState` (`started/completed/failed`). Both are defined in `models.py`.
 
 ## Execution Lifecycle Diagram
 

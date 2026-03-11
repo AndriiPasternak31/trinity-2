@@ -26,7 +26,7 @@ from typing import Optional
 import httpx
 
 from database import db
-from models import ActivityType
+from models import ActivityState, ActivityType, TaskExecutionStatus
 from services.activity_service import activity_service
 from services.slot_service import get_slot_service
 from utils.credential_sanitizer import sanitize_execution_log, sanitize_response
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 class TaskExecutionResult:
     """Result of a task execution."""
     execution_id: str
-    status: str                         # "success" | "failed"
+    status: str                         # TaskExecutionStatus value
     response: str                       # Sanitized response text
     cost: Optional[float] = None
     context_used: Optional[int] = None
@@ -173,12 +173,12 @@ class TaskExecutionService:
             if execution_id:
                 db.update_execution_status(
                     execution_id=execution_id,
-                    status="failed",
+                    status=TaskExecutionStatus.FAILED,
                     error=error_msg,
                 )
             return TaskExecutionResult(
                 execution_id=execution_id or "",
-                status="failed",
+                status=TaskExecutionStatus.FAILED,
                 response="",
                 error=error_msg,
             )
@@ -251,7 +251,7 @@ class TaskExecutionService:
             if execution_id:
                 db.update_execution_status(
                     execution_id=execution_id,
-                    status="success",
+                    status=TaskExecutionStatus.SUCCESS,
                     response=sanitized_resp,
                     context_used=context_used if context_used > 0 else None,
                     context_max=metadata.get("context_window") or 200000,
@@ -265,7 +265,7 @@ class TaskExecutionService:
             if activity_id:
                 await activity_service.complete_activity(
                     activity_id=activity_id,
-                    status="completed",
+                    status=ActivityState.COMPLETED,
                     details={
                         "session_id": response_data.get("session_id"),
                         "cost_usd": metadata.get("cost_usd"),
@@ -276,7 +276,7 @@ class TaskExecutionService:
 
             return TaskExecutionResult(
                 execution_id=execution_id or "",
-                status="success",
+                status=TaskExecutionStatus.SUCCESS,
                 response=sanitized_resp or "",
                 cost=metadata.get("cost_usd"),
                 context_used=context_used if context_used > 0 else None,
@@ -291,21 +291,21 @@ class TaskExecutionService:
             # Don't overwrite cancelled executions
             if execution_id:
                 existing = db.get_execution(execution_id)
-                if not existing or existing.status != "cancelled":
+                if not existing or existing.status != TaskExecutionStatus.CANCELLED:
                     db.update_execution_status(
                         execution_id=execution_id,
-                        status="failed",
+                        status=TaskExecutionStatus.FAILED,
                         error=error_msg,
                     )
             if activity_id:
                 await activity_service.complete_activity(
                     activity_id=activity_id,
-                    status="failed",
+                    status=ActivityState.FAILED,
                     error=error_msg,
                 )
             return TaskExecutionResult(
                 execution_id=execution_id or "",
-                status="failed",
+                status=TaskExecutionStatus.FAILED,
                 response="",
                 error=error_msg,
             )
@@ -324,21 +324,21 @@ class TaskExecutionService:
 
             if execution_id:
                 existing = db.get_execution(execution_id)
-                if not existing or existing.status != "cancelled":
+                if not existing or existing.status != TaskExecutionStatus.CANCELLED:
                     db.update_execution_status(
                         execution_id=execution_id,
-                        status="failed",
+                        status=TaskExecutionStatus.FAILED,
                         error=error_msg,
                     )
             if activity_id:
                 await activity_service.complete_activity(
                     activity_id=activity_id,
-                    status="failed",
+                    status=ActivityState.FAILED,
                     error=error_msg,
                 )
             return TaskExecutionResult(
                 execution_id=execution_id or "",
-                status="failed",
+                status=TaskExecutionStatus.FAILED,
                 response="",
                 error=error_msg,
             )
@@ -348,21 +348,21 @@ class TaskExecutionService:
             logger.error(f"[TaskExecService] Unexpected error executing task on {agent_name}: {error_msg}")
             if execution_id:
                 existing = db.get_execution(execution_id)
-                if not existing or existing.status != "cancelled":
+                if not existing or existing.status != TaskExecutionStatus.CANCELLED:
                     db.update_execution_status(
                         execution_id=execution_id,
-                        status="failed",
+                        status=TaskExecutionStatus.FAILED,
                         error=error_msg,
                     )
             if activity_id:
                 await activity_service.complete_activity(
                     activity_id=activity_id,
-                    status="failed",
+                    status=ActivityState.FAILED,
                     error=error_msg,
                 )
             return TaskExecutionResult(
                 execution_id=execution_id or "",
-                status="failed",
+                status=TaskExecutionStatus.FAILED,
                 response="",
                 error=error_msg,
             )

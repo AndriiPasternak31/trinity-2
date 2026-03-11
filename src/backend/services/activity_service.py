@@ -115,7 +115,7 @@ class ActivityService:
     async def complete_activity(
         self,
         activity_id: str,
-        status: str = "completed",
+        status: str = ActivityState.COMPLETED,
         details: Optional[Dict] = None,
         error: Optional[str] = None
     ) -> bool:
@@ -124,7 +124,7 @@ class ActivityService:
 
         Args:
             activity_id: UUID of the activity
-            status: "completed" or "failed"
+            status: ActivityState value ("completed" or "failed")
             details: Additional details to merge with existing details
             error: Error message if failed
 

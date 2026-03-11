@@ -16,6 +16,7 @@ from croniter import croniter
 
 from .connection import get_db_connection
 from db_models import Schedule, ScheduleCreate, ScheduleExecution, AgentGitConfig
+from models import TaskExecutionStatus
 from utils.helpers import utc_now_iso, to_utc_iso, parse_iso_timestamp
 
 logger = logging.getLogger(__name__)
@@ -474,7 +475,7 @@ class ScheduleOperations:
                 execution_id,
                 "__manual__",  # Special marker for manual/API-triggered tasks
                 agent_name,
-                "running",
+                TaskExecutionStatus.RUNNING,
                 now,
                 message,
                 triggered_by,
@@ -491,7 +492,7 @@ class ScheduleOperations:
                 id=execution_id,
                 schedule_id="__manual__",
                 agent_name=agent_name,
-                status="running",
+                status=TaskExecutionStatus.RUNNING,
                 started_at=datetime.fromisoformat(now),
                 message=message,
                 triggered_by=triggered_by,
@@ -537,7 +538,7 @@ class ScheduleOperations:
                 execution_id,
                 schedule_id,
                 agent_name,
-                "running",
+                TaskExecutionStatus.RUNNING,
                 now,
                 message,
                 triggered_by,
@@ -554,7 +555,7 @@ class ScheduleOperations:
                 id=execution_id,
                 schedule_id=schedule_id,
                 agent_name=agent_name,
-                status="running",
+                status=TaskExecutionStatus.RUNNING,
                 started_at=datetime.fromisoformat(now),
                 message=message,
                 triggered_by=triggered_by,
@@ -966,6 +967,50 @@ class ScheduleOperations:
             cursor.execute("DELETE FROM agent_git_config WHERE agent_name = ?", (agent_name,))
             conn.commit()
             return cursor.rowcount > 0
+
+    def mark_stale_executions_failed(self, timeout_minutes: int = 30) -> int:
+        """Mark running executions older than timeout as failed.
+
+        Uses TaskExecutionStatus.RUNNING / .FAILED for status values.
+
+        Args:
+            timeout_minutes: Executions running longer than this are considered stale.
+
+        Returns:
+            Number of executions marked as failed.
+        """
+        now = utc_now_iso()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Find stale executions for duration calculation
+            # SQL literal matches TaskExecutionStatus.RUNNING
+            cursor.execute("""
+                SELECT id, started_at FROM schedule_executions
+                WHERE status = ?
+                AND started_at < datetime('now', ? || ' minutes')
+            """, (TaskExecutionStatus.RUNNING, f"-{timeout_minutes}"))
+            stale_rows = cursor.fetchall()
+
+            if not stale_rows:
+                return 0
+
+            completed_at = parse_iso_timestamp(now)
+            for row in stale_rows:
+                started_at = parse_iso_timestamp(row["started_at"])
+                duration_ms = int((completed_at - started_at).total_seconds() * 1000)
+                # SQL literal matches TaskExecutionStatus.FAILED
+                cursor.execute("""
+                    UPDATE schedule_executions
+                    SET status = ?,
+                        completed_at = ?,
+                        duration_ms = ?,
+                        error = 'Marked as failed by cleanup: exceeded ' || ? || '-minute timeout'
+                    WHERE id = ?
+                """, (TaskExecutionStatus.FAILED, now, duration_ms, str(timeout_minutes), row["id"]))
+
+            conn.commit()
+            return len(stale_rows)
 
     def list_git_enabled_agents(self) -> List[AgentGitConfig]:
         """List all agents with git sync enabled."""

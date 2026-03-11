@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, List
 import logging
 
-from models import ActivityType
+from models import ActivityState, ActivityType
 from services.activity_service import activity_service
 from services.task_execution_service import get_task_execution_service
 
@@ -73,7 +73,7 @@ class ActivityTrackRequest(BaseModel):
 
 class ActivityCompleteRequest(BaseModel):
     """Request model for completing an activity."""
-    status: str = "completed"  # completed, failed
+    status: str = ActivityState.COMPLETED  # ActivityState: completed, failed
     details: Optional[Dict] = None
     error: Optional[str] = None
 

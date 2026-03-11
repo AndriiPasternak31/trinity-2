@@ -452,6 +452,45 @@ async def trigger_fleet_health_check(
     }
 
 
+@router.get("/cleanup-status")
+async def get_cleanup_status(
+    current_user: User = Depends(require_admin)
+):
+    """
+    Get cleanup service status and last run report.
+
+    Admin only. Returns the latest cleanup report with counts of
+    stale resources found and cleaned.
+    """
+    from services.cleanup_service import cleanup_service
+
+    report = cleanup_service.last_report
+    return {
+        "running": cleanup_service._running,
+        "interval_seconds": cleanup_service.poll_interval,
+        "last_run_at": cleanup_service.last_run_at,
+        "last_report": report.to_dict() if report else None,
+    }
+
+
+@router.post("/cleanup-trigger")
+async def trigger_cleanup(
+    current_user: User = Depends(require_admin)
+):
+    """
+    Trigger an immediate cleanup cycle.
+
+    Admin only. Runs cleanup synchronously and returns the report.
+    """
+    from services.cleanup_service import cleanup_service
+
+    report = await cleanup_service.run_cleanup()
+    return {
+        "status": "completed",
+        "report": report.to_dict(),
+    }
+
+
 @router.delete("/history")
 async def cleanup_health_history(
     days: int = Query(7, ge=1, le=90),

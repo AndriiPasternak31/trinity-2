@@ -177,8 +177,22 @@ class ExecutionSource(str, Enum):
     AGENT = "agent"     # Agent-to-agent via MCP
 
 
-class ExecutionStatus(str, Enum):
-    """Status of an execution request."""
+class TaskExecutionStatus(str, Enum):
+    """
+    Canonical status values for task/schedule executions persisted to the database.
+
+    Used across: TaskExecutionService, db/schedules.py, scheduler/database.py, chat.py, cleanup_service.py.
+    NOT used by: process_engine (has its own ExecutionStatus), ExecutionQueue (uses QueueItemStatus).
+    """
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+
+
+class QueueItemStatus(str, Enum):
+    """Status of an execution request in the in-memory/Redis execution queue."""
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -202,7 +216,7 @@ class Execution(BaseModel):
     message: str                               # The chat message
     queued_at: datetime
     started_at: Optional[datetime] = None
-    status: ExecutionStatus = ExecutionStatus.QUEUED
+    status: QueueItemStatus = QueueItemStatus.QUEUED
 
     class Config:
         json_encoders = {
