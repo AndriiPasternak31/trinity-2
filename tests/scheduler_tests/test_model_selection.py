@@ -1,5 +1,8 @@
 """
 Tests for MODEL-001 scheduler integration: model field passthrough and tracking.
+
+Updated for EXEC-024: Scheduler now delegates to backend's TaskExecutionService
+via _call_backend_execute_task() instead of calling agents directly.
 """
 
 # Path setup must happen before scheduler imports
@@ -17,19 +20,18 @@ from datetime import datetime
 from scheduler.service import SchedulerService
 from scheduler.database import SchedulerDatabase
 from scheduler.locking import LockManager
-from scheduler.models import Schedule, AgentTaskResponse, AgentTaskMetrics
 
 
 class TestSchedulerModelSelection:
     """Tests for model field in scheduler execution."""
 
     @pytest.mark.asyncio
-    async def test_execute_schedule_with_model_passes_to_agent(
+    async def test_execute_schedule_with_model_passes_to_backend(
         self,
         db_with_data: SchedulerDatabase,
         mock_lock_manager: LockManager
     ):
-        """Test that schedule model is passed to agent client task() method."""
+        """Test that schedule model is passed to backend execute-task call."""
         # Add a schedule with model to the database
         schedule_id = "schedule-with-model"
         with db_with_data.get_connection() as conn:
@@ -58,26 +60,21 @@ class TestSchedulerModelSelection:
         mock_lock.acquire.return_value = True
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
-        # Mock agent client and activity tracking
-        with patch('scheduler.service.get_agent_client') as mock_get_client, \
-             patch.object(service, '_track_activity_start', new_callable=AsyncMock) as mock_track, \
-             patch.object(service, '_complete_activity', new_callable=AsyncMock), \
+        # Mock backend call and event publishing
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
              patch.object(service, '_publish_event', new_callable=AsyncMock):
 
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000),
-                raw_response={"execution_log": []}
-            )
-            mock_get_client.return_value = mock_client
-            mock_track.return_value = "activity-123"
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-123",
+                "response": "Done",
+            }
 
             await service._execute_schedule_with_lock(schedule_id)
 
-            # Verify that task() was called with model parameter
-            mock_client.task.assert_called_once()
-            call_kwargs = mock_client.task.call_args[1]
+            # Verify that backend was called with model parameter
+            mock_backend.assert_called_once()
+            call_kwargs = mock_backend.call_args[1]
             assert call_kwargs.get("model") == "claude-opus-4-6"
 
     @pytest.mark.asyncio
@@ -86,7 +83,7 @@ class TestSchedulerModelSelection:
         db_with_data: SchedulerDatabase,
         mock_lock_manager: LockManager
     ):
-        """Test that schedules without model field don't pass model to agent."""
+        """Test that schedules without model field pass None for model."""
         # Use existing schedule-1 which has no model
         service = SchedulerService(
             database=db_with_data,
@@ -98,28 +95,23 @@ class TestSchedulerModelSelection:
         mock_lock.acquire.return_value = True
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
-        # Mock agent client
-        with patch('scheduler.service.get_agent_client') as mock_get_client, \
-             patch.object(service, '_track_activity_start', new_callable=AsyncMock) as mock_track, \
-             patch.object(service, '_complete_activity', new_callable=AsyncMock), \
+        # Mock backend call
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
              patch.object(service, '_publish_event', new_callable=AsyncMock):
 
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000),
-                raw_response={"execution_log": []}
-            )
-            mock_get_client.return_value = mock_client
-            mock_track.return_value = "activity-123"
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-456",
+                "response": "Done",
+            }
 
             await service._execute_schedule_with_lock("schedule-1")
 
-            # Verify that task() was called
-            mock_client.task.assert_called_once()
-            call_kwargs = mock_client.task.call_args[1]
-            # model should be None or not present
-            assert call_kwargs.get("model") is None or "model" not in call_kwargs
+            # Verify that backend was called
+            mock_backend.assert_called_once()
+            call_kwargs = mock_backend.call_args[1]
+            # model should be None
+            assert call_kwargs.get("model") is None
 
     @pytest.mark.asyncio
     async def test_execute_schedule_tracks_model_used_in_execution(
@@ -156,20 +148,15 @@ class TestSchedulerModelSelection:
         mock_lock.acquire.return_value = True
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
-        # Mock agent client
-        with patch('scheduler.service.get_agent_client') as mock_get_client, \
-             patch.object(service, '_track_activity_start', new_callable=AsyncMock) as mock_track, \
-             patch.object(service, '_complete_activity', new_callable=AsyncMock), \
+        # Mock backend call
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
              patch.object(service, '_publish_event', new_callable=AsyncMock):
 
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000),
-                raw_response={"execution_log": []}
-            )
-            mock_get_client.return_value = mock_client
-            mock_track.return_value = "activity-123"
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-789",
+                "response": "Done",
+            }
 
             await service._execute_schedule_with_lock(schedule_id)
 
@@ -224,26 +211,21 @@ class TestSchedulerModelSelection:
         mock_lock.acquire.return_value = True
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
-        # Mock agent client
-        with patch('scheduler.service.get_agent_client') as mock_get_client, \
-             patch.object(service, '_track_activity_start', new_callable=AsyncMock) as mock_track, \
-             patch.object(service, '_complete_activity', new_callable=AsyncMock), \
+        # Mock backend call
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
              patch.object(service, '_publish_event', new_callable=AsyncMock):
 
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000),
-                raw_response={"execution_log": []}
-            )
-            mock_get_client.return_value = mock_client
-            mock_track.return_value = "activity-123"
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-custom",
+                "response": "Done",
+            }
 
             await service._execute_schedule_with_lock(schedule_id)
 
             # Verify custom model was passed
-            mock_client.task.assert_called_once()
-            call_kwargs = mock_client.task.call_args[1]
+            mock_backend.assert_called_once()
+            call_kwargs = mock_backend.call_args[1]
             assert call_kwargs.get("model") == custom_model
 
 

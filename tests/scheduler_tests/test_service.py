@@ -19,7 +19,7 @@ import pytest
 from scheduler.service import SchedulerService
 from scheduler.database import SchedulerDatabase
 from scheduler.locking import LockManager
-from scheduler.models import Schedule, AgentTaskResponse, AgentTaskMetrics
+from scheduler.models import Schedule
 
 
 class TestSchedulerService:
@@ -222,14 +222,15 @@ class TestScheduleExecution:
         mock_lock.acquire.return_value = True
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
-        # Mock agent client
-        with patch('scheduler.service.get_agent_client') as mock_get_client:
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000)
-            )
-            mock_get_client.return_value = mock_client
+        # Mock backend call and event publishing
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
+             patch.object(service, '_publish_event', new_callable=AsyncMock):
+
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-123",
+                "response": "Done",
+            }
 
             await service._execute_schedule("schedule-1")
 
@@ -247,11 +248,11 @@ class TestScheduleExecution:
         # Mock lock acquisition failure
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=None)
 
-        # Mock agent client (should not be called)
-        with patch('scheduler.service.get_agent_client') as mock_get_client:
+        # Mock backend call (should not be called)
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend:
             await service._execute_schedule("schedule-1")
 
-        mock_get_client.assert_not_called()
+        mock_backend.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_execute_schedule_checks_enabled(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
@@ -267,10 +268,11 @@ class TestScheduleExecution:
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
         # Try to execute disabled schedule
-        with patch('scheduler.service.get_agent_client') as mock_get_client:
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
+             patch.object(service, '_publish_event', new_callable=AsyncMock):
             await service._execute_schedule("schedule-3")  # Disabled
 
-        mock_get_client.assert_not_called()
+        mock_backend.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_execute_schedule_checks_autonomy(self, initialized_db: str, mock_lock_manager: LockManager):
@@ -308,10 +310,11 @@ class TestScheduleExecution:
         mock_lock.acquire.return_value = True
         mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=mock_lock)
 
-        with patch('scheduler.service.get_agent_client') as mock_get_client:
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
+             patch.object(service, '_publish_event', new_callable=AsyncMock):
             await service._execute_schedule("schedule-no-auto")
 
-        mock_get_client.assert_not_called()
+        mock_backend.assert_not_called()
 
 
 class TestEventPublishing:
@@ -336,183 +339,62 @@ class TestEventPublishing:
         assert call_args[0][0] == "scheduler:events"
 
 
-class TestActivityTracking:
-    """Tests for activity tracking via backend internal API (added 2026-02-11)."""
+class TestBackendDelegation:
+    """Tests for scheduler delegation to backend via _call_backend_execute_task.
+
+    Note: _track_activity_start() and _complete_activity() were removed from
+    SchedulerService in EXEC-024. Activity tracking is now handled by the
+    backend's TaskExecutionService, called via _call_backend_execute_task().
+    """
 
     @pytest.mark.asyncio
-    async def test_track_activity_start_calls_backend_api(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
-        """Test that _track_activity_start calls the backend internal API."""
+    async def test_execute_schedule_with_lock_calls_backend(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
+        """Test that execution delegates to backend via _call_backend_execute_task."""
         service = SchedulerService(
             database=db_with_data,
             lock_manager=mock_lock_manager
         )
 
-        schedule = db_with_data.get_schedule("schedule-1")
-
-        with patch('httpx.AsyncClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"activity_id": "test-activity-123"}
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client_class.return_value = mock_client
-
-            activity_id = await service._track_activity_start(
-                agent_name="test-agent",
-                schedule=schedule,
-                execution_id="exec-123",
-                triggered_by="schedule"
-            )
-
-            assert activity_id == "test-activity-123"
-            mock_client.post.assert_called_once()
-            call_args = mock_client.post.call_args
-            assert "/api/internal/activities/track" in call_args[0][0]
-            assert call_args[1]["json"]["agent_name"] == "test-agent"
-            assert call_args[1]["json"]["activity_type"] == "schedule_start"
-            assert call_args[1]["json"]["triggered_by"] == "schedule"
-
-    @pytest.mark.asyncio
-    async def test_track_activity_start_returns_none_on_failure(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
-        """Test that _track_activity_start returns None on API failure."""
-        service = SchedulerService(
-            database=db_with_data,
-            lock_manager=mock_lock_manager
-        )
-
-        schedule = db_with_data.get_schedule("schedule-1")
-
-        with patch('httpx.AsyncClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_response = MagicMock()
-            mock_response.status_code = 500
-            mock_response.text = "Internal error"
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client_class.return_value = mock_client
-
-            activity_id = await service._track_activity_start(
-                agent_name="test-agent",
-                schedule=schedule,
-                execution_id="exec-123",
-                triggered_by="schedule"
-            )
-
-            assert activity_id is None
-
-    @pytest.mark.asyncio
-    async def test_complete_activity_calls_backend_api(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
-        """Test that _complete_activity calls the backend internal API."""
-        service = SchedulerService(
-            database=db_with_data,
-            lock_manager=mock_lock_manager
-        )
-
-        with patch('httpx.AsyncClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_client.post.return_value = mock_response
-            mock_client.__aenter__.return_value = mock_client
-            mock_client.__aexit__.return_value = None
-            mock_client_class.return_value = mock_client
-
-            await service._complete_activity(
-                activity_id="test-activity-123",
-                status="completed",
-                details={"execution_id": "exec-123"}
-            )
-
-            mock_client.post.assert_called_once()
-            call_args = mock_client.post.call_args
-            assert "/api/internal/activities/test-activity-123/complete" in call_args[0][0]
-            assert call_args[1]["json"]["status"] == "completed"
-
-    @pytest.mark.asyncio
-    async def test_complete_activity_skips_if_no_activity_id(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
-        """Test that _complete_activity does nothing if activity_id is None."""
-        service = SchedulerService(
-            database=db_with_data,
-            lock_manager=mock_lock_manager
-        )
-
-        with patch('httpx.AsyncClient') as mock_client_class:
-            mock_client = AsyncMock()
-            mock_client_class.return_value = mock_client
-
-            await service._complete_activity(
-                activity_id=None,
-                status="completed"
-            )
-
-            # Should not have created a client at all
-            mock_client.post.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_execute_schedule_with_lock_tracks_activity(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
-        """Test that execution tracks activity via internal API."""
-        service = SchedulerService(
-            database=db_with_data,
-            lock_manager=mock_lock_manager
-        )
-
-        # Mock agent client
-        with patch('scheduler.service.get_agent_client') as mock_get_client, \
-             patch.object(service, '_track_activity_start', new_callable=AsyncMock) as mock_track, \
-             patch.object(service, '_complete_activity', new_callable=AsyncMock) as mock_complete, \
+        # Mock backend call and event publishing
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
              patch.object(service, '_publish_event', new_callable=AsyncMock):
 
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000),
-                raw_response={"execution_log": []}
-            )
-            mock_get_client.return_value = mock_client
-            mock_track.return_value = "activity-123"
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-123",
+                "response": "Done",
+            }
 
             await service._execute_schedule_with_lock("schedule-1", triggered_by="schedule")
 
-            # Should have tracked activity start
-            mock_track.assert_called_once()
-            call_args = mock_track.call_args
-            assert call_args[1]["triggered_by"] == "schedule"
-
-            # Should have completed activity
-            mock_complete.assert_called_once()
-            complete_args = mock_complete.call_args
-            assert complete_args[1]["activity_id"] == "activity-123"
-            assert complete_args[1]["status"] == "completed"
+            # Should have called backend with correct parameters
+            mock_backend.assert_called_once()
+            call_kwargs = mock_backend.call_args[1]
+            assert call_kwargs["agent_name"] == "test-agent"
+            assert call_kwargs["message"] == "Run morning report"
+            assert call_kwargs["triggered_by"] == "schedule"
 
     @pytest.mark.asyncio
     async def test_execute_schedule_with_manual_trigger(self, db_with_data: SchedulerDatabase, mock_lock_manager: LockManager):
-        """Test that manual triggers use triggered_by='manual'."""
+        """Test that manual triggers pass triggered_by='manual' to backend."""
         service = SchedulerService(
             database=db_with_data,
             lock_manager=mock_lock_manager
         )
 
-        # Mock agent client
-        with patch('scheduler.service.get_agent_client') as mock_get_client, \
-             patch.object(service, '_track_activity_start', new_callable=AsyncMock) as mock_track, \
-             patch.object(service, '_complete_activity', new_callable=AsyncMock), \
+        # Mock backend call and event publishing
+        with patch.object(service, '_call_backend_execute_task', new_callable=AsyncMock) as mock_backend, \
              patch.object(service, '_publish_event', new_callable=AsyncMock):
 
-            mock_client = AsyncMock()
-            mock_client.task.return_value = AgentTaskResponse(
-                response_text="Success",
-                metrics=AgentTaskMetrics(context_used=1000, context_max=200000),
-                raw_response={"execution_log": []}
-            )
-            mock_get_client.return_value = mock_client
-            mock_track.return_value = "activity-456"
+            mock_backend.return_value = {
+                "status": "success",
+                "execution_id": "exec-456",
+                "response": "Done",
+            }
 
             await service._execute_schedule_with_lock("schedule-1", triggered_by="manual")
 
-            # Should have tracked activity with manual trigger
-            mock_track.assert_called_once()
-            call_args = mock_track.call_args
-            assert call_args[1]["triggered_by"] == "manual"
+            # Should have called backend with manual trigger
+            mock_backend.assert_called_once()
+            call_kwargs = mock_backend.call_args[1]
+            assert call_kwargs["triggered_by"] == "manual"
