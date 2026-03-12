@@ -1,4 +1,17 @@
 ### 2026-03-11
+🔧 **Fix: Task execution fails with misleading "token expired" error on subscription-incompatible model (#81)**
+
+When an agent's `~/.claude/settings.json` contained a model not available on the assigned subscription (e.g., `claude-3-5-haiku-latest` on Claude Max), headless task execution via chat and paid endpoints failed with a misleading "Subscription token may be expired or revoked" error. Terminal WebSocket sessions worked fine because they passed a `model=sonnet` query parameter.
+
+**Root cause:** `execute_headless_task()` did not specify a `--model` flag when `model` was `None`, so Claude Code used the agent's settings.json model which might be incompatible with the subscription type.
+
+**Fix:** `execute_headless_task()` now defaults to `model="sonnet"` when no model is specified, ensuring compatibility with all subscription types (Claude Max, Pro, and API). Also added `_is_model_access_error()` helper to detect model-related errors and provide clearer error messages.
+
+**Modified files:**
+- `docker/base-image/agent_server/services/claude_code.py` — Default model to "sonnet" in `execute_headless_task()`; added `_is_model_access_error()` function; improved `_diagnose_exit_failure()` to detect model access errors
+
+---
+
 🔧 **Fix: Scheduler async fire-and-forget with DB polling (#101)**
 
 Replaced the blocking HTTP call from scheduler to backend with async fire-and-forget dispatch + DB polling. This prevents TCP connection drops during long-running agent executions (10-60+ min) that caused false `failed` status and zero execution records.

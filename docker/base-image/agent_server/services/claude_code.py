@@ -620,6 +620,23 @@ def _is_rate_limit_message(text: str) -> bool:
     ])
 
 
+def _is_model_access_error(text: str) -> bool:
+    """Check if a message indicates a model access/subscription tier error."""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(pattern in lower for pattern in [
+        "model is not available",
+        "not available on your subscription",
+        "don't have access to",
+        "model not found",
+        "invalid model",
+        "model access",
+        "cannot access",
+        "not supported by your plan",
+    ])
+
+
 def _format_rate_limit_error(metadata: 'ExecutionMetadata') -> str:
     """Format a clear, actionable rate limit error message."""
     base_msg = metadata.error_message or "Subscription usage limit reached"
@@ -637,6 +654,14 @@ def _diagnose_exit_failure(return_code: int, metadata: Optional['ExecutionMetada
     if metadata and metadata.error_type == "rate_limit":
         return _format_rate_limit_error(metadata)
 
+    # Check for model access errors detected during stream parsing
+    if metadata and metadata.error_message and _is_model_access_error(metadata.error_message):
+        return (
+            f"Model access error: {metadata.error_message}. "
+            f"The agent's configured model may not be available with the current subscription. "
+            f"Try using a different model (sonnet, opus) or check subscription settings."
+        )
+
     # Check for missing credentials
     has_api_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_oauth_token = bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"))
@@ -644,6 +669,9 @@ def _diagnose_exit_failure(return_code: int, metadata: Optional['ExecutionMetada
     if not has_api_key and not has_oauth_token:
         return "No authentication configured. Set ANTHROPIC_API_KEY or assign a subscription token."
     if not has_api_key and has_oauth_token:
+        # Issue #81: This error message was misleading when the actual issue was
+        # model incompatibility. Now that we default to 'sonnet' for headless tasks,
+        # this message is more likely to be accurate.
         return "Subscription token may be expired or revoked. Generate a new one with 'claude setup-token'."
 
     # Exit code hints
@@ -685,7 +713,8 @@ async def execute_headless_task(
 
     Args:
         prompt: The task to execute
-        model: Optional model override (sonnet, opus, haiku)
+        model: Optional model override (sonnet, opus, haiku). Defaults to "sonnet" if not
+               specified to ensure compatibility with all subscription types (Issue #81).
         allowed_tools: Optional list of allowed tools (restricts available tools)
         system_prompt: Optional additional system prompt
         timeout_seconds: Execution timeout (default 5 minutes)
@@ -696,6 +725,15 @@ async def execute_headless_task(
     Returns: (response_text, execution_log, metadata, session_id)
     """
     import signal
+
+    # Issue #81: Default to "sonnet" when model is not specified.
+    # Without this, Claude Code uses the agent's ~/.claude/settings.json model,
+    # which may be incompatible with the assigned subscription (e.g., haiku on
+    # Claude Max). This causes misleading "token expired" errors.
+    # Using --model sonnet ensures compatibility with all subscription types.
+    if model is None:
+        model = "sonnet"
+        logger.debug("[Headless Task] No model specified, defaulting to 'sonnet' for subscription compatibility")
 
     if not agent_state.claude_code_available:
         raise HTTPException(

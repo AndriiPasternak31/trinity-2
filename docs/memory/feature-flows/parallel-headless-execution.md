@@ -3,13 +3,14 @@
 > **Requirement**: 12.1 - Parallel Headless Execution
 > **Status**: Implemented
 > **Created**: 2025-12-22
-> **Updated**: 2026-03-07 (ExecutionMetadata error fields)
+> **Updated**: 2026-03-11 (Default model for headless tasks)
 > **Verified**: 2026-02-05
 
 ## Revision History
 
 | Date | Changes |
 |------|---------|
+| 2026-03-11 | **Issue #81 - Default Model for Headless Tasks**: Fixed misleading "token expired" error when agent's `~/.claude/settings.json` contains a model incompatible with the assigned subscription. `execute_headless_task()` now defaults to `model="sonnet"` when model is None (`claude_code.py:732-735`). Added `_is_model_access_error()` helper (`claude_code.py:623-637`) to detect subscription/model access errors. Enhanced `_diagnose_exit_failure()` (`claude_code.py:657-663`) to provide actionable error messages when model access fails. Terminal WebSocket sessions always passed `model=sonnet` via URL param, but headless tasks didn't specify `--model` flag, causing Claude Code to use agent settings which might be incompatible. |
 | 2026-03-07 | **ExecutionMetadata Error Fields**: Added `error_type` and `error_message` fields to `ExecutionMetadata` model (`models.py:89-90`). Populated during stream parsing in `claude_code.py` from two sources: `result` messages with `is_error=true` (line 294-301, classifies as `rate_limit` or `execution_error`) and `assistant` messages with `error` field (line 331-339, uses Claude Code's classification directly). Enables the platform to distinguish rate limits from other failures for better error handling (429 vs 503). |
 | 2026-03-08 | **Session ID UUID Fix**: Fixed `--session-id` validation failure. Claude Code requires `--session-id` to be a valid UUID but `execution_id` (from `secrets.token_urlsafe(16)`) is a base64url string. Changed `claude_code.py:725` to always generate `uuid.uuid4()` for `--session-id` instead of reusing `execution_id`. The `execution_id` still tracks the task internally. |
 | 2026-03-06 | **Session Isolation + Permission Validation**: Fixed bug where headless tasks could run with `permissionMode: "default"` instead of `bypassPermissions`, causing all tool calls to be silently denied. Added `--no-session-persistence` and unique `--session-id` per headless task to prevent session file collision with interactive `/api/chat` sessions. Added `permissionMode` validation on the `init` stream-json message — kills process immediately and returns HTTP 503 if bypass not active. Flags skipped when `resume_session_id` is provided (EXEC-023 needs persistence). |
@@ -971,6 +972,70 @@ The mandatory `ANTHROPIC_API_KEY` check was removed from `execute_headless_task(
 - API key is still supported for agents that have it configured
 
 **Implementation**: `docker/base-image/agent_server/services/claude_code.py:586-590` - Removed mandatory API key check
+
+## Model Selection and Defaulting (Issue #81)
+
+**Added**: 2026-03-11
+
+### Problem
+
+When using Claude Max/Pro subscriptions, headless task execution could fail with a misleading "Subscription token may be expired or revoked" error. The root cause was model incompatibility:
+
+- **Terminal WebSocket sessions**: Always pass `model=sonnet` via URL parameter, ensuring subscription compatibility
+- **Headless task execution**: Did not specify `--model` flag when model was None, causing Claude Code to use the agent's `~/.claude/settings.json` which might contain an incompatible model (e.g., `claude-3-opus-20240229`)
+
+### Solution
+
+`execute_headless_task()` now defaults to `model="sonnet"` when no model is specified:
+
+**File**: `docker/base-image/agent_server/services/claude_code.py:732-735`
+```python
+# Issue #81: Default to "sonnet" when model is not specified.
+if model is None:
+    model = "sonnet"
+    logger.debug("[Headless Task] No model specified, defaulting to 'sonnet' for subscription compatibility")
+```
+
+### Error Detection
+
+Added `_is_model_access_error()` helper to detect model access/subscription tier errors:
+
+**File**: `docker/base-image/agent_server/services/claude_code.py:623-637`
+```python
+def _is_model_access_error(text: str) -> bool:
+    """Check if a message indicates a model access/subscription tier error."""
+    if not text:
+        return False
+    lower = text.lower()
+    return any(pattern in lower for pattern in [
+        "model is not available",
+        "not available on your subscription",
+        "don't have access to",
+        "model not found",
+        "invalid model",
+        "model access",
+        "cannot access",
+        "not supported by your plan",
+    ])
+```
+
+Enhanced `_diagnose_exit_failure()` to provide actionable error messages:
+
+**File**: `docker/base-image/agent_server/services/claude_code.py:657-663`
+```python
+if metadata and metadata.error_message and _is_model_access_error(metadata.error_message):
+    return (
+        f"Model access error: {metadata.error_message}. "
+        f"The agent's configured model may not be available with the current subscription. "
+        f"Try using a different model (sonnet, opus) or check subscription settings."
+    )
+```
+
+### Model Precedence
+
+1. **Explicit `model` parameter** (from request) — always used if provided
+2. **Default `"sonnet"`** — used when model is None (ensures subscription compatibility)
+3. **Agent settings** (`~/.claude/settings.json`) — only used if Claude Code ignores `--model` flag
 
 ## Security Considerations
 

@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-11 | #81 | Default model for headless tasks — prevents misleading "token expired" errors when agent settings contain incompatible model | [parallel-headless-execution.md](feature-flows/parallel-headless-execution.md) |
 | 2026-03-11 | SCHED-ASYNC-001 | Scheduler async fire-and-forget with DB polling, status overwrite guard, cleanup timeout 30→120 min | [scheduler-service.md](feature-flows/scheduler-service.md), [cleanup-service.md](feature-flows/cleanup-service.md) |
 | 2026-03-11 | CLEANUP-001 | Background cleanup service for stale executions, activities, and slots | [cleanup-service.md](feature-flows/cleanup-service.md) |
 | 2026-03-10 | AVATAR | Avatar display in Dashboard Timeline tiles (lg size, border ring) | [agent-avatars.md](feature-flows/agent-avatars.md), [dashboard-timeline-view.md](feature-flows/dashboard-timeline-view.md) |
