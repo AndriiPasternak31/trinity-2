@@ -1685,7 +1685,7 @@ async def set_agent_capacity(
 
 @router.get("/{agent_name}/timeout")
 async def get_agent_timeout(
-    agent_name: str = Depends(get_authorized_agent),
+    agent_name: str,
     current_user: User = Depends(get_current_user)
 ):
     """
