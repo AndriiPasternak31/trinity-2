@@ -219,6 +219,8 @@ project_trinity/
 
 9. **MCP reconnection**: After backend restart, MCP clients (Claude Code, etc.) need to be manually reconnected (run `/mcp` or restart the client).
 
+10. **Keep working directory clean**: Delete temporary files (screenshots, test outputs, cache directories) after use. Never leave PNG files, test artifacts, or debug outputs in the project root.
+
 ---
 
 ## Authentication
