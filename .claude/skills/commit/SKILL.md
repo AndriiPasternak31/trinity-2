@@ -18,6 +18,7 @@ Commit changes and link to relevant GitHub Issues.
 | Git Log | `.git/` | ✅ | | Recent commit style |
 | Git Diff | Working directory | ✅ | | Changes to commit |
 | GitHub Issues | `abilityai/trinity` | ✅ | | Issue to reference |
+| GitHub Labels | `abilityai/trinity` | | ✅ | Update issue status label |
 | Git Commit | `.git/` | | ✅ | New commit created |
 | Git Remote | Remote repository | | ✅ | Push to origin |
 
@@ -71,11 +72,18 @@ EOF
 git push
 ```
 
-### Step 5: Verify Issue Updated
+### Step 5: Update Issue Status
 
+Move issue to "Review" state per SDLC workflow:
 ```bash
-gh issue view <N> --json state,title
+# Remove in-progress label, add review label
+gh issue edit <N> --remove-label "status-in-progress" --add-label "status-review"
+
+# Verify
+gh issue view <N> --json state,title,labels
 ```
+
+Note: Only applies when issue was in `status-in-progress`. Skip if no issue reference.
 
 ## Commit Types
 
@@ -94,4 +102,4 @@ gh issue view <N> --json state,title
 - [ ] Issue reference included (Closes/Fixes/Refs #N)
 - [ ] Co-Authored-By line present
 - [ ] Push successful
-- [ ] Issue status verified (if applicable)
+- [ ] Issue moved to `status-review` (if applicable)
