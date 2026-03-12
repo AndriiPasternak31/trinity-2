@@ -412,6 +412,16 @@ class DatabaseManager:
         return self._agent_ops.get_all_agents_parallel_capacity()
 
     # =========================================================================
+    # Execution Timeout (delegated to db/agents.py) - TIMEOUT-001
+    # =========================================================================
+
+    def get_execution_timeout(self, agent_name: str) -> int:
+        return self._agent_ops.get_execution_timeout(agent_name)
+
+    def set_execution_timeout(self, agent_name: str, timeout_seconds: int) -> bool:
+        return self._agent_ops.set_execution_timeout(agent_name, timeout_seconds)
+
+    # =========================================================================
     # Avatar Identity (delegated to db/agents.py) - AVATAR-001
     # =========================================================================
 
