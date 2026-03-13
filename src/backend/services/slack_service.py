@@ -101,7 +101,7 @@ class SlackService:
 
         params = {
             "client_id": get_slack_client_id(),
-            "scope": "im:history,chat:write,users:read.email",
+            "scope": "im:history,im:read,im:write,chat:write,users:read,users:read.email",
             "redirect_uri": redirect_uri,
             "state": state
         }
