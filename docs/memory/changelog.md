@@ -1,4 +1,41 @@
 ### 2026-03-12
+🐛 **Fix: Slack connect endpoint now reads from database settings (SLACK-001)**
+
+Fixed bug where `POST /api/agents/{name}/public-links/{id}/slack/connect` was reading Slack credentials from environment variables instead of database settings. The endpoint now uses `get_slack_signing_secret()` from `settings_service` (database-first with env fallback), matching the behavior of other Slack endpoints.
+
+**Root cause:** Import of `SLACK_SIGNING_SECRET` from `config.py` (env-only) instead of using `get_slack_signing_secret()` from `settings_service`.
+
+**Fix:** `src/backend/routers/slack.py` - Changed import and usage to read from database settings.
+
+---
+
+📋 **Planning: Telegram Bot Integration for Agents (TGRAM-001)**
+
+Added requirements for per-agent Telegram bot integration. Each agent can have its own Telegram bot (created via @BotFather) enabling mobile-first chat access.
+
+**Scope:** Phase 1 MVP - bidirectional chat, polling mode, registration flow
+**GitHub Issue:** #103
+**Spec:** `docs/requirements/TELEGRAM_INTEGRATION.md`
+**Blueprint:** Slack integration (`slack.py`, `slack_service.py`)
+
+---
+
+✅ **Tests: Slack Integration test suite (SLACK-001)**
+
+Added comprehensive test suite for the Slack integration feature (27 tests). Tests cover signature verification, OAuth flow, DM handling, verification state machine, session persistence, and admin settings endpoints. 21 tests pass, 6 skipped (require specific environment setup).
+
+**Test file:** `tests/test_slack_integration.py`
+
+**Coverage:**
+- Public endpoints (events, OAuth callback)
+- Authentication enforcement
+- Connection status management
+- OAuth initiation and disconnect
+- Admin settings CRUD
+- Database schema validation
+
+---
+
 ⚙️ **Feature: Per-agent configurable execution timeout (#99)**
 
 Added per-agent execution timeout configuration. All execution paths (task API, chat, scheduler, MCP, paid endpoints) now use the agent's configured timeout when no explicit timeout is provided.
@@ -18,6 +55,21 @@ Added per-agent execution timeout configuration. All execution paths (task API, 
 - `routers/internal.py` — Scheduler uses agent timeout
 - `services/slot_service.py` — Dynamic slot TTL based on agent timeout + 5 min buffer
 - `models.py` — `ParallelTaskRequest.timeout_seconds` now defaults to `None` (use agent config)
+
+---
+
+✅ **Tests: Agent Timeout test suite (TIMEOUT-001)**
+
+Added comprehensive test suite for the per-agent execution timeout feature (21 tests). Tests cover authentication, endpoint structure, validation, and common timeout values.
+
+**Test file:** `tests/test_agent_timeout.py`
+
+**Coverage:**
+- Authentication requirements (GET/PUT)
+- Response structure (agent_name, seconds, minutes)
+- Default value (900 seconds = 15 minutes)
+- Validation (60-7200 range, integer only)
+- 404 for nonexistent agents
 
 ---
 

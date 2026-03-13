@@ -219,7 +219,7 @@ Slack sessions use the existing `public_chat_sessions` table with:
 | Handler | Line | Description |
 |---------|------|-------------|
 | `get_slack_connection_status()` | 417-450 | Get connection status |
-| `initiate_slack_oauth()` | 453-486 | Start OAuth flow |
+| `initiate_slack_oauth()` | 453-486 | Start OAuth flow (uses `get_slack_signing_secret()` from settings_service) |
 | `disconnect_slack()` | 489-513 | Disconnect workspace |
 | `update_slack_connection()` | 516-542 | Update settings |
 
@@ -714,3 +714,4 @@ Reload status (refresh UI)
 | 2026-02-25 | Claude | Enhanced with exact line numbers and code references |
 | 2026-02-25 | Claude | Added Settings Configuration flow (admin UI for Slack credentials) |
 | 2026-03-01 | Claude | Fixed access checks to use `can_user_access_agent()`/`can_user_share_agent()` (Issue #48) |
+| 2026-03-12 | Claude | Fixed `initiate_slack_oauth()` to use `get_slack_signing_secret()` from settings_service instead of importing from config.py |

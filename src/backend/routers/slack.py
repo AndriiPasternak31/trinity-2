@@ -31,7 +31,8 @@ from services.slack_service import slack_service
 from services.email_service import email_service
 from services.docker_service import get_agent_container
 from db_models import SlackConnectionStatus, SlackOAuthInitResponse
-from config import SLACK_SIGNING_SECRET, SLACK_AUTO_VERIFY_EMAIL
+from config import SLACK_AUTO_VERIFY_EMAIL
+from services.settings_service import get_slack_signing_secret
 
 
 logger = logging.getLogger(__name__)
@@ -470,7 +471,7 @@ async def initiate_slack_oauth(
     if existing:
         raise HTTPException(status_code=400, detail="Slack already connected. Disconnect first.")
 
-    if not SLACK_SIGNING_SECRET:
+    if not get_slack_signing_secret():
         raise HTTPException(status_code=400, detail="Slack integration not configured")
 
     # Generate OAuth state
