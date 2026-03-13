@@ -24,7 +24,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
 │  │   Frontend   │  │   Backend    │  │  MCP Server  │  │    Vector    │    │
 │  │   (Vue.js)   │  │  (FastAPI)   │  │  (FastMCP)   │  │   (Logs)     │    │
-│  │   :3000      │  │   :8000      │  │   :8080      │  │   :8686      │    │
+│  │   :80        │  │   :8000      │  │   :8080      │  │   :8686      │    │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘    │
 │         │                 │                 │                 │             │
 │         └─────────────────┼─────────────────┼─────────────────┘             │
@@ -98,37 +98,120 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 | `database.py` | SQLite persistence (users, agent ownership, MCP API keys) |
 | ~~`credentials.py`~~ | **REMOVED (2026-02-05)** - CRED-002 replaced with `routers/credentials.py` file injection system |
 
-**Routers (`routers/`):**
-- `auth.py` - Authentication endpoints (admin login, email auth, token validation)
-- `agents.py` - Agent CRUD, start/stop, logs, stats
+**Routers (`routers/`)** — 45 router modules:
+
+*Core Agent:*
+- `agents.py` - Agent CRUD, start/stop, logs, stats, timeout, read-only mode
 - `credentials.py` - Credential injection/export/import (CRED-002 simplified system)
-- `internal.py` - Internal endpoints for agent startup (no auth)
+- `chat.py` - Agent chat/activity monitoring
+- `chat/` - Chat sub-router directory
+- `internal.py` - Internal endpoints for agent startup, scheduler task execution (no auth)
 - `templates.py` - Template listing and GitHub repo fetching
 - `sharing.py` - Agent sharing between users
-- `mcp_keys.py` - MCP API key management
-- `chat.py` - Agent chat/activity monitoring
-- `schedules.py` - Agent scheduling CRUD and control
 - `git.py` - Git sync endpoints (status, sync, log, pull)
-- `processes.py` - Process definition CRUD, execution control (NEW: 2026-01-16)
-- `process_templates.py` - Process template listing and retrieval (NEW: 2026-01-16)
-- `slack.py` - Slack integration (OAuth, events, DM handling) (NEW: 2026-02-25, SLACK-001)
-- `image_generation.py` - Image generation REST endpoints (NEW: 2026-03-07, IMG-001)
-- `avatar.py` - Agent avatar generation and serving endpoints (NEW: 2026-03-07, AVATAR-001)
 
-**Services (`services/`):**
+*Auth & Security:*
+- `auth.py` - Authentication endpoints (admin login, email auth, token validation)
+- `mcp_keys.py` - MCP API key management
+- `setup.py` - First-time setup wizard
+
+*Scheduling & Execution:*
+- `schedules.py` - Agent scheduling CRUD and control
+- `executions.py` - Execution list and details
+
+*Organization & Tags:*
+- `tags.py` - Agent tagging
+- `system_views.py` - Saved system views
+- `systems.py` - System manifest deployment
+
+*Monitoring & Operations:*
+- `monitoring.py` - Fleet health monitoring (MON-001)
+- `telemetry.py` - Host telemetry (CPU/memory/disk)
+- `activities.py` - Activity timeline endpoints
+- `agent_dashboard.py` - Agent-defined dashboard (dashboard.yaml)
+- `alerts.py` - Cost threshold alerts
+- `notifications.py` - Agent notifications
+- `operator_queue.py` - Operating Room queue (OPS-001)
+- `ops.py` - Operating Room sync service
+- `logs.py` - Container log endpoints
+- `observability.py` - Observability data
+- `audit.py` - Audit trail
+
+*Public Access & Monetization:*
+- `public_links.py` - Public agent link management
+- `public.py` - Public chat endpoints
+- `paid.py` - x402 payment-gated chat (NVM-001)
+- `nevermined.py` - Nevermined payment config management
+- `slack.py` - Slack integration (OAuth, events, DM handling) (SLACK-001)
+
+*Subscriptions & Skills:*
+- `subscriptions.py` - Subscription management (SUB-002)
+- `skills.py` - Skill CRUD and assignment
+- `settings.py` - Platform admin settings
+
+*Process Engine:*
+- `processes.py` - Process definition CRUD, execution control
+- `process_templates.py` - Process template listing and retrieval
+- `approvals.py` - Human approval inbox
+- `triggers.py` - Process triggers
+
+*Content & Files:*
+- `image_generation.py` - Image generation REST endpoints (IMG-001)
+- `avatar.py` - Agent avatar generation and serving (AVATAR-001)
+- `docs.py` - Documentation endpoints
+
+*System:*
+- `system_agent.py` - System agent management
+
+**Services (`services/`)** — 22 service modules + Process Engine:
+
+*Core:*
 - `docker_service.py` - Docker container management
+- `docker_utils.py` - Docker utility helpers
 - `template_service.py` - GitHub template cloning and processing
+- `agent_client.py` - HTTP client for agent container communication (chat, session, injection)
+- `settings_service.py` - Centralized settings retrieval (API keys, ops config)
+
+*Execution & Scheduling:*
+- `task_execution_service.py` - Unified task execution lifecycle (slot mgmt, activity tracking, sanitization) (EXEC-024)
+- `slot_service.py` - Parallel execution slot management with dynamic TTL (CAPACITY-001)
+- `execution_queue.py` - Redis-based execution queueing
 - `scheduler_service.py` - APScheduler-based scheduling service
+- `cleanup_service.py` - Background recovery of stale executions, activities, and slots (CLEANUP-001)
+
+*Monitoring & Activities:*
+- `activity_service.py` - Activity tracking and timeline
+- `monitoring_service.py` - Fleet-wide health monitoring (MON-001)
+- `monitoring_alerts.py` - Alert threshold configuration
+- `operator_queue_service.py` - Operating Room sync with agent containers (OPS-001)
+
+*Auth & Credentials:*
+- `credential_encryption.py` - AES-256-GCM encryption for .credentials.enc files (CRED-002)
+- `subscription_service.py` - Subscription management (SUB-002)
+- `ssh_service.py` - Ephemeral SSH credential generation
+- `email_service.py` - Email sending for verification codes
+
+*Git & GitHub:*
 - `git_service.py` - Git sync operations for GitHub-native agents
 - `github_service.py` - GitHub API client (repo creation, validation, org detection)
-- `settings_service.py` - Centralized settings retrieval (API keys, ops config)
-- `agent_client.py` - HTTP client for agent container communication (chat, session, injection)
-- `credential_encryption.py` - AES-256-GCM encryption for .credentials.enc files (NEW: 2026-02-05)
-- `process_engine/` - Process Engine service (NEW: 2026-01-16, see below)
-- `slack_service.py` - Slack API client (OAuth, messaging, verification) (NEW: 2026-02-25, SLACK-001)
-- `task_execution_service.py` - Unified task execution lifecycle (slot mgmt, activity tracking, sanitization) (NEW: 2026-03-04, EXEC-024)
-- `image_generation_service.py` - Platform image generation via Gemini (prompt refinement + image gen) (NEW: 2026-03-07, IMG-001)
-- `image_generation_prompts.py` - Best practices prompts for image generation use cases (NEW: 2026-03-07, IMG-001)
+
+*Integrations:*
+- `slack_service.py` - Slack API client (OAuth, messaging, verification) (SLACK-001)
+- `nevermined_payment_service.py` - x402 payment verification and settlement (NVM-001)
+
+*Content & Media:*
+- `image_generation_service.py` - Platform image generation via Gemini (prompt refinement + image gen) (IMG-001)
+- `image_generation_prompts.py` - Best practices prompts for image generation use cases (IMG-001)
+
+*Skills & System:*
+- `skill_service.py` - Skill CRUD and injection
+- `system_agent_service.py` - System agent lifecycle management
+- `system_service.py` - System manifest operations
+- `log_archive_service.py` - Log archival
+- `archive_storage.py` - Archive storage backend
+
+*Process Engine:*
+- `process_engine/` - BPMN-inspired workflow orchestration (see Process Engine section below)
 
 **Logging (`logging_config.py`):**
 - Structured JSON logging for production
@@ -189,22 +272,21 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - Tools access auth context via `context.session` parameter
 - Agent-to-agent collaboration uses agent-scoped keys for access control
 
-**15 Tools:**
-1. `list_agents` - List all agents
-2. `get_agent` - Get agent details
-3. `create_agent` - Create new agent
-4. `delete_agent` - Delete agent
-5. `start_agent` - Start agent
-6. `stop_agent` - Stop agent
-7. `list_templates` - List templates
-8. `chat_with_agent` - Send message to agent (enforces sharing rules)
-9. `get_chat_history` - Get conversation history
-10. `get_agent_logs` - Get container logs
-11. `get_credential_status` - Check credential files
-12. `get_agent_ssh_access` - Generate ephemeral SSH credentials (NEW: 2026-01-02)
-13. `inject_credentials` - Inject credential files into agent (NEW: 2026-02-05, CRED-002)
-14. `export_credentials` - Export to encrypted .credentials.enc (NEW: 2026-02-05, CRED-002)
-15. `import_credentials` - Import from encrypted file (NEW: 2026-02-05, CRED-002)
+**59 Tools** across 12 tool modules (`src/tools/`):
+
+| Module | Tools | Description |
+|--------|-------|-------------|
+| `agents.ts` (17) | `list_agents`, `get_agent`, `get_agent_info`, `create_agent`, `rename_agent`, `delete_agent`, `start_agent`, `stop_agent`, `list_templates`, `get_credential_status`, `inject_credentials`, `export_credentials`, `import_credentials`, `get_credential_encryption_key`, `get_agent_ssh_access`, `deploy_local_agent`, `initialize_github_sync` | Agent lifecycle, credentials, SSH, local deploy, GitHub sync |
+| `chat.ts` (3) | `chat_with_agent`, `get_chat_history`, `get_agent_logs` | Chat (enforces sharing rules), history, logs |
+| `schedules.ts` (8) | `list_agent_schedules`, `create_agent_schedule`, `get_agent_schedule`, `update_agent_schedule`, `delete_agent_schedule`, `toggle_agent_schedule`, `trigger_agent_schedule`, `get_schedule_executions` | Schedule CRUD and execution history |
+| `skills.ts` (7) | `list_skills`, `get_skill`, `get_skills_library_status`, `assign_skill_to_agent`, `set_agent_skills`, `sync_agent_skills`, `get_agent_skills` | Skill management and assignment |
+| `tags.ts` (5) | `list_tags`, `get_agent_tags`, `tag_agent`, `untag_agent`, `set_agent_tags` | Agent tagging |
+| `systems.ts` (4) | `deploy_system`, `list_systems`, `restart_system`, `get_system_manifest` | System manifest deployment |
+| `subscriptions.ts` (6) | `register_subscription`, `list_subscriptions`, `assign_subscription`, `clear_agent_subscription`, `get_agent_auth`, `delete_subscription` | Subscription management |
+| `monitoring.ts` (3) | `get_fleet_health`, `get_agent_health`, `trigger_health_check` | Fleet health monitoring |
+| `nevermined.ts` (4) | `configure_nevermined`, `get_nevermined_config`, `toggle_nevermined`, `get_nevermined_payments` | x402 payment configuration |
+| `notifications.ts` (1) | `send_notification` | Agent-to-platform notifications |
+| `docs.ts` (1) | `get_agent_requirements` | Agent documentation |
 
 ### Vector Log Aggregator (`config/vector.yaml`)
 
@@ -333,6 +415,17 @@ PENDING → RUNNING → COMPLETED
 - **Informed**: Agents notified of events via NDJSON files (optional)
 
 **Feature Flows:** `docs/memory/feature-flows/process-engine/`
+
+### Background Services
+
+Services that run continuously in the backend process:
+
+| Service | Module | Description |
+|---------|--------|-------------|
+| **Cleanup Service** | `cleanup_service.py` | Recovers stale executions stuck in 'running' status, expires abandoned activities, releases orphaned slots. Runs on configurable interval (default 120 min). (CLEANUP-001) |
+| **Operator Queue Sync** | `operator_queue_service.py` | Polls running agents every 5s, reads `~/.trinity/operator-queue.json`, syncs to DB, writes responses back. (OPS-001) |
+| **Monitoring Service** | `monitoring_service.py` | Fleet-wide health checks on configurable interval. (MON-001) |
+| **Scheduler Service** | `scheduler_service.py` | APScheduler-based cron job execution. Async fire-and-forget with DB polling for status. |
 
 ---
 

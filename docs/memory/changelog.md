@@ -1,4 +1,15 @@
 ### 2026-03-12
+📝 **Docs: Architecture.md comprehensive update**
+
+Updated architecture.md to reflect current system state:
+- Fixed MCP Server tool count from 15 → 59 tools across 12 modules with full tool listing
+- Expanded Routers section from 16 → 45 router modules, organized by category
+- Expanded Services section from 11 → 30 service modules, organized by category
+- Fixed frontend port in ASCII diagram from `:3000` → `:80`
+- Added Background Services section documenting Cleanup, Operator Queue Sync, Monitoring, and Scheduler services
+
+---
+
 🐛 **Fix: Slack connect endpoint now reads from database settings (SLACK-001)**
 
 Fixed bug where `POST /api/agents/{name}/public-links/{id}/slack/connect` was reading Slack credentials from environment variables instead of database settings. The endpoint now uses `get_slack_signing_secret()` from `settings_service` (database-first with env fallback), matching the behavior of other Slack endpoints.
