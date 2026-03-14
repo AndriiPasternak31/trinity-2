@@ -299,15 +299,13 @@ Please address these items and request re-review.
 
 ## Quick Reference: When Documentation is Required
 
-| Change Type | Changelog | Roadmap | Requirements | Architecture | Feature Flow |
-|-------------|-----------|---------|--------------|--------------|--------------|
-| Bug fix | ✅ | ➖ | ➖ | ➖ | ⚠️ if behavior changes |
-| New feature | ✅ | ✅ | ✅ | ⚠️ if API/schema | ✅ |
-| Refactor | ✅ | ➖ | ➖ | ⚠️ if structure | ⚠️ if flow changes |
-| API change | ✅ | ➖ | ⚠️ if scope | ✅ | ✅ |
-| Schema change | ✅ | ➖ | ➖ | ✅ | ⚠️ |
-| Config change | ✅ | ➖ | ➖ | ⚠️ | ➖ |
-| Docs only | ✅ | ➖ | ➖ | ➖ | ➖ |
+| Change Type | Required Docs |
+|-------------|---------------|
+| Bug fix | Changelog only |
+| Feature / API change | Changelog + architecture or feature-flow as needed |
+| New capability | Changelog + requirements + feature-flow |
+| Refactor | Changelog only (unless it changes architecture) |
+| Docs only | Changelog |
 
 ## Related
 

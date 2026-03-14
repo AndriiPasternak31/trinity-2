@@ -59,18 +59,16 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 
 ## SDLC
 
-All work follows a 6-stage lifecycle tracked via the **Trinity Roadmap** GitHub Project board:
+All work follows a 4-stage lifecycle tracked via the **Trinity Roadmap** GitHub Project board:
 
 ```
- Backlog → Ready → In Progress → Dev Testing → Review → Done
+ Todo → In Progress → Review → Done
 ```
 
-- **Backlog**: Issue created, triaged with priority (P0-P3) and type labels
-- **Ready**: Acceptance criteria defined, `status-ready` label applied
-- **In Progress**: Developer assigned, branch created, `status-in-progress` label
-- **Dev Testing**: PR opened, deployed to dev server for validation
-- **Review**: `/validate-pr` passes, code review approved
-- **Done**: PR merged, issue closed, dev server updated
+- **Todo**: Issue created, triaged with priority (P0-P3) and type labels, acceptance criteria defined
+- **In Progress**: Developer assigned, feature branch created (`feature/<issue>-<slug>`), `status-in-progress` label
+- **Review**: PR opened, `/validate-pr` passes, code review approved
+- **Done**: PR squash-merged, issue closed
 
 **Full details**: `docs/DEVELOPMENT_WORKFLOW.md`
 
@@ -95,12 +93,11 @@ All work follows a 6-stage lifecycle tracked via the **Trinity Roadmap** GitHub 
 - Assign yourself, update labels and board status as you progress (see SDLC above)
 - Close issues when complete
 
-### 4. Mandatory Documentation Updates
-After **EVERY** change, update:
-- `changelog.md` - Add timestamped entry with emoji prefix
-- `architecture.md` - If changing APIs, schema, or integrations
-- `feature-flows/` - If modifying feature behavior
-- `requirements.md` - If changing feature scope
+### 4. Tiered Documentation Updates
+Documentation requirements scale with change type:
+- **Bug fix**: `changelog.md` only
+- **Feature / API change**: `changelog.md` + `architecture.md` or `feature-flows/` as needed
+- **New capability**: `changelog.md` + `requirements.md` + `feature-flows/`
 
 ### 5. Security First (PUBLIC REPO)
 - **This is a public repository** - assume all commits are visible worldwide

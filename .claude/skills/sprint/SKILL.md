@@ -100,7 +100,7 @@ If missing critical detail:
 ```bash
 # Assign yourself and update labels
 gh issue edit [NUMBER] --repo abilityai/trinity \
-  --add-label "status-in-progress" --remove-label "status-ready"
+  --add-label "status-in-progress"
 
 # Create feature branch from main
 git checkout main

@@ -16,10 +16,8 @@
 | `type-bug` | Red | Bug fix |
 | `type-refactor` | Purple | Code improvement |
 | `type-docs` | Blue | Documentation |
-| `status-ready` | Light green | Ready to work on |
 | `status-in-progress` | Yellow | Currently being worked on |
 | `status-blocked` | Gray | Has dependencies |
-| `status-review` | Purple | Needs review |
 
 ## Issues to Create
 
@@ -104,7 +102,7 @@
 | Platform Memory Primitives | `priority-p1`, `type-feature` | 3-tier memory (Episodic→Semantic→Procedural) |
 | Code Execution Mode | `priority-p2`, `type-feature` | Agents write code to interact with MCP servers (98% token reduction) |
 | Smart Model Routing | `priority-p2`, `type-feature` | Route queries by complexity: haiku→sonnet→opus |
-| Orphaned Execution Recovery | `priority-p1`, `type-feature`, `status-ready` | On scheduler startup, mark all "running" executions as failed |
+| Orphaned Execution Recovery | `priority-p1`, `type-feature` | On scheduler startup, mark all "running" executions as failed |
 | MEMORY.md Convention | `priority-p2`, `type-feature` | Agents maintain curated long-term memory file |
 | Telegram Channel Integration | `priority-p2`, `type-feature` | Mobile-first interface via Telegram bot |
 | Create Schedule from Task | `priority-p3`, `type-feature` | Add icon in Tasks tab to create schedule from execution |
@@ -137,13 +135,13 @@ gh issue create --repo abilityai/trinity --title "Sentinel/Watchdog Agents" --la
 gh issue create --repo abilityai/trinity --title "Thinking Budget" --label "priority-p2,type-feature" --body "Cost limits per reasoning task (\$X max spend)."
 
 # Phase 16 P0 items (highest priority)
-gh issue create --repo abilityai/trinity --title "Client/Viewer User Role (AUTH-002)" --label "priority-p0,type-feature,status-ready" --body "Simplified user role using existing auth. Sees only basic UI (agent list, terminal, files). Hides advanced features. Enables sharing agents with paying clients. Spec: docs/requirements/CLIENT_VIEWER_USER_ROLE.md"
+gh issue create --repo abilityai/trinity --title "Client/Viewer User Role (AUTH-002)" --label "priority-p0,type-feature" --body "Simplified user role using existing auth. Sees only basic UI (agent list, terminal, files). Hides advanced features. Enables sharing agents with paying clients. Spec: docs/requirements/CLIENT_VIEWER_USER_ROLE.md"
 
-gh issue create --repo abilityai/trinity --title "Subscription Management (SUB-001)" --label "priority-p0,type-feature,status-ready" --body "Centralized Claude Max/Pro subscription registry. MCP workflow: authenticate locally, register via register_subscription, assign to agents. Spec: docs/requirements/SUBSCRIPTION_MANAGEMENT.md"
+gh issue create --repo abilityai/trinity --title "Subscription Management (SUB-001)" --label "priority-p0,type-feature" --body "Centralized Claude Max/Pro subscription registry. MCP workflow: authenticate locally, register via register_subscription, assign to agents. Spec: docs/requirements/SUBSCRIPTION_MANAGEMENT.md"
 
-gh issue create --repo abilityai/trinity --title "Unified Executions Dashboard (EXEC-022)" --label "priority-p0,type-feature,status-ready" --body "Combined view of all executions across all agents. Filter by agent, time, trigger type. Real-time WebSocket updates. Click through to details. Spec: docs/requirements/UNIFIED_EXECUTIONS_DASHBOARD.md"
+gh issue create --repo abilityai/trinity --title "Unified Executions Dashboard (EXEC-022)" --label "priority-p0,type-feature" --body "Combined view of all executions across all agents. Filter by agent, time, trigger type. Real-time WebSocket updates. Click through to details. Spec: docs/requirements/UNIFIED_EXECUTIONS_DASHBOARD.md"
 
-gh issue create --repo abilityai/trinity --title "MCP Execution Query Tools (MCP-007)" --label "priority-p0,type-feature,status-ready" --body "list_recent_executions - query what happened across fleet. get_execution_result - fetch specific output. get_agent_activity_summary - high-level status. Spec: docs/requirements/MCP_EXECUTION_QUERY_TOOLS.md"
+gh issue create --repo abilityai/trinity --title "MCP Execution Query Tools (MCP-007)" --label "priority-p0,type-feature" --body "list_recent_executions - query what happened across fleet. get_execution_result - fetch specific output. get_agent_activity_summary - high-level status. Spec: docs/requirements/MCP_EXECUTION_QUERY_TOOLS.md"
 
 gh issue create --repo abilityai/trinity --title "Audit Trail System (SEC-001)" --label "priority-p0,type-feature" --body "Comprehensive audit logging for user/agent actions with full actor attribution. Append-only audit_log table, MCP tool call tracking, hash chain for tamper evidence. Spec: docs/requirements/AUDIT_TRAIL_ARCHITECTURE.md"
 ```

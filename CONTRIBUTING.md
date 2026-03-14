@@ -33,13 +33,13 @@ By contributing to Trinity, you agree that your contributions will be licensed u
 
 ### Pull Requests
 
-See `docs/DEVELOPMENT_WORKFLOW.md` for the full SDLC (Backlog → Ready → In Progress → Dev Testing → Review → Done).
+See `docs/DEVELOPMENT_WORKFLOW.md` for the full SDLC (Todo → In Progress → Review → Done).
 
 1. **Fork and clone** the repository
 2. **Find or create an issue** — every PR must link to an issue
-3. **Create a branch** from `main`:
+3. **Create a feature branch** from `main`:
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b feature/<issue-number>-your-feature-name
    ```
 4. **Make your changes** following our coding standards
 5. **Test your changes** locally

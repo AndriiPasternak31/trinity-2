@@ -7,10 +7,10 @@
 
 ## Software Development Lifecycle (SDLC)
 
-Trinity follows a 6-stage lifecycle. Every piece of work flows through these stages, tracked via the **Trinity Roadmap** GitHub Project board and issue labels.
+Trinity follows a 4-stage lifecycle that maps 1:1 to the **Trinity Roadmap** GitHub Project board columns.
 
 ```
- Backlog → Ready → In Progress → Dev Testing → Review → Done
+ Todo → In Progress → Review → Done
 ```
 
 ```
@@ -18,36 +18,26 @@ Trinity follows a 6-stage lifecycle. Every piece of work flows through these sta
 │                    TRINITY SDLC                                     │
 ├──────────┬──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ BACKLOG  │  Issue created, triaged with priority + type labels      │
+│ TODO     │  Issue created, triaged with priority + type labels      │
+│          │  Acceptance criteria defined before work begins           │
 │          │  GitHub Project: Todo                                    │
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ READY    │  Issue refined, acceptance criteria defined               │
-│          │  Label: status-ready                                     │
-│          │  GitHub Project: Todo                                    │
-│          │                                                          │
-├──────────┼──────────────────────────────────────────────────────────┤
-│          │                                                          │
-│ IN       │  Developer assigned, branch created                      │
+│ IN       │  Developer assigned, feature branch created              │
 │ PROGRESS │  Label: status-in-progress                               │
 │          │  GitHub Project: In Progress                             │
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ DEV      │  PR opened, deployed to dev server for validation        │
-│ TESTING  │  Label: status-review                                    │
-│          │  Dev server: dev.abilityai.dev                           │
-│          │                                                          │
-├──────────┼──────────────────────────────────────────────────────────┤
-│          │                                                          │
-│ REVIEW   │  /validate-pr passes, code review approved               │
-│          │  PR approved, ready to merge                             │
+│ REVIEW   │  PR opened, /validate-pr passes                          │
+│          │  Code review approved, ready to merge                    │
+│          │  GitHub Project: In Progress                             │
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
 │ DONE     │  PR merged to main, issue closed                         │
-│          │  Dev server updated, docs up to date                     │
+│          │  Docs up to date                                         │
 │          │  GitHub Project: Done                                    │
 │          │                                                          │
 └──────────┴──────────────────────────────────────────────────────────┘
@@ -64,7 +54,7 @@ Trinity follows a 6-stage lifecycle. Every piece of work flows through these sta
 
 Within P1, the **Tier** field on the project board provides sub-prioritization: **P1a** (highest) → **P1b** → **P1c**.
 
-**Rule**: Work P0 first, then P1 by issue number (oldest first).
+**Rule**: Work P0 first, then P1 by Tier (P1a → P1b → P1c), then by issue number (oldest first).
 
 ### Issue Types
 
@@ -77,17 +67,16 @@ Within P1, the **Tier** field on the project board provides sub-prioritization: 
 
 ### Key Rules
 
+- **All work on feature branches** — direct pushes to `main` are blocked (branch protection)
 - **Every PR links to an issue** — use `Fixes #N` in the PR description
 - **Assign yourself** when you start work on an issue
-- **Keep labels and board in sync** — update both when stage changes
-- **Dev server is the gate** — validate on `dev.abilityai.dev` before merge
 - **No merge without passing `/validate-pr`**
 
 ---
 
 ## Stage Details
 
-### 1. Backlog
+### 1. Todo
 
 Issues are created via GitHub issue templates (bug report or feature request). On creation:
 
@@ -95,27 +84,27 @@ Issues are created via GitHub issue templates (bug report or feature request). O
 2. Apply **type** label (feature/bug/refactor/docs)
 3. Add to **Trinity Roadmap** project board (lands in Todo)
 4. Add description with enough context to understand the problem
+5. Define acceptance criteria (how do we know it's done?)
 
-Issues stay in Backlog until they're refined enough to be actionable.
+An issue is ready to pick up when it has a clear description, acceptance criteria, and no unresolved blockers (if blocked, apply `status-blocked` label).
 
-### 2. Ready
-
-An issue moves to Ready when it has:
-
-- Clear description of what needs to happen
-- Acceptance criteria (how do we know it's done?)
-- No unresolved blockers (if blocked, apply `status-blocked` label)
-
-**Action**: Apply `status-ready` label. Issue stays in "Todo" column on the board.
-
-### 3. In Progress
+### 2. In Progress
 
 When picking up work:
 
 1. **Assign yourself** to the issue
-2. Apply `status-in-progress` label, remove `status-ready`
+2. Apply `status-in-progress` label
 3. Move to **In Progress** on the project board
 4. Create a feature branch from `main`
+
+#### Branch Convention
+
+All work happens on feature branches. Direct pushes to `main` are blocked by branch protection.
+
+**Naming**: `feature/<issue-number>-<short-slug>`
+- Example: `feature/68-live-execution-output`
+
+**Merge strategy**: Squash merge via PR with `Fixes #N`.
 
 Then follow the development cycle:
 
@@ -158,25 +147,19 @@ After tests pass, update documentation:
 /update-docs
 ```
 
-| Document | When to Update |
-|----------|----------------|
-| `changelog.md` | Always — add timestamped entry |
-| `architecture.md` | API changes, schema changes, new integrations |
-| `requirements.md` | New features, scope changes |
-| `feature-flows/*.md` | Behavior changes (use `/feature-flow-analysis`) |
+| Change Type | Required Docs |
+|-------------|---------------|
+| Bug fix | `changelog.md` only |
+| Feature / API change | `changelog.md` + `architecture.md` or `feature-flows/*.md` as needed |
+| New capability | `changelog.md` + `requirements.md` + `feature-flows/*.md` |
 
-### 4. Dev Testing
+### 3. Review
 
 When local development is complete:
 
 1. **Open a PR** — reference the issue with `Fixes #N`
-2. **Deploy to dev server** — `dev.abilityai.dev` is the validation environment
-3. **Verify on dev** — test the feature on real infrastructure, not just localhost
-4. Apply `status-review` label, remove `status-in-progress`
-
-The dev server is a GCP instance running the full Trinity stack. It mirrors production and is the final check before merge.
-
-### 5. Review
+2. **Verify locally** — test the feature on localhost
+3. **For P0/P1 features** (recommended): deploy to dev server for additional validation
 
 Run PR validation:
 
@@ -200,14 +183,13 @@ The validator produces a report with a recommendation: **APPROVE**, **REQUEST CH
 
 If changes are requested, the developer fixes and re-requests review. The reviewer runs `/validate-pr` again.
 
-### 6. Done
+### 4. Done
 
 When the PR is approved and merged:
 
 1. Issue is **auto-closed** via `Fixes #N`
 2. Move to **Done** on the project board
 3. Remove status labels
-4. Dev server is updated to the new `main`
 
 ---
 
@@ -227,11 +209,10 @@ Keep these in sync at all times:
 
 | Stage | Label | Board Column |
 |-------|-------|--------------|
-| Backlog | *(none)* | Todo |
-| Ready | `status-ready` | Todo |
+| Todo | *(none)* | Todo |
 | In Progress | `status-in-progress` | In Progress |
 | Blocked | `status-blocked` | In Progress |
-| Dev Testing / Review | `status-review` | In Progress |
+| Review | *(PR open)* | In Progress |
 | Done | *(none)* | Done |
 
 ---
@@ -240,10 +221,8 @@ Keep these in sync at all times:
 
 | Environment | URL | Purpose |
 |-------------|-----|---------|
-| **Local** | `http://localhost` | Development |
-| **Dev Server** | `dev.abilityai.dev` | Pre-merge validation |
-
-The dev server runs the full Trinity stack (backend, frontend, MCP server, scheduler, Redis, Vector) on a GCP VM, accessed via Tailscale. It is updated to track `main` and is used to validate changes on real infrastructure before they ship.
+| **Local** | `http://localhost` | Development and primary testing |
+| **Dev Server** | *(configured separately)* | Optional pre-merge validation for P0/P1 features |
 
 ---
 
@@ -322,19 +301,18 @@ Skills in `.claude/skills/` define HOW to approach specific tasks:
 
 **For every development session:**
 
-- [ ] Check GitHub Issues — pick the highest priority ready issue
-- [ ] Assign yourself, move to In Progress
+- [ ] Check GitHub Issues — pick the highest priority issue from Todo
+- [ ] Assign yourself, apply `status-in-progress`, move to In Progress
+- [ ] Create feature branch: `feature/<issue-number>-<slug>`
 - [ ] Load context (`/read-docs` or read relevant feature flows)
 - [ ] Implement changes
 - [ ] Run tests (`test-runner` agent)
-- [ ] Update documentation (`/update-docs`)
-- [ ] Open PR with `Fixes #N`
-- [ ] Deploy and verify on dev server
+- [ ] Update documentation (see tiered doc requirements above)
+- [ ] Open PR with `Fixes #N`, squash merge when approved
 - [ ] Run `/validate-pr`
 
 **For PR reviews:**
 
 - [ ] Run `/validate-pr <number>`
 - [ ] Verify all Critical issues resolved
-- [ ] Confirm feature works on dev server
 - [ ] Approve only when report shows all pass
