@@ -68,6 +68,7 @@ temp/
 
 # Local deployment configuration (contains sensitive data)
 CLAUDE.local.md
+.trinity-sync.yaml
 
 # API logs
 api.log
