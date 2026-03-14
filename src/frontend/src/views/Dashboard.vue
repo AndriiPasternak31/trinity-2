@@ -14,28 +14,17 @@
         <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
           <div class="flex items-center justify-between">
             <!-- Left: Stats -->
-            <div class="flex items-center">
-              <div class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400">
-                <span class="flex items-center space-x-1">
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ agents.length }}</span>
-                  <span>agents</span>
-                </span>
-                <span class="text-gray-300 dark:text-gray-600">·</span>
+            <div class="flex items-center min-w-0 overflow-hidden">
+              <div class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                 <span class="flex items-center space-x-1">
                   <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                  <span class="font-medium text-green-600 dark:text-green-400">{{ runningCount }}</span>
-                  <span>running</span>
+                  <span class="font-medium text-green-600 dark:text-green-400">{{ runningCount }}/{{ agents.length }}</span>
+                  <span>agents</span>
                 </span>
                 <span class="text-gray-300 dark:text-gray-600">·</span>
                 <span class="flex items-center space-x-1">
                   <span class="font-medium text-blue-600 dark:text-blue-400">{{ totalCollaborationCount }}</span>
                   <span>messages ({{ timeRangeHours }}h)</span>
-                </span>
-                <span v-if="activeCollaborationCount > 0" class="text-gray-300 dark:text-gray-600">·</span>
-                <span v-if="activeCollaborationCount > 0" class="flex items-center space-x-1 text-green-600 dark:text-green-400">
-                  <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  <span class="font-medium">{{ activeCollaborationCount }}</span>
-                  <span>active</span>
                 </span>
                 <!-- OTel Stats -->
                 <template v-if="observabilityStore.isOperational && observabilityStore.hasData">
@@ -67,13 +56,13 @@
             </div>
 
             <!-- Right: Controls -->
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-2 flex-shrink-0">
               <!-- Quick Tag Filter Dropdown -->
               <div v-if="availableTags.length > 0" class="relative">
                 <button
                   @click="showTagDropdown = !showTagDropdown"
                   :class="[
-                    'flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-medium transition-all',
+                    'flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-medium transition-all whitespace-nowrap',
                     selectedQuickTags.length > 0
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -82,7 +71,7 @@
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"/>
                   </svg>
-                  <span>{{ selectedQuickTags.length > 0 ? selectedQuickTags.length + ' tag' + (selectedQuickTags.length > 1 ? 's' : '') : 'Tags' }}</span>
+                  <span class="whitespace-nowrap">{{ selectedQuickTags.length > 0 ? selectedQuickTags.length + ' tag' + (selectedQuickTags.length > 1 ? 's' : '') : 'Tags' }}</span>
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                   </svg>
