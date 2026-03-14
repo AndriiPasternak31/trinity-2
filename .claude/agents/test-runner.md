@@ -157,6 +157,7 @@ The test suite covers:
 ### Credentials & Configuration
 - **Credentials** (test_credentials.py) - Credential management, hot reload
 - **Subscriptions** (test_subscriptions.py) - Subscription CRUD, assignment, auth status, injection, cascade delete (SUB-001) [SMOKE + Agent]
+- **Rate Limits** (test_rate_limits.py) - Rate limit message detection, error formatting, ExecutionMetadata error fields, 429 queue full (SUB-002) [UNIT + SMOKE]
 - **Settings** (test_settings.py) - System settings, Trinity prompt, API keys management
 - **Schedules** (test_schedules.py) - Scheduled executions
 - **Execution Queue** (test_execution_queue.py) - Queue management
@@ -177,6 +178,14 @@ The test suite covers:
 - **Parallel Tasks** (test_parallel_task.py) - Parallel headless execution (Req 12.1)
 - **Log Archive** (test_log_archive.py) - Log archival service (requires docker package in test env)
 - **Agent Notifications** (test_notifications.py) - Notification CRUD, acknowledge, dismiss, agent-specific queries (NOTIF-001) [SMOKE + Agent]
+
+### Avatars & Image Generation
+- **Avatars** (test_avatars.py) - Avatar serving, generation, regeneration, deletion, emotions, identity prompts, default generation (AVATAR-001/002/003) [SMOKE + Agent]
+- **Image Generation** (test_image_generation.py) - Image generation service tests
+
+### Payments
+- **Nevermined Permissions** (test_nevermined_permissions.py) - Nevermined config CRUD, owner/admin/unauth access (NVM-001) [SMOKE + Agent]
+- **Nevermined Payments** (test_nevermined_payments.py) - Paid chat 402/403 flow, payment info, settlement admin endpoints (NVM-001) [SMOKE + Agent]
 
 ### Real-Time & WebSocket
 - **Web Terminal** (test_web_terminal.py) - WebSocket terminal sessions
@@ -209,9 +218,10 @@ The test suite covers:
 
 ## Test Suite Statistics
 
-**Total Tests**: ~2040 tests across 108 test files
-**Smoke Tests**: ~504 tests (fast, no agent creation)
-**Core Tests (not slow)**: ~1951 tests
+**Total Tests**: ~2,130 tests across 111 test files
+**Smoke Tests**: ~540 tests (fast, no agent creation)
+**Unit Tests**: ~22 tests (no backend needed, rate limit detection/formatting)
+**Core Tests (not slow)**: ~2,040 tests
 **Slow Tests**: ~89 tests (chat execution, fleet ops, system agent ops, execution termination)
 **WebSocket Tests**: ~10 tests (web terminal, execution streaming)
 
@@ -240,7 +250,7 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 - **Warning**: 75-90% pass rate, <5 failures
 - **Critical**: <75% pass rate or >5 failures
 
-## Known Issues (2026-03-12)
+## Known Issues (2026-03-13)
 
 | Issue | Test | Severity | Status |
 |-------|------|----------|--------|
@@ -254,6 +264,7 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 
 | Issue | Fix | Date |
 |-------|-----|------|
+| Avatar/Rate Limit/Payment tests missing (#84) | Added test_avatars.py, test_rate_limits.py, test_nevermined_payments.py | 2026-03-13 |
 | Executions stuck in 'running' status (#90) | TaskExecutionService now wraps slot acquisition in try block | 2026-03-12 |
 | Scheduler async dispatch TCP drops (#101) | SCHED-ASYNC-001: Async fire-and-forget with DB polling | 2026-03-11 |
 | Headless tasks fail with token error (#81) | Default model to sonnet for headless tasks | 2026-03-11 |
@@ -262,11 +273,52 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 
 | Feature | Test File | Tests |
 |---------|-----------|-------|
+| AVATAR-001/002/003 Avatars | `test_avatars.py` | ✅ 40 tests |
+| SUB-002 Rate Limits | `test_rate_limits.py` | ✅ 22 tests (unit + smoke) |
+| NVM-001 Payment Flows | `test_nevermined_payments.py` | ✅ 15 tests |
 | TIMEOUT-001 Agent Timeout | `test_agent_timeout.py` | ✅ 21 tests |
 | SCHED-ASYNC-001 Async Dispatch | `scheduler_tests/test_async_dispatch.py` | ✅ 11 tests |
 | CAPACITY-001 Capacity | `test_capacity.py` | ✅ 24 tests |
 | SUB-001 Subscriptions | `test_subscriptions.py` | ✅ 18 tests |
 | NOTIF-001 Notifications | `test_notifications.py` | ✅ 40 tests |
+
+## Recent Test Additions (2026-03-13)
+
+| Test File | Description | Tests Added |
+|-----------|-------------|-------------|
+| `test_avatars.py` | Avatar Generation & Serving (AVATAR-001/002/003) | ~40 tests |
+| `test_rate_limits.py` | Rate Limit Detection & Formatting (SUB-002) | ~22 tests |
+| `test_nevermined_payments.py` | Nevermined Payment Flows (NVM-001) | ~15 tests |
+
+**AVATAR-001/002/003 Avatar Tests** (`test_avatars.py`):
+
+- **Serving (Smoke)**: GET avatar/reference 404 for missing files, public access
+- **Emotions (Smoke)**: List emotions (empty), invalid emotion 400, valid emotion 404, all 8 emotions validated
+- **Identity (Smoke)**: GET identity returns null fields, auth required, nonexistent agent handling
+- **Generation (Smoke)**: Auth required, validation (empty/whitespace/too-long prompt, missing field), 501 without Gemini key
+- **Regeneration (Smoke)**: Auth required, 404 without reference image
+- **Deletion (Smoke)**: Auth required, idempotent delete, clears identity in DB
+- **Default Generation**: Admin-only auth, response structure validation
+- **Lifecycle (E2E)**: Generate → serve → identity → reference → delete → verify cleaned up
+- **Regeneration E2E**: Generate → regenerate from reference → verify
+- **Emotions E2E**: Generate → wait for background emotion variants → serve emotion
+
+**SUB-002 Rate Limit Tests** (`test_rate_limits.py`):
+
+- **Unit: `_is_rate_limit_message()`**: 15 tests — all 8 patterns, case insensitivity, false negatives, edge cases
+- **Unit: `_format_rate_limit_error()`**: 3 tests — with/without error_message, three resolution options
+- **Unit: `ExecutionMetadata`**: 4 tests — default None fields, setter, serialization
+- **Smoke: Queue full 429**: 2 tests — nonexistent agent, unauthenticated access
+
+**NVM-001 Payment Flow Tests** (`test_nevermined_payments.py`):
+
+- **Info endpoint**: No config 404/501, nonexistent agent, with config 200, disabled 404
+- **402 Payment Required**: No payment header → 402 with body + base64 header, validation
+- **403 Invalid Token**: Invalid payment-signature → 403 with error details
+- **Settlement Admin**: List failures (admin), retry nonexistent 404, auth requirements
+- **Request Validation**: Missing message 422, optional session_id accepted
+
+---
 
 ## Recent Test Additions (2026-03-12)
 
