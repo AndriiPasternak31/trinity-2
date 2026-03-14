@@ -22,9 +22,9 @@
 │                                                                     │
 │   2. DEVELOPMENT                                                    │
 │      ↓                                                              │
-│   Implement changes following existing patterns                     │
-│      ↓                                                              │
-│   Reference feature flows for data flow understanding               │
+│   /implement <source> → End-to-end automated implementation         │
+│      ↓    OR                                                        │
+│   Manual implementation following existing patterns                 │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
@@ -38,17 +38,19 @@
 │                                                                     │
 │   4. DOCUMENTATION                                                  │
 │      ↓                                                              │
-│   feature-flow-analyzer agent → Create/update feature flows         │
+│   /sync-feature-flows → Update affected feature flows               │
 │      ↓                                                              │
 │   /update-docs → Update changelog, architecture, requirements       │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│   5. PR VALIDATION (before merge)                                   │
+│   5. COMMIT & REVIEW                                                │
+│      ↓                                                              │
+│   /security-check → Pre-commit security validation                  │
+│      ↓                                                              │
+│   /commit → Stage, commit, push, link issues                        │
 │      ↓                                                              │
 │   /validate-pr → Validate PR meets all methodology requirements     │
-│      ↓                                                              │
-│   Review report → APPROVE / REQUEST CHANGES / NEEDS DISCUSSION      │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -61,7 +63,7 @@
 
 ### Option A: Full Context Load (New Session)
 
-Use the `/read-docs` command:
+Use the `/read-docs` skill:
 
 ```
 /read-docs
@@ -70,7 +72,7 @@ Use the `/read-docs` command:
 This loads:
 - `docs/memory/requirements.md` - Feature requirements (source of truth)
 - `docs/memory/architecture.md` - System design
-- `docs/memory/roadmap.md` - Current priorities
+- GitHub Issues - Current priorities (P0/P1)
 - `docs/memory/changelog.md` - Recent changes
 
 ### Option B: Targeted Context (Specific Feature Work)
@@ -93,13 +95,32 @@ See `docs/memory/feature-flows.md` for the complete index.
 
 ## Phase 2: Development
 
-### Before Writing Code
+### Option A: Automated Implementation
+
+Use `/implement` for end-to-end feature development:
+
+```
+/implement #42
+/implement docs/requirements/new-feature.md
+/implement "Add a user profile page with avatar upload"
+```
+
+This automatically:
+1. Parses requirements
+2. Studies existing patterns
+3. Implements the feature
+4. Creates and runs tests
+5. Updates documentation
+
+### Option B: Manual Development
+
+#### Before Writing Code
 
 1. **Check requirements**: Does `requirements.md` cover this feature?
-2. **Check roadmap**: Is this the current priority?
+2. **Check roadmap**: Is this the current priority? (`/roadmap`)
 3. **Read feature flow**: Understand existing data flow before modifying
 
-### During Development
+#### During Development
 
 - Follow patterns established in existing code
 - Reference feature flows for:
@@ -107,15 +128,14 @@ See `docs/memory/feature-flows.md` for the complete index.
   - Database operations
   - Event handling
   - Error handling patterns
-- Use the TodoWrite tool to track multi-step tasks
 
 ---
 
 ## Phase 3: Testing
 
-**Every development session must end with testing.**
+**Every development session must include testing.**
 
-### Minimum: Run Test Suite
+### Run Test Suite
 
 Use the `test-runner` agent:
 
@@ -130,8 +150,8 @@ This runs the test suite and reports:
 
 **Test Tiers:**
 - **Smoke tests** (~1min): Quick validation
-- **Core tests** (~5min): Standard validation (default)
-- **Full suite** (~15min): Comprehensive coverage
+- **Core tests** (~5-15min): Standard validation (default)
+- **Full suite** (~15+min): Comprehensive coverage
 
 ### Manual Verification
 
@@ -153,40 +173,113 @@ curl http://localhost:8000/api/endpoint
 
 ### If You Modified Feature Behavior
 
-**Use the `feature-flow-analyzer` agent:**
+Use `/sync-feature-flows` to batch-update affected flows:
 
 ```
-Analyze and update the feature flow for user-login
+/sync-feature-flows recent
 ```
 
-Or use the command:
+Or analyze a specific feature:
 
 ```
 /feature-flow-analysis user-login
 ```
 
-This will:
-1. Trace the feature from UI → Backend → Database
-2. Update or create `docs/memory/feature-flows/{feature}.md`
-3. Update the feature flows index
-
 ### For All Changes
 
-**Use the `/update-docs` command:**
+Use `/update-docs`:
 
 ```
 /update-docs
 ```
 
-Claude Code will determine which documents need updates:
+This determines which documents need updates:
 
 | Document | When to Update |
 |----------|----------------|
 | `changelog.md` | Always - add timestamped entry |
 | `architecture.md` | API changes, schema changes, new integrations |
 | `requirements.md` | New features, scope changes |
-| `roadmap.md` | Task completion, new discoveries |
-| `feature-flows/*.md` | Behavior changes (use analyzer) |
+| `feature-flows/*.md` | Behavior changes |
+
+---
+
+## Phase 5: Commit & Review
+
+### Pre-Commit Security Check
+
+```
+/security-check
+```
+
+Scans staged files for:
+- API keys and tokens
+- Email addresses and IPs
+- Hardcoded secrets
+- Credential files
+
+### Commit with Issue Linking
+
+```
+/commit closes #17
+```
+
+This stages files, creates a commit with proper formatting, pushes, and updates the GitHub issue status.
+
+### PR Validation
+
+```
+/validate-pr 42
+```
+
+Validates:
+
+| Category | Validation |
+|----------|------------|
+| **Changelog** | Entry exists with timestamp and emoji |
+| **Requirements** | Updated if new feature or scope change |
+| **Architecture** | Updated if API/schema/integration changes |
+| **Feature Flows** | Created/updated for behavior changes, correct format |
+| **Security** | No secrets, keys, emails, IPs in diff |
+| **Code Quality** | Minimal changes, follows patterns |
+| **Traceability** | Links to requirements |
+
+---
+
+## Skills Reference
+
+### Core Workflow
+
+| Skill | Purpose | When to Use |
+|-------|---------|-------------|
+| `/read-docs` | Load project context | Start of session |
+| `/update-docs` | Update documentation | After changes |
+| `/commit [msg]` | Commit, push, link issues | When ready to commit |
+| `/validate-pr <n>` | Validate PR against methodology | Before merging PRs |
+
+### Feature Development
+
+| Skill | Purpose | When to Use |
+|-------|---------|-------------|
+| `/implement <source>` | End-to-end implementation | New features |
+| `/feature-flow-analysis <name>` | Document feature flow | After modifying features |
+| `/sync-feature-flows [range]` | Batch update flows | After code changes |
+| `/add-testing <name>` | Add tests to flow | Improving coverage |
+
+### Code Quality & Security
+
+| Skill | Purpose | When to Use |
+|-------|---------|-------------|
+| `/security-check` | Pre-commit secret scan | Before every commit |
+| `/security-analysis [scope]` | Full OWASP audit | Periodic reviews |
+| `/refactor-audit [scope]` | Complexity analysis | Code quality reviews |
+| `/tidy [scope]` | Repository cleanup | Periodic maintenance |
+
+### Project Management
+
+| Skill | Purpose | When to Use |
+|-------|---------|-------------|
+| `/roadmap [cmd]` | Query GitHub Issues | Check priorities |
 
 ---
 
@@ -217,19 +310,6 @@ Use the security-analyzer to review the auth code
 
 ---
 
-## Slash Commands Reference
-
-| Command | Purpose | When to Use |
-|---------|---------|-------------|
-| `/read-docs` | Load project context | Start of session |
-| `/update-docs` | Update documentation | After changes |
-| `/feature-flow-analysis <feature>` | Document feature flow | After modifying features |
-| `/security-check` | Validate no secrets in staged files | Before every commit |
-| `/add-testing` | Add tests for a feature | Improving coverage |
-| `/validate-pr <number>` | Validate PR against methodology | Before merging PRs |
-
----
-
 ## Memory Files Explained
 
 The `docs/memory/` directory contains persistent project state:
@@ -238,7 +318,7 @@ The `docs/memory/` directory contains persistent project state:
 docs/memory/
 ├── requirements.md      ← SINGLE SOURCE OF TRUTH for features
 ├── architecture.md      ← Current system design (~1000 lines max)
-├── roadmap.md           ← Prioritized task queue
+├── roadmap.md           ← Prioritized task queue (optional, can use GitHub Issues)
 ├── changelog.md         ← Timestamped history (~500 lines)
 ├── feature-flows.md     ← Index of all feature flow documents
 └── feature-flows/       ← Individual feature documentation
@@ -253,7 +333,7 @@ docs/memory/
 requirements.md  ──defines──►  What features exist
        │
        ▼
-roadmap.md       ──prioritizes──►  What to work on next
+GitHub Issues    ──prioritizes──►  What to work on next
        │
        ▼
 feature-flows/*  ──documents──►  How features work
@@ -267,32 +347,30 @@ architecture.md  ──maintains──►  Current system state
 
 ---
 
-## Example Development Session
+## Example Development Sessions
 
-### Scenario: Add a new field to user profile
+### Scenario: Implement a New Feature
 
 ```
 # 1. CONTEXT LOADING
 You: /read-docs
-You: Also read the user-profile feature flow
 
-# 2. DEVELOPMENT
-You: Add an "avatar" field to user profiles
+# 2. DEVELOPMENT (automated)
+You: /implement #42
 
-Claude: [Reads feature flow, implements changes across frontend/backend]
+# Claude automatically:
+# - Reads the issue requirements
+# - Studies existing patterns
+# - Implements the feature
+# - Runs tests
+# - Updates documentation
+# - Reports completion
 
-# 3. TESTING
-You: Run the tests to make sure nothing broke
-
-Claude: [Invokes test-runner agent, reports results]
-
-# 4. DOCUMENTATION
-You: Update the feature flow for user-profile and update docs
-
-Claude: [Invokes feature-flow-analyzer, then /update-docs]
+# 3. COMMIT
+You: /commit closes #42
 ```
 
-### Scenario: Fix a bug in data export
+### Scenario: Fix a Bug
 
 ```
 # 1. CONTEXT LOADING
@@ -304,41 +382,27 @@ Claude: [Reads flow, traces issue, implements fix]
 
 # 3. TESTING
 You: Test it
-
 Claude: [Runs relevant tests, verifies fix]
 
 # 4. DOCUMENTATION
-You: Update the docs
+You: /update-docs
 
-Claude: [Updates changelog, possibly updates feature flow if behavior changed]
+# 5. COMMIT
+You: /commit fixes #23 - timestamp column in CSV export
 ```
 
----
+### Scenario: Code Quality Review
 
-## Development Skills
+```
+# Run complexity analysis
+You: /refactor-audit backend
 
-Skills are methodology guides in `.claude/skills/` that define HOW to approach specific tasks.
+# Run security audit
+You: /security-analysis
 
-### Available Skills
-
-| Skill | Purpose | When to Apply |
-|-------|---------|---------------|
-| `verification` | Evidence-based completion claims | Before saying "done" or "fixed" |
-| `systematic-debugging` | Root cause investigation | When fixing bugs or failures |
-| `tdd` | Test-driven development | When writing new code |
-| `code-review` | Receiving review feedback | When responding to PR comments |
-
-### Key Principles
-
-**Verification**: No completion claims without evidence. Run the command, show the output.
-
-**Debugging**: Find root cause BEFORE attempting fixes. No quick patches.
-
-**TDD**: Write failing test first, then minimal code to pass.
-
-**Code Review**: Technical rigor over social comfort. Verify before implementing.
-
-See `.claude/skills/{name}/SKILL.md` for full methodology guides.
+# Clean up repository
+You: /tidy --report-only
+```
 
 ---
 
@@ -354,8 +418,8 @@ See `.claude/skills/{name}/SKILL.md` for full methodology guides.
 - ✅ Keep changelog entries concise but informative
 - ✅ Run `/security-check` before every commit
 - ✅ Run `/validate-pr` before approving any PR
-- ✅ Provide evidence with completion claims (verification skill)
-- ✅ Investigate root cause before fixing bugs (debugging skill)
+- ✅ Use `/commit` for consistent commit messages
+- ✅ Use `/implement` for new features
 
 ### DON'T
 
@@ -366,65 +430,7 @@ See `.claude/skills/{name}/SKILL.md` for full methodology guides.
 - ❌ Write new documentation files without being asked
 - ❌ Over-document - keep it minimal and useful
 - ❌ Merge PRs without running validation
-- ❌ Claim "done" without showing verification output
-- ❌ Guess at bug fixes without root cause analysis
-
----
-
-## Phase 5: PR Validation
-
-**Before merging any PR, validate it meets all methodology requirements.**
-
-### Run PR Validation
-
-```
-/validate-pr 42
-```
-
-Or with full URL:
-```
-/validate-pr https://github.com/org/repo/pull/42
-```
-
-### What Gets Validated
-
-| Category | Validation |
-|----------|------------|
-| **Changelog** | Entry exists with timestamp and emoji |
-| **Roadmap** | Updated if task completed or new work discovered |
-| **Requirements** | Updated if new feature or scope change |
-| **Architecture** | Updated if API/schema/integration changes |
-| **Feature Flows** | Created/updated for behavior changes, correct format |
-| **Security** | No secrets, keys, emails, IPs in diff |
-| **Code Quality** | Minimal changes, follows patterns |
-| **Traceability** | Links to requirements |
-
-### Validation Report
-
-The command generates a structured report with:
-- Summary table showing pass/fail for each category
-- Documentation and security checklists
-- Issues found (Critical, Warnings, Suggestions)
-- **Recommendation**: APPROVE / REQUEST CHANGES / NEEDS DISCUSSION
-
-### Example Workflow
-
-```
-# Reviewer receives PR notification
-You: /validate-pr 42
-
-# Claude analyzes and generates report
-Claude: ## PR Validation Report
-        ...
-        ### Recommendation
-        **REQUEST CHANGES**
-        - [ ] Changelog entry missing
-        - [ ] Feature flow needs Testing section
-
-# Reviewer posts comment with required changes
-# Developer fixes and requests re-review
-# Reviewer runs /validate-pr 42 again
-```
+- ❌ Commit secrets or credentials
 
 ---
 
@@ -436,9 +442,10 @@ For every development session:
 - [ ] Understand what you're modifying (read the feature flow)
 - [ ] Implement changes
 - [ ] Run tests (`test-runner` agent)
-- [ ] Update feature flow if behavior changed (`feature-flow-analyzer` agent)
+- [ ] Update feature flow if behavior changed (`/sync-feature-flows`)
 - [ ] Update documentation (`/update-docs`)
 - [ ] Run security check before commit (`/security-check`)
+- [ ] Commit with issue link (`/commit`)
 
 For PR reviews:
 

@@ -13,11 +13,14 @@ Step-by-step instructions for integrating this development methodology into your
 From your project root:
 
 ```bash
-# Copy the .claude directory (commands and agents)
+# Copy the .claude directory (skills and agents)
 cp -r /path/to/dev-methodology-template/.claude .
 
 # Copy the docs directory
 cp -r /path/to/dev-methodology-template/docs .
+
+# Copy the testing directory (optional)
+cp -r /path/to/dev-methodology-template/testing .
 
 # Copy the CLAUDE.md template
 cp /path/to/dev-methodology-template/templates/CLAUDE.md.template CLAUDE.md
@@ -112,7 +115,7 @@ Add your first entry:
 
 ### 2025-01-08 10:00:00
 🎉 **Initialized Development Methodology**
-- Added Claude Code commands and agents
+- Added Claude Code skills and agents
 - Set up memory file structure
 - Ready for disciplined development
 ```
@@ -127,40 +130,31 @@ CLAUDE.local.md
 .claude/settings.local.json
 ```
 
-## Step 5: Customize Commands
+## Step 5: Customize Skills
 
-Review and customize commands in `.claude/commands/`:
+Review and customize skills in `.claude/skills/`:
 
-### read-docs.md
+### read-docs/SKILL.md
 
-Update file paths to match your project structure:
+Update file paths to match your project structure and add any project-specific docs to load.
 
-```markdown
-# Read these files:
-- `docs/memory/requirements.md`
-- `docs/memory/architecture.md`
-# Add your project-specific docs here
-```
-
-### feature-flow-analysis.md
+### feature-flow-analysis/SKILL.md
 
 Update layer references for your stack:
 
 ```markdown
-# Replace Vue/FastAPI references with your stack:
+# Replace generic references with your stack:
 - Frontend: React components → Redux → API calls
 - Backend: Express routes → Controllers → Database
 ```
 
-### test-runner.md
+### commit/SKILL.md
 
-Update test commands for your project:
+Update the Co-Authored-By line and any repo-specific references.
 
-```bash
-# Replace with your test commands:
-npm test           # instead of pytest
-npm run test:smoke # for smoke tests
-```
+### roadmap/SKILL.md
+
+The roadmap skill queries GitHub Issues. Make sure your repo uses priority labels (`priority-p0`, `priority-p1`, etc.) and type labels (`type-feature`, `type-bug`, etc.).
 
 ## Step 6: Customize Agents
 
@@ -170,7 +164,7 @@ Review and customize agents in `.claude/agents/`:
 
 Update:
 - Test suite location
-- Test commands for each tier
+- Test commands for each tier (smoke, core, full)
 - Expected test count and duration
 
 ### feature-flow-analyzer.md
@@ -187,7 +181,31 @@ Update:
 - Your security boundaries
 - Report output path
 
-## Step 7: First Run
+## Step 7: Set Up GitHub Labels (Optional)
+
+For full roadmap integration, create these labels in your GitHub repo:
+
+```bash
+# Priority labels
+gh label create "priority-p0" --color "B60205" --description "Blocking/Urgent"
+gh label create "priority-p1" --color "D93F0B" --description "Critical path"
+gh label create "priority-p2" --color "FBCA04" --description "Important"
+gh label create "priority-p3" --color "0E8A16" --description "Nice to have"
+
+# Type labels
+gh label create "type-feature" --color "0075CA" --description "New feature"
+gh label create "type-bug" --color "D73A4A" --description "Bug fix"
+gh label create "type-refactor" --color "CFD3D7" --description "Code refactoring"
+gh label create "type-docs" --color "0075CA" --description "Documentation"
+
+# Status labels
+gh label create "status-ready" --color "0E8A16" --description "Ready to work on"
+gh label create "status-in-progress" --color "FBCA04" --description "Being worked on"
+gh label create "status-review" --color "D93F0B" --description "In review"
+gh label create "status-blocked" --color "B60205" --description "Blocked"
+```
+
+## Step 8: First Run
 
 Verify the setup:
 
@@ -201,7 +219,7 @@ claude
 # You should see confirmation that docs were loaded
 ```
 
-## Step 8: Create Your First Feature Flow
+## Step 9: Create Your First Feature Flow
 
 Test the methodology by documenting an existing feature:
 
@@ -216,19 +234,20 @@ This will create `docs/memory/feature-flows/user-login.md`.
 - [ ] CLAUDE.md has no `{{PLACEHOLDER}}` values remaining
 - [ ] All memory files exist (no `.template` extension)
 - [ ] `/read-docs` loads without errors
-- [ ] Commands are accessible (try `/security-check`)
+- [ ] Skills are accessible (try `/security-check`)
 - [ ] Agents are accessible (ask "use the test-runner agent")
 - [ ] `.gitignore` excludes local config files
+- [ ] GitHub labels created (if using roadmap integration)
 
 ## Troubleshooting
 
-### Commands not found
+### Skills not found
 
-Ensure `.claude/commands/` is in your project root, not nested.
+Ensure `.claude/skills/` is in your project root with `SKILL.md` files inside each skill directory.
 
 ### Memory files not loading
 
-Check file paths in `read-docs.md` match your actual structure.
+Check file paths in `read-docs/SKILL.md` match your actual structure.
 
 ### Agents not working
 
@@ -249,3 +268,4 @@ model: sonnet
 2. **Document existing features**: Use `/feature-flow-analysis`
 3. **Add tests to flows**: Use `/add-testing`
 4. **Establish the habit**: `/read-docs` at session start, `/update-docs` after changes
+5. **Use `/implement`** for new features to get end-to-end automation

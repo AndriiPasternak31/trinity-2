@@ -1,6 +1,26 @@
+---
+name: validate-pr
+description: Validate a pull request against the project development methodology and generate a merge decision report.
+allowed-tools: [Bash, Read, Grep]
+user-invocable: true
+argument-hint: "<pr-number-or-url>"
+automation: gated
+---
+
 # Validate Pull Request
 
 Validate a pull request against the project development methodology and generate a merge decision report.
+
+## State Dependencies
+
+| Source | Location | Read | Write | Description |
+|--------|----------|------|-------|-------------|
+| PR Details | GitHub API | ✅ | | PR metadata and diff |
+| Changelog | `docs/memory/changelog.md` | ✅ | | Entry check |
+| Requirements | `docs/memory/requirements.md` | ✅ | | Req updates |
+| Architecture | `docs/memory/architecture.md` | ✅ | | API changes |
+| Feature Flows | `docs/memory/feature-flows/` | ✅ | | Flow updates |
+| GitHub Issues | GitHub repo | ✅ | | Issue references |
 
 ## Usage
 
@@ -8,7 +28,7 @@ Validate a pull request against the project development methodology and generate
 /validate-pr <pr-number-or-url>
 ```
 
-## Instructions
+## Process
 
 ### Step 1: Fetch PR Information
 
@@ -46,17 +66,17 @@ Check if `docs/memory/changelog.md` is in the changed files list.
 
 **If missing**: Flag as ❌ FAIL - "Changelog not updated"
 
-#### 2.2 Roadmap Update (CONDITIONAL)
-Check if `docs/memory/roadmap.md` is in the changed files list.
+#### 2.2 GitHub Issues Update (CONDITIONAL)
+Check if PR references a GitHub Issue (e.g., "Closes #17", "Fixes #23").
 
 **Required if**:
-- PR completes a roadmap item → item should be marked ✅ with timestamp
-- PR discovers new work → new item added to appropriate phase
+- PR completes a roadmap item → issue should be closed by PR
+- PR discovers new work → new issue created with appropriate labels
 
 **Validation**:
-- [ ] Completed items marked with `✅` and date
-- [ ] New items have proper status (⏳) and description
-- [ ] Items in correct phase/priority section
+- [ ] PR references related issue(s) in description
+- [ ] Issue has correct priority label (priority-p0/p1/p2/p3)
+- [ ] Issue has correct type label (type-feature/bug/refactor)
 
 #### 2.3 Requirements Update (CONDITIONAL)
 Check if `docs/memory/requirements.md` is in the changed files list.
@@ -104,13 +124,11 @@ For each changed feature flow file, verify structure:
 
 **Required Sections** (check headings exist):
 - [ ] `## Overview` - One-line description
-- [ ] `## User Story` - As a [user], I want to [action]...
 - [ ] `## Entry Points` - UI and API entry points
 - [ ] `## Frontend Layer` - Components, State Management, API Calls
 - [ ] `## Backend Layer` - Endpoint, Business Logic, Database Operations
 - [ ] `## Side Effects` - Events, logs, notifications
 - [ ] `## Error Handling` - Error cases table
-- [ ] `## Security Considerations` - Auth, validation, rate limiting
 - [ ] `## Testing` - Prerequisites, Test Steps, Edge Cases, Status
 - [ ] `## Related Flows` - Upstream/downstream connections
 
@@ -142,7 +160,7 @@ grep -iE '(sk-[a-zA-Z0-9]{20,}|pk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|gho_[a-zA
 
 #### 4.2 Email Addresses
 ```bash
-grep -oE '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' /tmp/pr_diff.txt | grep -vE '(example\.com|example\.org|placeholder|test@|user@example|noreply@)'
+grep -oE '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' /tmp/pr_diff.txt | grep -vE '(example\.com|example\.org|placeholder|test@|user@example|noreply@|anthropic\.com)'
 ```
 - [ ] No real email addresses (only placeholders allowed)
 
@@ -211,7 +229,7 @@ Create the report in this format:
 | Category | Status | Notes |
 |----------|--------|-------|
 | Changelog | ✅/❌ | [details] |
-| Roadmap | ✅/❌/➖ | [details or N/A] |
+| GitHub Issues | ✅/❌/➖ | [details or N/A] |
 | Requirements | ✅/❌/➖ | [details or N/A] |
 | Architecture | ✅/❌/➖ | [details or N/A] |
 | Feature Flows | ✅/❌/⚠️ | [details] |
@@ -223,7 +241,7 @@ Create the report in this format:
 ### Documentation Checklist
 
 - [x/] Changelog entry with timestamp and emoji
-- [x/] Roadmap updated (if applicable)
+- [x/] GitHub Issues referenced (if applicable)
 - [x/] Requirements updated (if applicable)
 - [x/] Architecture updated (if applicable)
 - [x/] Feature flow created/updated (if applicable)
@@ -255,17 +273,6 @@ Create the report in this format:
 
 [Brief justification for the recommendation]
 
-**If REQUEST CHANGES, comment template:**
-```
-This PR requires the following changes before merge:
-
-- [ ] [Required change 1]
-- [ ] [Required change 2]
-...
-
-Please address these items and request re-review.
-```
-
 ---
 
 ## Status Legend
@@ -279,19 +286,33 @@ Please address these items and request re-review.
 
 ## Quick Reference: When Documentation is Required
 
-| Change Type | Changelog | Roadmap | Requirements | Architecture | Feature Flow |
-|-------------|-----------|---------|--------------|--------------|--------------|
-| Bug fix | ✅ | ➖ | ➖ | ➖ | ⚠️ if behavior changes |
-| New feature | ✅ | ✅ | ✅ | ⚠️ if API/schema | ✅ |
-| Refactor | ✅ | ➖ | ➖ | ⚠️ if structure | ⚠️ if flow changes |
-| API change | ✅ | ➖ | ⚠️ if scope | ✅ | ✅ |
-| Schema change | ✅ | ➖ | ➖ | ✅ | ⚠️ |
-| Config change | ✅ | ➖ | ➖ | ⚠️ | ➖ |
-| Docs only | ✅ | ➖ | ➖ | ➖ | ➖ |
+| Change Type | Changelog | Requirements | Architecture | Feature Flow |
+|-------------|-----------|--------------|--------------|--------------|
+| Bug fix | ✅ | ➖ | ➖ | ⚠️ if behavior changes |
+| New feature | ✅ | ✅ | ⚠️ if API/schema | ✅ |
+| Refactor | ✅ | ➖ | ⚠️ if structure | ⚠️ if flow changes |
+| API change | ✅ | ⚠️ if scope | ✅ | ✅ |
+| Schema change | ✅ | ➖ | ✅ | ⚠️ |
+| Config change | ✅ | ➖ | ⚠️ | ➖ |
+| Docs only | ✅ | ➖ | ➖ | ➖ |
 
 ## Related
 
 - `docs/DEVELOPMENT_WORKFLOW.md` - Development cycle
 - `docs/memory/feature-flows.md` - Feature flow index
 - `.claude/agents/feature-flow-analyzer.md` - Flow format specification
-- `.claude/commands/security-check.md` - Security validation details
+- `/security-check` - Security validation details
+
+## Completion Checklist
+
+- [ ] PR information fetched
+- [ ] Changelog validated
+- [ ] GitHub Issues checked
+- [ ] Requirements checked
+- [ ] Architecture checked
+- [ ] Feature flows validated
+- [ ] Security checks passed
+- [ ] Code quality assessed
+- [ ] Requirements traced
+- [ ] Report generated
+- [ ] Recommendation provided

@@ -16,6 +16,23 @@ This file provides guidance to Claude Code when working with this repository.
 
 ---
 
+## SDLC
+
+All work follows a 6-stage lifecycle tracked via GitHub Issues:
+
+```
+ Backlog → Ready → In Progress → Dev Testing → Review → Done
+```
+
+- **Backlog**: Issue created, triaged with priority (P0-P3) and type labels
+- **Ready**: Acceptance criteria defined, `status-ready` label applied
+- **In Progress**: Developer assigned, branch created, `status-in-progress` label
+- **Dev Testing**: PR opened, tests passing
+- **Review**: `/validate-pr` passes, code review approved
+- **Done**: PR merged, issue closed
+
+---
+
 ## Rules of Engagement
 
 ### 1. Requirements-Driven Development
@@ -30,9 +47,10 @@ This file provides guidance to Claude Code when working with this repository.
 - No creating documentation files unless explicitly requested
 
 ### 3. Follow the Roadmap
-- Check `docs/memory/roadmap.md` for current priorities
-- Work topmost incomplete items in the queue
-- Mark items complete with timestamp: `[x] 2025-01-08 HH:MM:SS`
+- Check GitHub Issues for current priorities (`/roadmap`)
+- Work P0 issues first, then P1, then by issue number (oldest first)
+- Assign yourself, update labels and board status as you progress
+- Close issues when complete
 
 ### 4. Mandatory Documentation Updates
 After **EVERY** change, update:
@@ -48,6 +66,16 @@ After **EVERY** change, update:
 - Use placeholder values in example configs (e.g., `your-domain.com`, `your-api-key`)
 - Review diffs before committing for accidental sensitive data
 
+### 6. Development Skills
+Follow methodology guides in `.claude/skills/`:
+
+| Skill | Key Rule |
+|-------|----------|
+| `/commit` | Stage specific files, link GitHub Issues, push |
+| `/implement` | End-to-end: requirements → code → tests → docs |
+| `/validate-pr` | Verify all methodology requirements before merge |
+| `/security-check` | Pre-commit secret detection |
+
 ---
 
 ## Memory Files
@@ -56,9 +84,10 @@ After **EVERY** change, update:
 |------|---------|
 | `docs/memory/requirements.md` | **SINGLE SOURCE OF TRUTH** - All features |
 | `docs/memory/architecture.md` | Current system design (~1000 lines max) |
-| `docs/memory/roadmap.md` | Prioritized task queue |
+| `docs/memory/roadmap.md` | Prioritized task queue (or use GitHub Issues) |
 | `docs/memory/changelog.md` | Timestamped history (~500 lines) |
 | `docs/memory/feature-flows.md` | Index of vertical slice docs |
+| GitHub Issues | Prioritized task queue with labels |
 
 ---
 
@@ -89,7 +118,7 @@ After **EVERY** change, update:
 │   ├── memory/             # Persistent project memory
 │   └── DEVELOPMENT_WORKFLOW.md
 ├── .claude/
-│   ├── commands/           # Slash commands
+│   ├── skills/             # Slash commands (skills)
 │   └── agents/             # Sub-agents
 └── CLAUDE.md               # This file
 ```
@@ -118,6 +147,8 @@ After **EVERY** change, update:
 
 5. **Feature flows**: Read relevant feature flow before modifying a feature
 
+6. **Keep working directory clean**: Delete temporary files (screenshots, test outputs, cache directories) after use
+
 ---
 
 ## See Also
@@ -125,5 +156,5 @@ After **EVERY** change, update:
 - **Development Workflow**: `docs/DEVELOPMENT_WORKFLOW.md`
 - **Testing Guide**: `docs/TESTING_GUIDE.md`
 - **Full Requirements**: `docs/memory/requirements.md`
-- **Current Roadmap**: `docs/memory/roadmap.md`
+- **Current Roadmap**: GitHub Issues (`/roadmap`)
 - **Recent Changes**: `docs/memory/changelog.md`

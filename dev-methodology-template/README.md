@@ -1,14 +1,13 @@
 # Claude Code Development Methodology Template
 
-A reusable development methodology kit for Claude Code projects. Provides slash commands, sub-agents, memory files, and documentation templates to enforce disciplined, traceable development practices.
+A reusable development methodology kit for Claude Code projects. Provides skills (slash commands), sub-agents, memory files, and documentation templates to enforce disciplined, traceable development practices.
 
 ## What's Included
 
 | Category | Contents |
 |----------|----------|
-| **Commands** | 6 slash commands: `/read-docs`, `/update-docs`, `/feature-flow-analysis`, `/add-testing`, `/security-check`, `/validate-pr` |
+| **Skills** | 13 slash commands: `/read-docs`, `/update-docs`, `/feature-flow-analysis`, `/add-testing`, `/security-check`, `/validate-pr`, `/commit`, `/implement`, `/roadmap`, `/refactor-audit`, `/tidy`, `/sync-feature-flows`, `/security-analysis` |
 | **Agents** | 3 sub-agents: `feature-flow-analyzer`, `test-runner`, `security-analyzer` |
-| **Skills** | 4 methodology guides: `verification`, `systematic-debugging`, `tdd`, `code-review` |
 | **Memory Files** | Templates for requirements, architecture, roadmap, changelog, feature flows |
 | **Workflow** | Development cycle documentation and testing guide |
 | **Testing** | Phase-based testing framework templates |
@@ -53,22 +52,24 @@ your-project/
 ├── CLAUDE.md                    # Project instructions (from template)
 ├── CLAUDE.local.md              # Local/private config (gitignored)
 ├── .claude/
-│   ├── commands/                # Slash commands
-│   │   ├── read-docs.md
-│   │   ├── update-docs.md
-│   │   ├── feature-flow-analysis.md
-│   │   ├── add-testing.md
-│   │   ├── security-check.md
-│   │   └── validate-pr.md
+│   ├── skills/                  # Slash commands (skills)
+│   │   ├── read-docs/SKILL.md
+│   │   ├── update-docs/SKILL.md
+│   │   ├── feature-flow-analysis/SKILL.md
+│   │   ├── add-testing/SKILL.md
+│   │   ├── security-check/SKILL.md
+│   │   ├── validate-pr/SKILL.md
+│   │   ├── commit/SKILL.md
+│   │   ├── implement/SKILL.md
+│   │   ├── roadmap/SKILL.md
+│   │   ├── refactor-audit/SKILL.md
+│   │   ├── tidy/SKILL.md
+│   │   ├── sync-feature-flows/SKILL.md
+│   │   └── security-analysis/SKILL.md
 │   ├── agents/                  # Sub-agents
 │   │   ├── feature-flow-analyzer.md
 │   │   ├── test-runner.md
 │   │   └── security-analyzer.md
-│   ├── skills/                  # Methodology guides
-│   │   ├── verification/SKILL.md
-│   │   ├── systematic-debugging/SKILL.md
-│   │   ├── tdd/SKILL.md
-│   │   └── code-review/SKILL.md
 │   └── settings.local.json      # Claude Code settings
 └── docs/
     ├── DEVELOPMENT_WORKFLOW.md  # Development cycle guide
@@ -89,27 +90,51 @@ This methodology enforces a 5-phase development cycle:
 ```
 1. CONTEXT LOADING    →  /read-docs
        ↓
-2. DEVELOPMENT        →  Implement changes
+2. DEVELOPMENT        →  /implement or manual coding
        ↓
 3. TESTING            →  test-runner agent
        ↓
-4. DOCUMENTATION      →  /update-docs
+4. DOCUMENTATION      →  /update-docs, /sync-feature-flows
        ↓
 5. PR VALIDATION      →  /validate-pr (before merge)
 ```
 
 See `docs/DEVELOPMENT_WORKFLOW.md` for details.
 
-## Commands Reference
+## Skills Reference
 
-| Command | Purpose |
-|---------|---------|
+### Core Workflow
+
+| Skill | Purpose |
+|-------|---------|
 | `/read-docs` | Load project context at session start |
 | `/update-docs` | Update changelog, architecture, requirements after changes |
-| `/feature-flow-analysis <name>` | Document feature from UI to database |
-| `/add-testing <name>` | Add testing section to feature flow |
-| `/security-check` | Validate no secrets in staged files before commit |
+| `/commit [message]` | Stage, commit, push, and link to GitHub Issues |
 | `/validate-pr <number>` | Validate PR against methodology and generate merge report |
+
+### Feature Development
+
+| Skill | Purpose |
+|-------|---------|
+| `/implement <source>` | End-to-end feature implementation from requirements to docs |
+| `/feature-flow-analysis <name>` | Document feature from UI to database |
+| `/sync-feature-flows [range]` | Batch-update feature flows from code changes |
+| `/add-testing <name>` | Add testing section to feature flow |
+
+### Code Quality & Security
+
+| Skill | Purpose |
+|-------|---------|
+| `/security-check` | Pre-commit secret detection in staged files |
+| `/security-analysis [scope]` | Full OWASP-based security audit |
+| `/refactor-audit [scope]` | Identify complexity issues and refactoring candidates |
+| `/tidy [scope]` | Audit and clean up repository structure |
+
+### Project Management
+
+| Skill | Purpose |
+|-------|---------|
+| `/roadmap [command]` | Query GitHub Issues for priorities and status |
 
 ## Agents Reference
 
@@ -118,19 +143,6 @@ See `docs/DEVELOPMENT_WORKFLOW.md` for details.
 | `feature-flow-analyzer` | Traces and documents feature vertical slices |
 | `test-runner` | Runs test suite with tiered execution (smoke/core/full) |
 | `security-analyzer` | OWASP Top 10 security analysis |
-
-## Skills Reference
-
-Skills are methodology guides that define HOW to approach specific tasks.
-
-| Skill | Purpose | Key Rule |
-|-------|---------|----------|
-| `verification` | Evidence-based completion | No "done" without proof |
-| `systematic-debugging` | Root cause investigation | Investigate before fixing |
-| `tdd` | Test-driven development | Failing test first |
-| `code-review` | Receiving feedback | Verify before implementing |
-
-Skills are located in `.claude/skills/{name}/SKILL.md`.
 
 ## Memory Files Explained
 
@@ -152,19 +164,35 @@ architecture.md  ──maintains──►  Current system state
 
 ## Customization
 
-### Adding Project-Specific Commands
+### Adding Project-Specific Skills
 
-Create new `.md` files in `.claude/commands/`:
+Create new directories in `.claude/skills/` with a `SKILL.md` file:
 
 ```markdown
-# My Custom Command
+---
+name: my-skill
+description: What this skill does
+allowed-tools: [Read, Write, Edit, Bash]
+user-invocable: true
+automation: manual
+---
 
-Description of what this command does.
+# My Custom Skill
 
-## Instructions
+Description of what this skill does.
 
-1. Step one
-2. Step two
+## State Dependencies
+
+| Source | Location | Read | Write | Description |
+|--------|----------|------|-------|-------------|
+
+## Process
+
+### Step 1: ...
+
+## Completion Checklist
+
+- [ ] Step completed
 ```
 
 ### Adding Project-Specific Agents
@@ -202,6 +230,7 @@ The memory file structure can be extended. Common additions:
 - Run tests after every significant change
 - Update feature flows when behavior changes
 - Run `/security-check` before every commit
+- Use `/commit` for consistent commit messages with issue linking
 
 ### DON'T
 

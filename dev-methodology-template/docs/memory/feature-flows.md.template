@@ -81,4 +81,4 @@
 
 ## Feature Flow Template
 
-See `.claude/commands/feature-flow-analysis.md` for the standard template.
+See `.claude/skills/feature-flow-analysis/SKILL.md` for the standard template.
