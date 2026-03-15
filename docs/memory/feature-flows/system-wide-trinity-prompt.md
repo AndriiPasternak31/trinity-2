@@ -146,8 +146,7 @@ Platform instructions are injected at runtime on every Claude Code invocation �
 
 ### Trinity Status Endpoint (Agent-Side)
 - `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/trinity.py`
-  - `GET /api/trinity/status` — reports platform integration status (meta-prompt mount, .trinity directory)
-  - `injected` field always returns `True` (injection is now per-request, not file-based)
+  - `GET /api/trinity/status` — returns `{injected: true}` (always true, injection is per-request)
   - `POST /api/trinity/inject` and `POST /api/trinity/reset` — **removed**
 
 ## Data Flow Diagram
