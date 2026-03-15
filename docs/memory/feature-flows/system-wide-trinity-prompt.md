@@ -113,16 +113,14 @@ CREATE TABLE IF NOT EXISTS system_settings (
 ## Agent Injection Flow
 
 ### Backend Agent Startup
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_service/lifecycle.py:62-89`
+- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_service/lifecycle.py:68-95`
   - `inject_trinity_meta_prompt(agent_name)` function
-  - Called during `start_agent_internal()` (line 211)
+  - Called during `start_agent_internal()` (line 237)
 
-**Injection Logic** (lines 77-89):
+**Injection Logic**:
 ```python
 # Fetch system-wide custom prompt setting
 custom_prompt = db.get_setting_value("trinity_prompt", default=None)
-if custom_prompt:
-    logger.info(f"Found trinity_prompt setting ({len(custom_prompt)} chars), will inject into {agent_name}")
 
 # Use AgentClient for injection (handles retries internally)
 client = get_agent_client(agent_name)
@@ -135,66 +133,32 @@ return await client.inject_trinity_prompt(
 ```
 
 ### Agent Client
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_client.py:390-456`
+- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_client.py`
   - `inject_trinity_prompt()` method handles retries and HTTP communication
   - Sends POST to `/api/trinity/inject` with `custom_prompt` payload
 
-**Client Injection Code** (lines 390-456):
-```python
-async def inject_trinity_prompt(
-    self,
-    custom_prompt: Optional[str] = None,
-    force: bool = False,
-    timeout: float = None,
-    max_retries: int = 3,
-    retry_delay: float = 2.0
-) -> Dict[str, Any]:
-    payload = {"force": force}
-    if custom_prompt:
-        payload["custom_prompt"] = custom_prompt
-    # ... retries and HTTP request to /api/trinity/inject
-```
+### Agent-Server Injection (CLAUDE.local.md)
+- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/trinity.py:48-202`
+  - `POST /api/trinity/inject` endpoint
 
-### Agent-Server Injection
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/trinity.py:54-202`
-  - `POST /api/trinity/inject` endpoint (line 54)
-  - Handles `TrinityInjectRequest.custom_prompt` field
+**Key design decision (2026-03-14)**: Platform instructions are now written to `CLAUDE.local.md` instead of `CLAUDE.md`. This file is gitignored and survives git operations (checkout, pull, reset) that previously wiped injected content.
 
-**Custom Instructions Injection** (lines 137-145):
-```python
-# Build the custom instructions section if provided
-custom_section = ""
-if request.custom_prompt and request.custom_prompt.strip():
-    custom_section = f"""
+**Ownership boundary**:
+- `CLAUDE.md` — owned by the agent, can be modified freely during work
+- `CLAUDE.local.md` — owned by the platform, overwritten on each agent start
 
-## Custom Instructions
+**Injection steps**:
+1. Copies `prompt.md` to `.trinity/prompt.md` (operator queue protocol, agent instructions)
+2. Writes `CLAUDE.local.md` with Trinity platform instructions + custom prompt
+3. Ensures `CLAUDE.local.md` is in `.gitignore`
+4. Cleans up legacy `## Trinity Agent System` section from `CLAUDE.md` if present
 
-{request.custom_prompt.strip()}
-"""
-    logger.info("Custom prompt provided, will inject into CLAUDE.md")
-```
-
-**CLAUDE.md Update** (lines 148-187):
-- If CLAUDE.md exists and has Trinity section: Update/append Custom Instructions
-- If CLAUDE.md exists without Trinity: Add both sections
-- If CLAUDE.md doesn't exist: Create with Trinity + Custom sections
-- Removes existing "## Custom Instructions" before updating (lines 152-161)
-- Tracks `had_custom_instructions` flag to ensure removal when prompt is cleared (lines 153, 160)
-
-**Key Logic** (lines 163-178):
-```python
-if "## Trinity Agent System" not in content:
-    with open(claude_md_path, "a") as f:
-        f.write(trinity_section)
-        f.write(custom_section)
-    claude_md_updated = True
-elif custom_section or had_custom_instructions:
-    # Trinity section exists, update file if custom section changed
-    with open(claude_md_path, "w") as f:
-        f.write(content)
-        f.write(custom_section)
-    claude_md_updated = True
-```
+**CLAUDE.local.md contents**:
+- Trinity Agent System header
+- Agent collaboration tools (`list_agents`, `chat_with_agent`)
+- Operator communication reference (`@.trinity/prompt.md`)
+- Package persistence instructions
+- Custom Instructions section (from `trinity_prompt` setting)
 
 ### Models
 - `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/models.py:186-189`
@@ -235,9 +199,9 @@ elif custom_section or had_custom_instructions:
                                                                    |
                                                                    v
                                                           +-------------------+
-                                                          | CLAUDE.md         |
-                                                          | ## Custom         |
-                                                          | Instructions      |
+                                                          | CLAUDE.local.md   |
+                                                          | (gitignored,      |
+                                                          |  survives git ops)|
                                                           +-------------------+
 ```
 
@@ -301,13 +265,13 @@ This feature does not broadcast changes via WebSocket. Agents only receive the p
 
 5. **Agent Receives Prompt**
    - Action: Save a prompt, then start a new agent
-   - Expected: Agent's CLAUDE.md contains "## Custom Instructions" section
-   - Verify: SSH into agent, check CLAUDE.md content
+   - Expected: Agent's CLAUDE.local.md contains "## Custom Instructions" section
+   - Verify: SSH into agent, check CLAUDE.local.md content
 
 6. **Restart Agent Updates Prompt**
    - Action: Update trinity_prompt, restart existing agent
-   - Expected: Agent's CLAUDE.md updated with new content
-   - Verify: Check CLAUDE.md after restart
+   - Expected: Agent's CLAUDE.local.md updated with new content
+   - Verify: Check CLAUDE.local.md after restart
 
 ### Automated Tests
 
@@ -343,38 +307,21 @@ This feature does not broadcast changes via WebSocket. Agents only receive the p
 
 ## Known Issues / Bug Fixes
 
+### Bug Fix: Platform instructions lost during git operations (2026-03-14)
+
+**Issue**: Trinity section injected into `CLAUDE.md` was wiped when agents performed git operations (checkout, pull, reset, commit). Agents lost knowledge of operator queue, collaboration tools, and custom instructions.
+
+**Root Cause**: `CLAUDE.md` is tracked by git. Agent git operations would restore the repo's original `CLAUDE.md`, removing the platform-injected Trinity section.
+
+**Fix**: Moved all platform instructions from `CLAUDE.md` to `CLAUDE.local.md`, which is gitignored. The platform now owns `CLAUDE.local.md` (overwritten on each start) while agents own `CLAUDE.md` (can modify freely). Legacy cleanup removes old `## Trinity Agent System` sections from `CLAUDE.md`.
+
 ### Bug Fix: Custom Instructions Not Removed When Cleared (2025-12-14)
 
 **Issue**: When clearing the `trinity_prompt` setting, the "## Custom Instructions" section was not being removed from CLAUDE.md on agent restart.
 
-**Root Cause**: The condition only checked for `custom_section` being non-empty, so when the prompt was cleared (empty `custom_section`), the code would not rewrite CLAUDE.md even though it had stripped out the old Custom Instructions section.
+**Root Cause**: The condition only checked for `custom_section` being non-empty.
 
-**Fix Location**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/trinity.py`
-
-**Changes**:
-1. Added `had_custom_instructions` flag tracking at lines 153-161:
-   ```python
-   had_custom_instructions = False
-   if "## Custom Instructions" in content:
-       # ... strip existing section ...
-       had_custom_instructions = True
-   ```
-
-2. Modified condition at line 169 from:
-   ```python
-   elif custom_section:
-   ```
-   to:
-   ```python
-   elif custom_section or had_custom_instructions:
-   ```
-
-3. Added log message at line 178:
-   ```python
-   logger.info("Removed Custom Instructions from CLAUDE.md")
-   ```
-
-**Verification**: Test `test_prompt_removed_when_cleared` in `/Users/eugene/Dropbox/trinity/trinity/tests/test_settings.py` validates the fix.
+**Status**: This issue is now moot since CLAUDE.local.md is fully overwritten on each agent start. The custom instructions section is simply omitted when the prompt is empty.
 
 ## Related Flows
 - **Upstream**: Admin authentication (auth0-authentication.md)
@@ -390,3 +337,4 @@ This feature does not broadcast changes via WebSocket. Agents only receive the p
 | 2025-12-14 | claude | Bug fix: Custom instructions removal when cleared |
 | 2025-12-19 | claude | Verified line numbers against current codebase |
 | 2026-01-23 | claude | Updated line numbers after refactoring: settings_service.py extracted, agent_client.py added, router line numbers updated, test file expanded |
+| 2026-03-14 | claude | Major: Platform instructions moved from CLAUDE.md to CLAUDE.local.md (gitignored) to survive git operations |

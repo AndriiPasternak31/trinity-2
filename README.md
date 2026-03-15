@@ -333,13 +333,17 @@ Trinity deploys agents from templates. Templates define agent behavior, resource
 ```
 my-template/
 ├── template.yaml              # Metadata, resources, credentials
-├── CLAUDE.md                  # Agent instructions
+├── CLAUDE.md                  # Agent instructions (owned by agent)
 ├── .claude/                   # Claude Code configuration
 │   ├── agents/               # Sub-agents (optional)
 │   ├── commands/             # Slash commands (optional)
 │   └── skills/               # Custom skills (optional)
 ├── .mcp.json.template        # MCP config with ${VAR} placeholders
 └── .env.example              # Documents required env vars
+
+# Generated at runtime by the platform (not in templates):
+# CLAUDE.local.md              # Platform instructions (gitignored, managed by Trinity)
+# .trinity/prompt.md           # Operator communication protocol
 ```
 
 ### Design Guides

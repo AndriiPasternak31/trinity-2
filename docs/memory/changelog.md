@@ -1,5 +1,13 @@
 ### 2026-03-14
 
+**fix: Move platform instructions from CLAUDE.md to CLAUDE.local.md**
+
+Platform instructions (Trinity section, operator queue, collaboration tools, custom prompt) were being injected into agents' `CLAUDE.md`, which got wiped during git operations. Now written to `CLAUDE.local.md` (gitignored, survives git ops). Legacy Trinity sections cleaned up from `CLAUDE.md` on next injection.
+
+- `docker/base-image/agent_server/routers/trinity.py` — Inject to CLAUDE.local.md, ensure gitignored, clean up legacy
+
+---
+
 **feat: Mobile Admin — agent chat, autonomy toggle, and task sending**
 
 Enhanced mobile admin (`/m`) agents tab with agent management controls and chat:

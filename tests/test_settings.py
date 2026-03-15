@@ -239,15 +239,16 @@ class TestTrinityPromptSetting:
 
 
 class TestTrinityPromptInjection:
-    """Tests for Trinity prompt injection into agent CLAUDE.md.
+    """Tests for Trinity prompt injection into agent CLAUDE.local.md.
 
-    These tests require agent creation and are slower.
+    Platform instructions are written to CLAUDE.local.md (gitignored, survives
+    git operations). These tests require agent creation and are slower.
     """
 
     @pytest.mark.slow
     @pytest.mark.requires_agent
     def test_agent_receives_prompt_on_creation(self, api_client: TrinityApiClient, request):
-        """New agent receives trinity_prompt in CLAUDE.md."""
+        """New agent receives trinity_prompt in CLAUDE.local.md."""
         agent_name = f"test-prompt-inj-{uuid.uuid4().hex[:6]}"
         prompt_text = f"Test injection prompt {uuid.uuid4().hex[:8]}"
 
@@ -276,22 +277,21 @@ class TestTrinityPromptInjection:
                     break
                 time.sleep(1)
 
-            # Verify injection by reading CLAUDE.md via files API
-            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.md")
+            # Verify injection by reading CLAUDE.local.md via files API
+            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.local.md")
             if response.status_code == 200:
                 content = response.json().get("content", "")
-                # The custom instructions should be in CLAUDE.md
+                # The custom instructions should be in CLAUDE.local.md
                 assert "Custom Instructions" in content, \
-                    "CLAUDE.md should contain Custom Instructions section"
+                    "CLAUDE.local.md should contain Custom Instructions section"
                 assert prompt_text in content, \
-                    f"CLAUDE.md should contain the prompt text: {prompt_text}"
+                    f"CLAUDE.local.md should contain the prompt text: {prompt_text}"
             else:
                 # Fall back to checking logs if files API fails
                 response = api_client.get(f"/api/agents/{agent_name}/logs?lines=200")
                 if response.status_code == 200:
                     logs = response.json().get("logs", "")
-                    # Check for Trinity section creation (at minimum)
-                    assert "Trinity" in logs or "CLAUDE.md" in logs, \
+                    assert "CLAUDE.local.md" in logs or "Trinity" in logs, \
                         "Agent logs should indicate Trinity injection activity"
 
         finally:
@@ -302,7 +302,7 @@ class TestTrinityPromptInjection:
     @pytest.mark.slow
     @pytest.mark.requires_agent
     def test_prompt_updated_on_agent_restart(self, api_client: TrinityApiClient, request):
-        """Agent receives updated trinity_prompt on restart."""
+        """Agent receives updated trinity_prompt on restart via CLAUDE.local.md."""
         agent_name = f"test-prompt-upd-{uuid.uuid4().hex[:6]}"
         initial_prompt = f"Initial prompt {uuid.uuid4().hex[:8]}"
         updated_prompt = f"Updated prompt {uuid.uuid4().hex[:8]}"
@@ -339,12 +339,21 @@ class TestTrinityPromptInjection:
             api_client.post(f"/api/agents/{agent_name}/start")
             time.sleep(5)
 
-            # Verify updated prompt in logs
-            response = api_client.get(f"/api/agents/{agent_name}/logs")
+            # Verify updated prompt in CLAUDE.local.md
+            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.local.md")
             if response.status_code == 200:
-                logs = response.json().get("logs", "")
-                # Should see custom instructions being updated
-                assert "Custom" in logs, "Agent logs should show custom instructions handling"
+                content = response.json().get("content", "")
+                assert updated_prompt in content, \
+                    "CLAUDE.local.md should contain the updated prompt text"
+                assert initial_prompt not in content, \
+                    "CLAUDE.local.md should NOT contain the old prompt text"
+            else:
+                # Fall back to logs check
+                response = api_client.get(f"/api/agents/{agent_name}/logs")
+                if response.status_code == 200:
+                    logs = response.json().get("logs", "")
+                    assert "CLAUDE.local.md" in logs, \
+                        "Agent logs should show CLAUDE.local.md being written"
 
         finally:
             api_client.delete("/api/settings/trinity_prompt")
@@ -353,7 +362,7 @@ class TestTrinityPromptInjection:
     @pytest.mark.slow
     @pytest.mark.requires_agent
     def test_prompt_removed_when_cleared(self, api_client: TrinityApiClient, request):
-        """Custom Instructions removed from CLAUDE.md when prompt cleared."""
+        """Custom Instructions removed from CLAUDE.local.md when prompt cleared."""
         agent_name = f"test-prompt-clr-{uuid.uuid4().hex[:6]}"
         prompt_text = f"Temporary prompt {uuid.uuid4().hex[:8]}"
 
@@ -378,11 +387,11 @@ class TestTrinityPromptInjection:
                 time.sleep(1)
 
             # Verify custom instructions present first
-            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.md")
+            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.local.md")
             if response.status_code == 200:
                 content = response.json().get("content", "")
                 assert "Custom Instructions" in content, \
-                    "CLAUDE.md should have Custom Instructions before clearing"
+                    "CLAUDE.local.md should have Custom Instructions before clearing"
 
             # Clear prompt
             api_client.delete("/api/settings/trinity_prompt")
@@ -393,22 +402,22 @@ class TestTrinityPromptInjection:
             api_client.post(f"/api/agents/{agent_name}/start")
             time.sleep(6)  # Wait for startup and injection
 
-            # Verify removal by checking CLAUDE.md content
-            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.md")
+            # Verify removal — CLAUDE.local.md is fully rewritten on each start,
+            # so without a custom prompt it simply won't have the section
+            response = api_client.get(f"/api/agents/{agent_name}/files/CLAUDE.local.md")
             if response.status_code == 200:
                 content = response.json().get("content", "")
-                # Custom Instructions section should be gone
                 assert "Custom Instructions" not in content, \
-                    "CLAUDE.md should NOT contain Custom Instructions after clearing"
+                    "CLAUDE.local.md should NOT contain Custom Instructions after clearing"
                 assert prompt_text not in content, \
-                    "CLAUDE.md should NOT contain the original prompt text"
+                    "CLAUDE.local.md should NOT contain the original prompt text"
             else:
                 # Fall back to logs check
                 response = api_client.get(f"/api/agents/{agent_name}/logs?lines=300")
                 if response.status_code == 200:
                     logs = response.json().get("logs", "")
-                    assert "Removed Custom Instructions" in logs or "Created CLAUDE.md" in logs, \
-                        "Agent logs should indicate custom instructions handling"
+                    assert "CLAUDE.local.md" in logs, \
+                        "Agent logs should indicate CLAUDE.local.md being written"
 
         finally:
             api_client.delete("/api/settings/trinity_prompt")
