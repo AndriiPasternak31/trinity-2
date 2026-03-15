@@ -55,17 +55,24 @@
         </div>
       </div>
 
-      <!-- New Chat button -->
-      <button
-        @click="startNewChat"
-        :disabled="loading"
-        class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-      >
-        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        New Chat
-      </button>
+      <div class="flex items-center space-x-2">
+        <!-- Model selector -->
+        <div class="w-44">
+          <ModelSelector v-model="selectedModel" compact placeholder="Default model" />
+        </div>
+
+        <!-- New Chat button -->
+        <button
+          @click="startNewChat"
+          :disabled="loading"
+          class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+        >
+          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          New Chat
+        </button>
+      </div>
     </div>
 
     <!-- Agent not running message -->
@@ -144,12 +151,8 @@
 
       <!-- Input area -->
       <div class="px-4 pb-4">
-        <div class="flex items-end space-x-2 mb-2">
-          <div class="w-56">
-            <ModelSelector v-model="selectedModel" compact placeholder="Default model" />
-          </div>
-        </div>
         <ChatInput
+          ref="chatInputRef"
           v-model="message"
           :disabled="loading"
           placeholder="Type your message..."
@@ -161,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 import { ChatMessages, ChatInput } from './chat'
@@ -202,6 +205,14 @@ const isRateLimitError = computed(() => {
   return lower.includes('usage limit') || lower.includes('rate limit') || lower.includes('out of extra usage') || lower.includes('out of usage')
 })
 const messagesRef = ref(null)
+const chatInputRef = ref(null)
+
+// Focus the chat input
+const focusChatInput = () => {
+  nextTick(() => {
+    chatInputRef.value?.focus()
+  })
+}
 
 // Model selection
 const selectedModel = ref(localStorage.getItem('trinity_chat_model') || '')
@@ -319,6 +330,7 @@ const selectSession = async (session, closeDropdown = true) => {
     error.value = 'Failed to load conversation history'
   } finally {
     loading.value = false
+    focusChatInput()
   }
 }
 
@@ -334,6 +346,8 @@ const startNewChat = () => {
   resumeBannerDismissed.value = false
   // Close any active SSE connection
   closeSSE()
+  // Focus input
+  focusChatInput()
 }
 
 // Dismiss resume mode banner (EXEC-023)
