@@ -299,10 +299,11 @@ const selectSession = async (session, closeDropdown = true) => {
       headers: authStore.authHeader
     })
 
-    // Load messages from session
+    // Load messages from session (already ordered ASC by backend)
     messages.value = (response.data.messages || []).map(msg => ({
       role: msg.role,
-      content: msg.content
+      content: msg.content,
+      timestamp: msg.timestamp
     }))
   } catch (err) {
     console.error('Failed to load session:', err)
@@ -510,7 +511,8 @@ const sendMessage = async (userMessage) => {
   // Add user message to chat immediately
   messages.value.push({
     role: 'user',
-    content: userMessage
+    content: userMessage,
+    timestamp: new Date().toISOString()
   })
 
   // Clear input
@@ -529,6 +531,7 @@ const sendMessage = async (userMessage) => {
       save_to_session: true,
       user_message: userMessage,
       create_new_session: !currentSessionId.value,
+      chat_session_id: currentSessionId.value || undefined,
       async_mode: true
     }
 
@@ -563,7 +566,8 @@ const sendMessage = async (userMessage) => {
       if (execution.status === 'success' && execution.response) {
         messages.value.push({
           role: 'assistant',
-          content: execution.response
+          content: execution.response,
+          timestamp: new Date().toISOString()
         })
       } else if (execution.status === 'failed') {
         error.value = execution.error || 'Task execution failed'

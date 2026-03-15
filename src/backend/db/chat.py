@@ -151,14 +151,16 @@ class ChatOperations:
             return self._row_to_chat_session(row) if row else None
 
     def get_chat_messages(self, session_id: str, limit: int = 100) -> List[ChatMessage]:
-        """Get messages for a chat session (newest first)."""
+        """Get messages for a chat session (oldest first for display order)."""
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT * FROM chat_messages
-                WHERE session_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
+                SELECT * FROM (
+                    SELECT * FROM chat_messages
+                    WHERE session_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ) sub ORDER BY timestamp ASC
             """, (session_id, limit))
             return [self._row_to_chat_message(row) for row in cursor.fetchall()]
 

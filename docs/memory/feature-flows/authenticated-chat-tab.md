@@ -31,7 +31,7 @@ As an authenticated user, I want a simple chat interface with my agents that:
 | `ChatPanel.vue` | `components/ChatPanel.vue` (646 lines) | Main authenticated chat panel with session selector + SSE streaming |
 | `ChatMessages.vue` | `components/chat/ChatMessages.vue` (87 lines) | Shared message list with bottom-aligned layout |
 | `ChatInput.vue` | `components/chat/ChatInput.vue` (83 lines) | Shared input with auto-resize textarea |
-| `ChatBubble.vue` | `components/chat/ChatBubble.vue` (56 lines) | Shared message bubble with markdown rendering |
+| `ChatBubble.vue` | `components/chat/ChatBubble.vue` (61 lines) | Shared message bubble with markdown rendering + timestamp display |
 | `ChatLoadingIndicator.vue` | `components/chat/ChatLoadingIndicator.vue` (51 lines) | Bouncing dots with dynamic status text + fade animation |
 | `execution-status.js` | `utils/execution-status.js` (72 lines) | Maps stream-json events to human-readable status labels |
 
@@ -100,7 +100,7 @@ const isResumeMode = computed(() =>        // Show banner when in resume mode AN
 |--------|------|-------------|
 | `formatSessionDate()` | 224 | Format timestamp as relative time ("2h ago") |
 | `loadSessions()` | 247 | Fetch user's chat sessions for this agent |
-| `selectSession()` | 274 | Select a session and load its messages |
+| `selectSession()` | 280 | Select a session and load its messages (includes timestamps) |
 | `startNewChat()` | 310 | Clear current session, start fresh, close SSE |
 | `buildContextPrompt()` | 331 | Build conversation context from last 20 messages |
 | `updateLoadingText()` | 351 | Update status label with 500ms min display time (THINK-001) |
@@ -108,7 +108,7 @@ const isResumeMode = computed(() =>        // Show banner when in resume mode AN
 | `closeSSE()` | 386 | Close SSE stream reader + cleanup timers (THINK-001) |
 | `subscribeToStream()` | 398 | Subscribe to execution SSE stream via fetch ReadableStream (THINK-001) |
 | `pollExecution()` | 472 | Poll execution status every 5s until complete (THINK-001) |
-| `sendMessage()` | 499 | Send message via async `/task` endpoint (THINK-001 refactor) |
+| `sendMessage()` | 506 | Send message via async `/task` endpoint with `chat_session_id` (THINK-001 refactor) |
 
 ### API Calls
 
@@ -119,12 +119,13 @@ await axios.get(`/api/agents/${agentName}/chat/sessions`, { headers: authStore.a
 // Get session details with messages (line 292)
 await axios.get(`/api/agents/${agentName}/chat/sessions/${sessionId}`, { headers: authStore.authHeader })
 
-// Send message - async mode (THINK-001) (line 539)
+// Send message - async mode (THINK-001) (line 529)
 await axios.post(`/api/agents/${agentName}/task`, {
   message: contextPrompt,          // Full message with conversation context
   save_to_session: true,           // Persist to chat_sessions table
   user_message: userMessage,       // Original message (for session display)
   create_new_session: !sessionId,  // Create new session if none active
+  chat_session_id: currentSessionId.value || undefined,  // Explicit session targeting
   async_mode: true                 // Return immediately with execution_id (THINK-001)
 }, { headers: authStore.authHeader })
 
@@ -185,10 +186,18 @@ if request.async_mode:
     return { "status": "accepted", "execution_id": execution_id, ... }
 ```
 
-**Session persistence in background** (`src/backend/routers/chat.py:489-540`):
+**Session persistence in background** (`src/backend/routers/chat.py:453-514`):
 ```python
 if request.save_to_session and user_id and user_email:
-    session = db.create_new_chat_session(...) if request.create_new_session else db.get_or_create_chat_session(...)
+    if request.create_new_session:
+        session = db.create_new_chat_session(...)
+    elif request.chat_session_id:
+        # Use the explicit session ID from the frontend
+        session = db.get_chat_session(request.chat_session_id)
+        if not session:
+            session = db.get_or_create_chat_session(...)  # Fallback
+    else:
+        session = db.get_or_create_chat_session(...)
     db.add_chat_message(session_id=session.id, role="user", content=original_user_message)
     db.add_chat_message(session_id=session.id, role="assistant", content=sanitized_resp, ...)
     # Broadcast chat_session_id via WebSocket
@@ -411,10 +420,13 @@ The `:key` binding is critical -- it forces Vue to destroy and recreate the `<sp
 User types message
     |
     v
+ChatPanel pushes { role, content, timestamp: new Date().toISOString() } to messages[]
+    |
+    v
 ChatPanel prepends session history to message (buildContextPrompt)
     |
     v
-POST /api/agents/{name}/task (async_mode=true, save_to_session=true)
+POST /api/agents/{name}/task (async_mode=true, save_to_session=true, chat_session_id=...)
     |
     +---> Backend creates execution record (status: "running")
     +---> Backend acquires capacity slot (CAPACITY-001)
@@ -469,6 +481,7 @@ Frontend refreshes session list (loadSessions)
 | `save_to_session` | bool | When true, persist to `chat_sessions` + `chat_messages` tables |
 | `user_message` | string | Original user message (without context prefix) for clean display |
 | `create_new_session` | bool | When true, close existing active sessions and create new one |
+| `chat_session_id` | string | Explicit chat session ID to save messages to (for continuing existing sessions) |
 | `resume_session_id` | string | Claude Code session ID for `--resume` flag (EXEC-023) |
 
 ## Shared Components
@@ -478,7 +491,7 @@ The following components are shared between ChatPanel and PublicChat:
 ```
 src/frontend/src/components/chat/
 ├── index.js                  # Export barrel (5 lines)
-├── ChatBubble.vue            # Message bubble with markdown (56 lines)
+├── ChatBubble.vue            # Message bubble with markdown + timestamps (61 lines)
 ├── ChatInput.vue             # Auto-resize textarea + send button (83 lines)
 ├── ChatMessages.vue          # Message list with auto-scroll (87 lines)
 └── ChatLoadingIndicator.vue  # Dynamic status indicator with fade animation (51 lines)
@@ -490,11 +503,16 @@ src/frontend/src/components/chat/
 - User messages: indigo background, white text, right-aligned (`bg-indigo-600 text-white ml-auto`)
 - Assistant messages: white/gray background, markdown rendered via `marked` library
 - Links open in new tab with `target="_blank"`
+- Optional `timestamp` prop (string, ISO 8601). When provided, a formatted time is shown below the bubble:
+  - Today's messages: time only (e.g., "3:42 PM")
+  - Older messages: date + time (e.g., "Mar 14, 3:42 PM")
+  - User bubbles: right-aligned timestamp; assistant bubbles: left-aligned
 
 **ChatMessages.vue**
 - Bottom-aligned layout using `min-h-full flex flex-col justify-end` (lines 2-4)
 - Auto-scroll on new messages via `watch` on `messages.length`
 - Passes `loadingText` prop down to `ChatLoadingIndicator` (line 28)
+- Passes `msg.timestamp` to `ChatBubble` via `:timestamp="msg.timestamp"` (line 24)
 - Exposes `scrollToBottom()` method for parent components
 - Named slot `#empty` for custom empty state
 
@@ -599,8 +617,9 @@ Tasks | Chat | Dashboard | Schedules | Credentials | Skills | ...
 ### Modified
 - `src/frontend/src/views/AgentDetail.vue` - Added Chat tab
 - `src/frontend/src/views/PublicChat.vue` - Refactored to use shared components
-- `src/backend/routers/chat.py` - `_execute_task_background` now supports `save_to_session` + `user_id`/`user_email` args; SSE stream proxy endpoint
-- `src/backend/models.py` - `ParallelTaskRequest.async_mode` field
+- `src/backend/routers/chat.py` - `_execute_task_background` now supports `save_to_session` + `user_id`/`user_email` args; SSE stream proxy endpoint; both async and sync paths use explicit `chat_session_id` when provided
+- `src/backend/models.py` - `ParallelTaskRequest.async_mode` and `chat_session_id` fields
+- `src/backend/db/chat.py` - `get_chat_messages()` uses subquery for correct ASC ordering
 
 ## Related Flows
 
@@ -691,6 +710,9 @@ When detected (lines 140-143):
 
 | Date | Change |
 |------|--------|
+| 2026-03-14 | **Message timestamps**. ChatBubble now accepts optional `timestamp` prop (line 41-44) with `formattedTime` computed (line 51-59). Today's messages show time only ("3:42 PM"), older messages show date + time ("Mar 14, 3:42 PM"). ChatMessages passes `msg.timestamp` to ChatBubble (line 24). ChatPanel includes `timestamp: new Date().toISOString()` when pushing local user/assistant messages (lines 515, 570). Backend-loaded messages include `timestamp` from `msg.timestamp` in `selectSession()` (line 306). |
+| 2026-03-14 | **Bug Fix: Messages saved to wrong session**. Frontend was not passing `currentSessionId` to backend. When continuing in an existing (possibly closed) session, backend's `get_or_create_chat_session()` found a different active session or created a new one. Fix: Added `chat_session_id` field to `ParallelTaskRequest` (models.py:95). Frontend now sends `chat_session_id: currentSessionId.value` in payload (ChatPanel.vue:534). Both async (`_execute_task_background`, chat.py:462-471) and sync (chat.py:803-810) backend paths use explicit session ID via `db.get_chat_session()`, falling back to `get_or_create_chat_session()` if not found. |
+| 2026-03-14 | **Bug Fix: Message ordering wrong after switching sessions**. `get_chat_messages()` in `db/chat.py` returned `ORDER BY timestamp DESC` but frontend displayed messages as-is. New messages pushed locally appeared at the end, but after switching sessions and back, loaded messages were reversed. Fix: Changed SQL to subquery `SELECT * FROM (... ORDER BY timestamp DESC LIMIT ?) sub ORDER BY timestamp ASC` (db/chat.py:157-164) so the most recent N messages are returned in chronological order. |
 | 2026-03-07 | **Rate limit error styling**. Added `isRateLimitError` computed property (line 193) that detects subscription/rate limit errors by keyword matching. Error display (lines 140-143) now uses amber styling (`bg-amber-100`, `text-amber-700`) with a "Subscription Usage Limit" header for these errors, distinguishing them from red generic errors. |
 | 2026-03-03 | **THINK-001: Dynamic Thinking Status**. Refactored `sendMessage()` from synchronous POST to async mode (`async_mode=true`). Added SSE stream subscription via `fetch` + `ReadableStream` for real-time status labels. New utility `execution-status.js` maps Claude Code `stream-json` events to human-readable labels ("Reading file...", "Searching code...", etc.). Added 500ms minimum display time per label to prevent flicker. Added 10s heartbeat timeout fallback to "Working...". Added polling loop (5s intervals) for execution completion. Updated `ChatLoadingIndicator.vue` with CSS fade transition animation (`:key` binding for re-render). Backend `_execute_task_background` now accepts `user_id`/`user_email` for session persistence in async mode. |
 | 2026-02-27 | **Bug Fix (CHAT-002)**: Fixed chat message ordering issue. Replaced fragile flex spacer technique (`<div class="flex-1">` pushing content down) with `min-h-full flex flex-col justify-end` pattern in `ChatMessages.vue`. This provides reliable bottom-alignment without race conditions between spacer resizing and message rendering. |

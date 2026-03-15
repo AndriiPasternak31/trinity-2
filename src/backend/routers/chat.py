@@ -459,6 +459,16 @@ async def _execute_task_background(
                         user_id=user_id,
                         user_email=user_email
                     )
+                elif request.chat_session_id:
+                    # Use the explicit session ID from the frontend
+                    session = db.get_chat_session(request.chat_session_id)
+                    if not session:
+                        # Session not found, fall back to get_or_create
+                        session = db.get_or_create_chat_session(
+                            agent_name=agent_name,
+                            user_id=user_id,
+                            user_email=user_email
+                        )
                 else:
                     session = db.get_or_create_chat_session(
                         agent_name=agent_name,
@@ -790,6 +800,14 @@ async def execute_parallel_task(
                     user_id=current_user.id,
                     user_email=current_user.email or current_user.username
                 )
+            elif request.chat_session_id:
+                session = db.get_chat_session(request.chat_session_id)
+                if not session:
+                    session = db.get_or_create_chat_session(
+                        agent_name=name,
+                        user_id=current_user.id,
+                        user_email=current_user.email or current_user.username
+                    )
             else:
                 session = db.get_or_create_chat_session(
                     agent_name=name,
