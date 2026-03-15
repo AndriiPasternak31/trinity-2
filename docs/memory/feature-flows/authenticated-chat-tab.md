@@ -28,7 +28,8 @@ As an authenticated user, I want a simple chat interface with my agents that:
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `ChatPanel.vue` | `components/ChatPanel.vue` (646 lines) | Main authenticated chat panel with session selector + SSE streaming |
+| `ChatPanel.vue` | `components/ChatPanel.vue` (~670 lines) | Main authenticated chat panel with session selector, model selector + SSE streaming |
+| `ModelSelector.vue` | `components/ModelSelector.vue` (172 lines) | Reusable model dropdown with presets and free-text input |
 | `ChatMessages.vue` | `components/chat/ChatMessages.vue` (87 lines) | Shared message list with bottom-aligned layout |
 | `ChatInput.vue` | `components/chat/ChatInput.vue` (83 lines) | Shared input with auto-resize textarea |
 | `ChatBubble.vue` | `components/chat/ChatBubble.vue` (61 lines) | Shared message bubble with markdown rendering + timestamp display |
@@ -59,7 +60,13 @@ As an authenticated user, I want a simple chat interface with my agents that:
    - Custom empty slot for welcome message
    - Dynamic loading text via `loadingText` prop (THINK-001)
 
-5. **Input Area** (lines 145-151)
+5. **Model Selector** (lines 147-151)
+   - `ModelSelector` component (compact mode) above chat input
+   - Persisted to `localStorage` as `trinity_chat_model`
+   - Passed as `model` parameter in `/task` payload
+   - Empty value = agent default model
+
+6. **Input Area** (lines 152-157)
    - Uses shared `ChatInput` component
    - Auto-resize textarea
    - Send on Enter or button click
@@ -79,6 +86,9 @@ const isRateLimitError = computed()  // Detects rate/usage limit errors for ambe
 let heartbeatTimer = null            // 10s timeout fallback to "Working..."
 let labelTimer = null                // Min 500ms display time scheduler
 let lastLabelTime = 0                // Timestamp of last label change
+
+// Sessions
+const selectedModel = ref(localStorage.getItem('trinity_chat_model') || '') // Persisted model choice
 
 // Sessions
 const sessions = ref([])             // List of user's sessions
@@ -126,7 +136,8 @@ await axios.post(`/api/agents/${agentName}/task`, {
   user_message: userMessage,       // Original message (for session display)
   create_new_session: !sessionId,  // Create new session if none active
   chat_session_id: currentSessionId.value || undefined,  // Explicit session targeting
-  async_mode: true                 // Return immediately with execution_id (THINK-001)
+  async_mode: true,                // Return immediately with execution_id (THINK-001)
+  model: selectedModel.value || undefined  // User-selected model override
 }, { headers: authStore.authHeader })
 
 // SSE stream subscription (line 404) - via fetch, not EventSource (custom auth headers)
@@ -477,6 +488,7 @@ Frontend refreshes session list (loadSessions)
 
 | Parameter | Type | Purpose |
 |-----------|------|---------|
+| `model` | string | User-selected model override (e.g., `claude-opus-4-6`). Empty = agent default. |
 | `async_mode` | bool | When true, return immediately with `execution_id` for polling (THINK-001) |
 | `save_to_session` | bool | When true, persist to `chat_sessions` + `chat_messages` tables |
 | `user_message` | string | Original user message (without context prefix) for clean display |
@@ -544,7 +556,7 @@ Tasks | Chat | Dashboard | Schedules | Credentials | Skills | ...
 | Execution | Headless (`/task`) async | Interactive (PTY) |
 | Dashboard | Shows in timeline | Not tracked |
 | Session | Switchable, persistent | Single stream |
-| Model | Sonnet (default) | Per-session |
+| Model | User-selectable via ModelSelector | Per-session |
 | Power | Basic chat | Full Claude Code |
 | Status | Dynamic labels (THINK-001) | TUI shows directly |
 
@@ -710,6 +722,7 @@ When detected (lines 140-143):
 
 | Date | Change |
 |------|--------|
+| 2026-03-14 | **Model selector in Chat tab**. Added `ModelSelector` component (compact mode) above the chat input area in `ChatPanel.vue`. Users can now select a model (e.g., Opus, Sonnet, Haiku) before sending messages. Selection is persisted to `localStorage` (`trinity_chat_model`) and passed as the `model` parameter in the `/task` payload. Empty selection uses the agent's default model. Reuses the existing `ModelSelector.vue` component already used by Tasks and Schedules panels. |
 | 2026-03-14 | **Message timestamps**. ChatBubble now accepts optional `timestamp` prop (line 41-44) with `formattedTime` computed (line 51-59). Today's messages show time only ("3:42 PM"), older messages show date + time ("Mar 14, 3:42 PM"). ChatMessages passes `msg.timestamp` to ChatBubble (line 24). ChatPanel includes `timestamp: new Date().toISOString()` when pushing local user/assistant messages (lines 515, 570). Backend-loaded messages include `timestamp` from `msg.timestamp` in `selectSession()` (line 306). |
 | 2026-03-14 | **Bug Fix: Messages saved to wrong session**. Frontend was not passing `currentSessionId` to backend. When continuing in an existing (possibly closed) session, backend's `get_or_create_chat_session()` found a different active session or created a new one. Fix: Added `chat_session_id` field to `ParallelTaskRequest` (models.py:95). Frontend now sends `chat_session_id: currentSessionId.value` in payload (ChatPanel.vue:534). Both async (`_execute_task_background`, chat.py:462-471) and sync (chat.py:803-810) backend paths use explicit session ID via `db.get_chat_session()`, falling back to `get_or_create_chat_session()` if not found. |
 | 2026-03-14 | **Bug Fix: Message ordering wrong after switching sessions**. `get_chat_messages()` in `db/chat.py` returned `ORDER BY timestamp DESC` but frontend displayed messages as-is. New messages pushed locally appeared at the end, but after switching sessions and back, loaded messages were reversed. Fix: Changed SQL to subquery `SELECT * FROM (... ORDER BY timestamp DESC LIMIT ?) sub ORDER BY timestamp ASC` (db/chat.py:157-164) so the most recent N messages are returned in chronological order. |

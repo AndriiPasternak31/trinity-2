@@ -144,6 +144,11 @@
 
       <!-- Input area -->
       <div class="px-4 pb-4">
+        <div class="flex items-end space-x-2 mb-2">
+          <div class="w-56">
+            <ModelSelector v-model="selectedModel" compact placeholder="Default model" />
+          </div>
+        </div>
         <ChatInput
           v-model="message"
           :disabled="loading"
@@ -160,6 +165,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 import { ChatMessages, ChatInput } from './chat'
+import ModelSelector from './ModelSelector.vue'
 import { getStatusFromStreamEvent, MIN_LABEL_DISPLAY_MS, HEARTBEAT_TIMEOUT_MS } from '../utils/execution-status'
 
 const props = defineProps({
@@ -196,6 +202,9 @@ const isRateLimitError = computed(() => {
   return lower.includes('usage limit') || lower.includes('rate limit') || lower.includes('out of extra usage') || lower.includes('out of usage')
 })
 const messagesRef = ref(null)
+
+// Model selection
+const selectedModel = ref(localStorage.getItem('trinity_chat_model') || '')
 
 // SSE state (THINK-001)
 let heartbeatTimer = null
@@ -532,7 +541,8 @@ const sendMessage = async (userMessage) => {
       user_message: userMessage,
       create_new_session: !currentSessionId.value,
       chat_session_id: currentSessionId.value || undefined,
-      async_mode: true
+      async_mode: true,
+      model: selectedModel.value || undefined
     }
 
     // EXEC-023: Include resume_session_id for ALL messages in resume mode
@@ -609,6 +619,15 @@ const handleClickOutside = (event) => {
     showSessionDropdown.value = false
   }
 }
+
+// Persist model selection
+watch(selectedModel, (val) => {
+  if (val) {
+    localStorage.setItem('trinity_chat_model', val)
+  } else {
+    localStorage.removeItem('trinity_chat_model')
+  }
+})
 
 // Watch for agent becoming available
 watch(() => props.agentStatus, (newStatus) => {
