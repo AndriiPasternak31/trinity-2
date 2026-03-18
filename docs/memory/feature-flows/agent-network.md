@@ -1,6 +1,8 @@
 # Feature: Agent Network
 
-> **Last Updated**: 2026-03-14 - Dashboard header compacted: agents display shortened to "N/N agents" format (running/total), removed redundant "active" collaboration indicator, added whitespace-nowrap to tag selector to prevent two-row wrapping.
+> **Last Updated**: 2026-03-17 - Permission edges now populated: `fetchPermissionEdges()` implemented in network.js, fetching `GET /api/agents/{name}/permissions` for all non-system agents in parallel and rendering dashed gray directional arrows (`perm-{source}-{target}` IDs) that represent static agent-to-agent communication permissions.
+>
+> **Previous (2026-03-14)** - Dashboard header compacted: agents display shortened to "N/N agents" format (running/total), removed redundant "active" collaboration indicator, added whitespace-nowrap to tag selector to prevent two-row wrapping.
 >
 > **Previous (2026-03-07)** - Agent Avatars in Network Graph: AgentNode now displays an `AgentAvatar` component in the node header (line 28), showing the agent's avatar image or initials-based fallback. `avatarUrl` field added to node data in `convertAgentsToNodes()` for both system agents (line 426) and regular agents (line 460) in `network.js`.
 >
@@ -257,12 +259,58 @@ Pinia store managing graph state and WebSocket communication. **Note**: Previous
 
 **Actions**:
 
-##### fetchAgents() (Lines 108-116)
+##### fetchAgents() (Lines 134-147)
 ```javascript
 await axios.get('/api/agents')
 // -> convertAgentsToNodes()
+// -> fetchPermissionEdges()  (called at end, after nodes are built)
 ```
-Fetches all agents and converts to Vue Flow nodes with grid layout.
+Fetches all agents, converts to Vue Flow nodes with grid layout, then populates permission edges. Also called by `setFilterTags()` when the tag filter changes.
+
+##### fetchPermissionEdges() (Lines 149-208)
+```javascript
+// Runs after fetchAgents() populates nodes.value
+// Skips system agents and agents where permissions return 403.
+const results = await Promise.allSettled(
+  agentNames.map(name =>
+    axios.get(`/api/agents/${name}/permissions`)
+      .then(r => ({ agent: name, permitted: r.data.permitted_agents.map(p => p.name) }))
+  )
+)
+// For each fulfilled result, create one edge per permitted target
+// (only when both source and target nodes exist in current graph)
+permissionEdges.value = newEdges
+```
+Fetches agent-to-agent communication permissions for all non-system agents in parallel via `GET /api/agents/{name}/permissions`. Builds `permissionEdges` with dashed gray directional arrows.
+
+**Edge format**:
+```javascript
+{
+  id: `perm-${source}-${target}`,   // e.g. "perm-alice-bob"
+  source,
+  target,
+  type: 'smoothstep',
+  animated: false,
+  style: {
+    stroke: '#94a3b8',              // Tailwind slate-400
+    strokeWidth: 1.5,
+    strokeDasharray: '5,3',         // Dashed pattern
+    opacity: 0.7
+  },
+  markerEnd: { type: 'arrowclosed', color: '#94a3b8', width: 12, height: 12 },
+  data: { type: 'permission' }
+}
+```
+
+**Key behaviors**:
+- Only non-system agents are queried (system agents have no permission entries).
+- `Promise.allSettled` means 403s (inaccessible agents) are silently skipped — only `fulfilled` results produce edges.
+- Both source and target node IDs must exist in `nodes.value` before an edge is added; stale agent references are discarded.
+- Bidirectional permissions (A can call B AND B can call A) produce two separate directional dashed edges (`perm-A-B` and `perm-B-A`).
+- Re-runs on every `fetchAgents()` call (including tag-filter changes and periodic refreshes), replacing `permissionEdges.value` in full.
+
+**Merge with collaboration edges** (`edges` computed, Lines 14-37):
+Permission edges are the baseline layer. When an active collaboration edge (`animated: true`) shares the same source/target pair as a permission edge, the permission edge (`perm-{source}-{target}`) is removed from the map so only the animated collaboration edge is visible. Inactive collaboration edges (`e-{source}-{target}`) coexist with their corresponding permission edge, showing both the static permission relationship and the historical communication count label.
 
 ##### fetchHistoricalCollaborations() (Lines 118-177)
 ```javascript

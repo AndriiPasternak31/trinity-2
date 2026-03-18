@@ -597,6 +597,54 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
   - Phase 3: Inline keyboards for approve/reject
   - Phase 4: Production webhook mode
 
+### 15.1d Public Chat Session Memory (PUB-006)
+- **Status**: ⏳ Not Started
+- **Requirement ID**: PUB-006
+- **Priority**: P2
+- **Description**: Optional per-session persistent memory for public link users. When enabled, the agent accumulates structured knowledge about a user across the entire session lifetime — beyond simple message history replay — so it can recall facts, preferences, and context without re-reading every prior message.
+- **Problem Statement**:
+  - Currently, context is injected by concatenating the last N messages (max 10 turns) into the prompt. This breaks for long conversations (context window pressure) and loses facts from early in the session.
+  - There is no mechanism for the agent to "remember" key facts it learned (e.g., user's name, goals, constraints) independent of raw message replay.
+- **Key Features**:
+  - **Opt-in per public link**: Toggle `memory_enabled` on `agent_public_links` (default: `false`). The public link creation/edit UI exposes this setting.
+  - **Session metadata store**: Agent can write a structured JSON blob (`session_context`) to the session record after each turn — capturing facts, preferences, and a rolling summary of the conversation.
+  - **Smart context injection**: When memory is enabled, the context prompt is built from (a) `session_context` (agent-written facts) + (b) recent messages (last 5 turns), instead of the current flat 10-turn replay. This keeps prompts shorter and more focused.
+  - **Agent write-back endpoint**: `POST /api/public/session/{token}/memory` — accepts `session_context` JSON from the agent container after execution completes. The backend calls this automatically by passing the agent's response through a structured extraction step, OR the agent itself calls it via an injected tool.
+  - **Session summary**: After every N turns (configurable, default 5), the backend triggers a lightweight summarization call to condense prior messages into `session_context`, freeing up context window space.
+  - **No extra infra**: Uses existing `public_chat_sessions` table (add `session_context TEXT` column and `memory_enabled` on links table). No vector DB required in Phase 1.
+- **Database Changes**:
+  - `agent_public_links`: add `memory_enabled INTEGER DEFAULT 0`
+  - `public_chat_sessions`: add `session_context TEXT` (JSON), `summarized_through_message_id TEXT`
+- **API Endpoints**:
+  - `PUT /api/agents/{name}/public-links/{id}` — extend to include `memory_enabled` toggle (reuse existing link update endpoint)
+  - `POST /api/public/session/{token}/memory` — agent or backend writes updated `session_context`; requires valid `session_id` query param; no external auth (link token is sufficient)
+  - `GET /api/public/history/{token}` — extend response to include `session_context` when memory is enabled
+- **Context Prompt Format (memory enabled)**:
+  ```
+  ### Session Context (what I know about this user)
+  {session_context JSON rendered as bullet list}
+
+  ### Recent conversation (last 5 turns)
+  User: ...
+  Assistant: ...
+
+  ### Current message
+  User: {new_message}
+  ```
+- **Context Prompt Format (memory disabled)** — unchanged from current behavior (last 10 turns flat replay).
+- **Summarization Trigger**: After every 5th user message, if `memory_enabled`, the backend schedules a background task that:
+  1. Fetches all messages not yet covered by `summarized_through_message_id`
+  2. Calls the agent with a special prompt asking it to extract structured facts and update `session_context`
+  3. Saves the updated `session_context` and advances `summarized_through_message_id`
+- **Frontend Changes**:
+  - Public link settings panel: add "Session Memory" toggle with tooltip explaining behavior
+  - No changes to `PublicChat.vue` — transparent to end users
+- **Architecture Notes**:
+  - Phase 1: Structured JSON blob in SQLite (no vector DB, no embeddings). Sufficient for most agent-user sessions.
+  - Phase 2 (future): Embed messages and do semantic retrieval for very long sessions (>50 turns). Out of scope for PUB-006.
+  - Memory is scoped to a single `public_chat_session` — there is no cross-session or cross-link memory.
+  - Anonymous sessions have the same memory capability as email-verified sessions.
+
 ### 15.2 First-Time Setup
 - **Status**: ✅ Implemented (2025-12-23)
 - **Description**: Admin password wizard on fresh install

@@ -140,8 +140,70 @@ export const useNetworkStore = defineStore('network', () => {
       const response = await axios.get('/api/agents', { params })
       agents.value = response.data
       convertAgentsToNodes(response.data)
+      await fetchPermissionEdges()
     } catch (error) {
       console.error('Failed to fetch agents:', error)
+    }
+  }
+
+  async function fetchPermissionEdges() {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+
+      const agentNames = agents.value
+        .filter(a => !a.is_system)
+        .map(a => a.name)
+
+      if (agentNames.length === 0) return
+
+      // Fetch permissions for all agents in parallel, ignore failures (e.g. 403 for inaccessible agents)
+      const results = await Promise.allSettled(
+        agentNames.map(name =>
+          axios.get(`/api/agents/${name}/permissions`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(r => ({ agent: name, permitted: (r.data.permitted_agents || []).map(p => p.name) }))
+        )
+      )
+
+      const newEdges = []
+
+      results.forEach(result => {
+        if (result.status !== 'fulfilled') return
+        const { agent: source, permitted } = result.value
+
+        permitted.forEach(target => {
+          // Only add if both nodes exist in the current graph
+          const sourceExists = nodes.value.some(n => n.id === source)
+          const targetExists = nodes.value.some(n => n.id === target)
+          if (!sourceExists || !targetExists) return
+
+          newEdges.push({
+            id: `perm-${source}-${target}`,
+            source,
+            target,
+            type: 'smoothstep',
+            animated: false,
+            style: {
+              stroke: '#94a3b8',
+              strokeWidth: 1.5,
+              strokeDasharray: '5,3',
+              opacity: 0.7
+            },
+            markerEnd: {
+              type: 'arrowclosed',
+              color: '#94a3b8',
+              width: 12,
+              height: 12
+            },
+            data: { type: 'permission' }
+          })
+        })
+      })
+
+      permissionEdges.value = newEdges
+    } catch (error) {
+      console.error('[Permissions] Failed to fetch permission edges:', error)
     }
   }
 
@@ -1579,6 +1641,7 @@ export const useNetworkStore = defineStore('network', () => {
 
     // Actions
     fetchAgents,
+    fetchPermissionEdges,
     setFilterTags,
     fetchHistoricalCollaborations,
     fetchHistoricalCommunications: fetchHistoricalCollaborations, // Alias for new terminology
