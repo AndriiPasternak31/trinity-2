@@ -1,6 +1,8 @@
 # Feature: Agent Network
 
-> **Last Updated**: 2026-03-17 - Permission edges now populated: `fetchPermissionEdges()` implemented in network.js, fetching `GET /api/agents/{name}/permissions` for all non-system agents in parallel and rendering dashed gray directional arrows (`perm-{source}-{target}` IDs) that represent static agent-to-agent communication permissions.
+> **Last Updated**: 2026-03-18 - Graph edges simplified to permission-only: `edges` computed now returns `permissionEdges.value` directly (old merge logic combining collaborationEdges + permissionEdges removed). `collaborationEdges` still exists in state and is populated by WebSocket events for live animation purposes, but is NOT rendered in the graph.
+>
+> **Previous (2026-03-17)** - Permission edges now populated: `fetchPermissionEdges()` implemented in network.js, fetching `GET /api/agents/{name}/permissions` for all non-system agents in parallel and rendering dashed gray directional arrows (`perm-{source}-{target}` IDs) that represent static agent-to-agent communication permissions.
 >
 > **Previous (2026-03-14)** - Dashboard header compacted: agents display shortened to "N/N agents" format (running/total), removed redundant "active" collaboration indicator, added whitespace-nowrap to tag selector to prevent two-row wrapping.
 >
@@ -233,9 +235,9 @@ Pinia store managing graph state and WebSocket communication. **Note**: Previous
 **State** (Lines 6-59):
 - `agents` (8) - Raw agent data from API
 - `nodes` (9) - Vue Flow node objects
-- `collaborationEdges` (10) - Edges from collaboration history
-- `permissionEdges` (11) - Edges from agent-to-agent permissions
-- `edges` (14-36) - Computed property merging collaboration and permission edges
+- `collaborationEdges` (10) - Edges from collaboration history (populated by WebSocket events for animation tracking; NOT rendered in the graph)
+- `permissionEdges` (11) - Edges from agent-to-agent permissions (the sole source for graph edges)
+- `edges` (15) - Computed property returning `permissionEdges.value` directly; no merge logic
 - `collaborationHistory` (37) - Last 100 real-time communication events (in-memory)
 - `lastEventTime` (38) - Timestamp of most recent event
 - `activeCollaborations` (39) - Count of currently animated edges
@@ -309,8 +311,11 @@ Fetches agent-to-agent communication permissions for all non-system agents in pa
 - Bidirectional permissions (A can call B AND B can call A) produce two separate directional dashed edges (`perm-A-B` and `perm-B-A`).
 - Re-runs on every `fetchAgents()` call (including tag-filter changes and periodic refreshes), replacing `permissionEdges.value` in full.
 
-**Merge with collaboration edges** (`edges` computed, Lines 14-37):
-Permission edges are the baseline layer. When an active collaboration edge (`animated: true`) shares the same source/target pair as a permission edge, the permission edge (`perm-{source}-{target}`) is removed from the map so only the animated collaboration edge is visible. Inactive collaboration edges (`e-{source}-{target}`) coexist with their corresponding permission edge, showing both the static permission relationship and the historical communication count label.
+**`edges` computed** (Line 15):
+```javascript
+const edges = computed(() => permissionEdges.value)
+```
+The graph renders only permission-based edges. There is no merge with `collaborationEdges`. `collaborationEdges` remains in state because WebSocket `agent_collaboration` events still populate it (used for tracking `activeCollaborationCount` and the animated-edge indicator in the header), but those edges are never passed to Vue Flow's `<VueFlow :edges="...">` binding.
 
 ##### fetchHistoricalCollaborations() (Lines 118-177)
 ```javascript

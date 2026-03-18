@@ -40,26 +40,28 @@ As an agent operator, I want to view all agent executions (including chats) from
 ```
 
 **TasksPanel.vue** - Main tasks component with the following sections:
-- **Header (lines 4-47)**: Title, queue status indicator, refresh button
-- **Summary Stats (lines 49-69)**: Total tasks, success rate, total cost, avg duration - Compact layout with smaller padding (`px-3 py-2`) and text (`text-base`, `text-[10px]`)
-- **New Task Input (lines 71-101)**: Model selector + textarea for task message, Run button - Uses `items-stretch` so Run button height matches textarea
-  - **Model Selector (line 86, MODEL-001)**: `ModelSelector` component above textarea, persisted per-agent in localStorage
+- **Header (lines 4-61)**: Title, trigger type filter dropdown, queue status indicator, refresh button
+- **Summary Stats (lines 63-83)**: Total tasks, success rate, total cost, avg duration - Compact layout with smaller padding (`px-3 py-2`) and text (`text-base`, `text-[10px]`)
+- **New Task Input (lines 85-134)**: Model + Timeout selectors + textarea for task message, Run button - Uses `items-stretch` so Run button height matches textarea
+  - **Model Selector (line 90, MODEL-001)**: `ModelSelector` component, persisted per-agent in localStorage
+  - **Timeout Selector (lines 93-104)**: Dropdown for `timeout_seconds` (5min/15min/30min/1hr/2hr), persisted per-agent in localStorage (default: 15min/900s)
   - **Keyboard shortcuts**: Enter to submit, Shift+Enter for newline, Cmd/Ctrl+Enter also works
-- **Task History (lines 103-315)**: Scrollable list of all tasks with expand/collapse
-  - **Action Buttons per Task** (lines 210-311):
-    - Open Execution Detail (lines 211-233): External link / Live button for running tasks
-    - View Log (lines 234-244): Modal for execution transcript
-    - Copy Input (lines 245-254): Copy task message to clipboard
-    - **Stop Execution** (lines 255-271): Terminate running task (new 2026-01-12)
-    - Re-run (lines 272-283): Repeat the same task
-    - **Make Repeatable** (lines 284-294): Create schedule from task message (calendar icon)
-    - Expand/Collapse (lines 295-310): Show/hide task details
-- **Execution Log Modal (lines 317-433)**: Modal for viewing execution transcript
-- **Queue Management (lines 435-453)**: Force release and clear queue buttons
+- **Task History (lines 136-369)**: Scrollable list of all tasks with expand/collapse
+  - Row highlight: `highlightExecutionId` prop causes ring highlight and auto-scroll
+  - **Action Buttons per Task** (lines 264-365):
+    - Open Execution Detail (lines 265-287): External link / Live button for running tasks
+    - View Log (lines 288-298): Modal for execution transcript
+    - Copy Input (lines 299-308): Copy task message to clipboard
+    - **Stop Execution** (lines 309-325): Terminate running task
+    - Re-run (lines 326-337): Repeat the same task
+    - **Make Repeatable** (lines 338-348): Create schedule from task message (calendar icon)
+    - Expand/Collapse (lines 349-365): Show/hide task details
+- **Execution Log Modal (lines 371-487)**: Modal for viewing execution transcript
+- **Queue Management (lines 489-507)**: Force release and clear queue buttons
 
 ### Events Emitted
 
-**TasksPanel.vue:451** - Component events:
+**TasksPanel.vue:539** - Component events:
 ```javascript
 const emit = defineEmits(['create-schedule'])
 ```
@@ -68,7 +70,7 @@ const emit = defineEmits(['create-schedule'])
 
 ### State Management
 
-**TasksPanel.vue:510-530** - Local reactive state:
+**TasksPanel.vue:520-580** - Local reactive state:
 ```javascript
 const props = defineProps({
   agentName: { type: String, required: true },
@@ -87,23 +89,41 @@ const taskLoading = ref(false)       // Submit in progress
 const expandedTaskId = ref(null)     // Currently expanded task
 const expandLoadingTaskId = ref(null)  // PERF-001: Track which task is loading details
 const taskDetailsCache = ref({})     // PERF-001: Cache for task details (response/error)
-const terminatingTaskId = ref(null)  // Task being terminated (new 2026-01-12)
+const terminatingTaskId = ref(null)  // Task being terminated
+const triggerFilter = ref('all')     // Filter by triggered_by type
 const runningExecutions = ref([])    // Running executions from agent (for termination)
 
 // Model selection (MODEL-001) - persisted per-agent in localStorage
 const taskModelKey = computed(() => `trinity-task-model-${props.agentName}`)
-const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-opus-4-5')
+const selectedModel = ref(localStorage.getItem(`trinity-task-model-${props.agentName}`) || 'claude-opus-4-5-20251101')
 watch(selectedModel, (val) => { localStorage.setItem(taskModelKey.value, val) })
+
+// Timeout selection - persisted per-agent in localStorage (default: 900s / 15min)
+const taskTimeoutKey = computed(() => `trinity-task-timeout-${props.agentName}`)
+const taskTimeout = ref(parseInt(localStorage.getItem(`trinity-task-timeout-${props.agentName}`)) || 900)
+watch(taskTimeout, (val) => { localStorage.setItem(taskTimeoutKey.value, val) })
 ```
 
-**Computed Properties (lines 291-316)**:
+**Computed Properties (lines 590-643)**:
 ```javascript
 // Combine local pending tasks with server executions for seamless UX
 const allTasks = computed(() => {
   const pending = pendingTasks.value.filter(p => {
     return !executions.value.some(e => e.message === p.message && e.started_at === p.started_at)
   })
-  return [...pending, ...executions.value]
+
+  // enhanceWithExecutionId: matches running tasks to process registry entries for Stop button
+  // Falls back to single-running-execution assumption when message preview matching fails
+  const enhanceWithExecutionId = (task) => { /* ... */ }
+
+  let tasks = [...pending.map(enhanceWithExecutionId), ...executions.value.map(enhanceWithExecutionId)]
+
+  // Apply trigger type filter
+  if (triggerFilter.value !== 'all') {
+    tasks = tasks.filter(t => t.triggered_by === triggerFilter.value)
+  }
+
+  return tasks
 })
 
 const successRate = computed(() => { /* ... */ })
@@ -113,7 +133,7 @@ const avgDuration = computed(() => { /* ... */ })
 
 ### API Calls
 
-**Load Executions (lines 329-338)** - Returns lightweight `ExecutionSummary`:
+**Load Executions (lines 656-670)** - Returns lightweight `ExecutionSummary`:
 ```javascript
 async function loadExecutions() {
   // PERF-001: Returns ExecutionSummary (excludes response, error, tool_calls, execution_log)
@@ -121,10 +141,15 @@ async function loadExecutions() {
     headers: authStore.authHeader
   })
   executions.value = response.data
+
+  // If highlightExecutionId is set, auto-expand and scroll to that task
+  if (props.highlightExecutionId) {
+    scrollToHighlightedTask()
+  }
 }
 ```
 
-**Fetch Task Details on Expand (lines 805-836)** - PERF-001 on-demand loading:
+**Fetch Task Details on Expand (lines 843-881)** - PERF-001 on-demand loading:
 ```javascript
 // PERF-001: Fetch task details when user expands a task row
 async function fetchTaskDetails(taskId) {
@@ -158,21 +183,31 @@ async function fetchTaskDetails(taskId) {
 }
 ```
 
-**Load Queue Status (lines 341-354)**:
+**Load Queue Status (lines 690-715)**:
 ```javascript
 async function loadQueueStatus() {
   if (props.agentStatus !== 'running') {
     queueStatus.value = null
+    runningExecutions.value = []
     return
   }
   const response = await axios.get(`/api/agents/${props.agentName}/queue`, {
     headers: authStore.authHeader
   })
   queueStatus.value = response.data
+
+  // Also fetch running executions when queue is busy OR when local tasks are running
+  // (manual tasks bypass the queue, so is_busy may be false even with active tasks)
+  const hasLocalRunningTasks = pendingTasks.value.some(t => t.status === 'running')
+  if (response.data.is_busy || hasLocalRunningTasks) {
+    await loadRunningExecutions()
+  } else {
+    runningExecutions.value = []
+  }
 }
 ```
 
-**Run New Task (lines 357-433)**:
+**Run New Task (lines 734-818)**:
 ```javascript
 async function runNewTask() {
   // Create local pending task for immediate UI feedback
@@ -186,8 +221,12 @@ async function runNewTask() {
   }
   pendingTasks.value.unshift(localTask)
 
-  // Submit to server (MODEL-001: include selected model)
-  const payload = { message: taskMessage }
+  // Poll for running executions at 500ms and 2s after start (enables Stop button)
+  setTimeout(() => loadQueueStatus(), 500)
+  setTimeout(() => loadQueueStatus(), 2000)
+
+  // Submit to server (MODEL-001: include selected model; timeout_seconds from selector)
+  const payload = { message: taskMessage, timeout_seconds: taskTimeout.value }
   if (selectedModel.value) {
     payload.model = selectedModel.value
   }
@@ -201,7 +240,7 @@ async function runNewTask() {
 }
 ```
 
-**Make Repeatable (lines 654-657)**:
+**Make Repeatable (lines 827-830)**:
 ```javascript
 // Create schedule from task (make repeatable)
 function makeRepeatable(task) {
@@ -211,7 +250,7 @@ function makeRepeatable(task) {
 
 This emits the `create-schedule` event with the task message, which is handled by AgentDetail.vue to switch to the Schedules tab with the message pre-filled.
 
-**Queue Management (lines 908-936)**:
+**Queue Management (lines 1055-1083)**:
 ```javascript
 async function forceReleaseQueue() {
   await axios.post(`/api/agents/${props.agentName}/queue/release`, {}, {
@@ -232,7 +271,7 @@ async function clearQueue() {
 
 Running tasks can be stopped via the Stop button, which terminates the Claude Code subprocess gracefully.
 
-**Load Running Executions** (lines 619-634):
+**Load Running Executions** (lines 717-732):
 ```javascript
 async function loadRunningExecutions() {
   if (props.agentStatus !== 'running') {
@@ -246,7 +285,7 @@ async function loadRunningExecutions() {
 }
 ```
 
-**Execution ID Matching** (lines 509-530):
+**Execution ID Matching** (inside `allTasks` computed, lines 598-616):
 ```javascript
 // Enhance running tasks with execution_id from runningExecutions
 const enhanceWithExecutionId = (task) => {
@@ -254,29 +293,36 @@ const enhanceWithExecutionId = (task) => {
     return task
   }
   // Match by message preview (first 100 chars)
+  const messagePreview = task.message.substring(0, 100)
   const match = runningExecutions.value.find(e =>
-    e.metadata?.message_preview === task.message.substring(0, 100)
+    e.metadata?.message_preview === messagePreview ||
+    e.metadata?.message_preview?.startsWith(messagePreview.substring(0, 50))
   )
-  if (match) {
-    return { ...task, execution_id: match.execution_id }
+  if (match) return { ...task, execution_id: match.execution_id }
+  // Fallback: if only one running execution exists, assume it's this task
+  if (runningExecutions.value.length === 1) {
+    return { ...task, execution_id: runningExecutions.value[0].execution_id }
   }
   return task
 }
 ```
 
-**Terminate Task** (lines 742-777):
+**Terminate Task** (lines 888-924):
 ```javascript
 async function terminateTask(task) {
   if (!task.execution_id) return
 
   terminatingTaskId.value = task.id
   try {
+    // task_execution_id query param lets backend update the database record
     await axios.post(
-      `/api/agents/${props.agentName}/executions/${task.execution_id}/terminate`,
+      `/api/agents/${props.agentName}/executions/${task.execution_id}/terminate?task_execution_id=${task.execution_id}`,
       {},
       { headers: authStore.authHeader }
     )
-    // Update task status locally
+    // Update local pending task status immediately
+    const idx = pendingTasks.value.findIndex(t => t.id === task.id)
+    if (idx !== -1) pendingTasks.value[idx].status = 'cancelled'
     // Refresh data to get updated status
     await loadAllData()
   } finally {
@@ -719,6 +765,8 @@ Tasks are tracked in the `agent_activities` table via `activity_service.track_ac
 | running | Yellow | Pulsing dot |
 | success | Green | Solid dot |
 | failed | Red | Solid dot |
+| cancelled | Orange | Solid dot |
+| skipped | Purple | Solid dot |
 | queued | Gray | Solid dot |
 
 ### Trigger Badges
@@ -762,6 +810,7 @@ Tasks are tracked in the `agent_activities` table via `activity_service.track_ac
 
 | Date | Changes |
 |------|---------|
+| 2026-03-18 | **Timeout selector**: Added `taskTimeout` state with a Timeout dropdown in the New Task Input section (5min/15min/30min/1hr/2hr, default 15min). Value persisted per-agent in localStorage (`trinity-task-timeout-{name}`). Sent as `timeout_seconds` in POST /task payload. Added `cancelled` (orange) and `skipped` (purple) task status badges. Updated default model to `claude-opus-4-5-20251101`. Enhanced execution ID matching: fallback to single running execution when preview matching fails. `loadQueueStatus` now conditionally fetches running executions for local running tasks (manual tasks bypass queue). Terminate URL now includes `?task_execution_id=` query param so backend can update DB record. |
 | 2026-03-15 | **Unified chat execution tracking (#96)**: All `/api/chat` calls now create execution records (previously only MCP/agent-to-agent did). User chats use `triggered_by=chat`. Added "Chat" filter option (sky blue badge) to TasksPanel. Subtitle updated to "All executions". |
 | 2026-03-04 | **Paid/Public trigger types**: Added `paid` (yellow) and `public` (teal) to Trigger Badges table and filter dropdown. |
 | 2026-03-02 | **MODEL-001 Model Selection**: Added `ModelSelector.vue` component above task textarea (line 86). Model persisted per-agent in localStorage. Model sent in POST /task payload. `model_used` displayed in task history rows (line 205). New `model_used TEXT` column in `schedule_executions` table. |

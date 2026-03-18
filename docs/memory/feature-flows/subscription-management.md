@@ -342,7 +342,7 @@ On the Agent Detail page, admins see the auth method badge in the `AgentHeader` 
 ### Location
 
 - **AgentHeader badge/switcher**: `src/frontend/src/components/AgentHeader.vue:109-145`
-- **AgentDetail wiring**: `src/frontend/src/views/AgentDetail.vue:27-65` (template), `303-309` (state), `784-817` (functions), `913-928` (onMounted)
+- **AgentDetail wiring**: `src/frontend/src/views/AgentDetail.vue:27-67` (template), `307-309` (state), `784-817` (functions), `927-928` (onMounted), `839` (route-change watch)
 
 ### UI Behavior
 
@@ -378,25 +378,28 @@ const subscriptionChanging = ref(false)   // Spinner while API call in flight
 
 #### `loadAvailableSubscriptions()` (`AgentDetail.vue:784-794`)
 
-Called in `onMounted` (line 928) after `loadAuthStatus()`. Calls `GET /api/subscriptions`. On 403, sets `availableSubscriptions.value = null` (hides dropdown for non-admins). On success, sets array (may be empty).
+Called once in `onMounted` (line 928) after `loadAuthStatus()`. Calls `GET /api/subscriptions`. On 403, sets `availableSubscriptions.value = null` (hides dropdown for non-admins). On success, sets array (may be empty).
+
+Not called on agent route change (subscriptions are global, the list does not vary per agent). When navigating between agents, only `loadAuthStatus` is re-fetched (route-change watch, `AgentDetail.vue:839`) to refresh the badge for the new agent.
 
 #### `changeSubscription(subscriptionName)` (`AgentDetail.vue:796-817`)
 
-Emitted by AgentHeader `@change-subscription` event. Logic:
+Wired to AgentHeader `@change-subscription` event (`AgentDetail.vue:64`). Logic:
 - If `subscriptionName` is non-empty: `PUT /api/subscriptions/agents/{name}?subscription_name={subscriptionName}`
 - If empty string (user selected "API Key"): `DELETE /api/subscriptions/agents/{name}`
 - Sets `subscriptionChanging = true` before call, `false` in `finally`
 - Calls `loadAuthStatus()` on success to refresh the badge
 - Shows error notification on failure
 
-### Props Added to AgentHeader
+### Props Passed to AgentHeader (`AgentDetail.vue:27-67`)
 
-| Prop | Type | Default | Purpose |
-|------|------|---------|---------|
-| `subscriptions` | Array | `null` | List from `GET /api/subscriptions`; `null` hides dropdown |
-| `subscriptionChanging` | Boolean | `false` | Shows spinner on badge during API call |
+| Prop | Source in AgentDetail | Purpose |
+|------|-----------------------|---------|
+| `:auth-status="authStatus"` | `authStatus` ref (307) | Current badge state from `GET /api/subscriptions/agents/{name}/auth` |
+| `:subscriptions="availableSubscriptions"` | `availableSubscriptions` ref (308) | Full subscription list; `null` hides dropdown for non-admins |
+| `:subscription-changing="subscriptionChanging"` | `subscriptionChanging` ref (309) | Shows spinner on badge during API call |
 
-New emit: `change-subscription` — payload is the selected `<option value>` string (subscription name or empty string for API Key).
+New emit on `AgentHeader`: `change-subscription` — payload is the selected `<option value>` string (subscription name or empty string for API Key).
 
 ### Data Flow
 
@@ -1253,6 +1256,25 @@ The error flows through: Claude Code → `process_stream_line()` (stores in `met
 2. Navigate to Agent Detail page
 3. Verify: Red badge in header row shows "No Auth"
 
+#### Test: Subscription Switcher Dropdown (Admin Only)
+1. Register at least one subscription in Settings
+2. Navigate to Agent Detail page as admin (agent you own)
+3. Verify: Auth badge shows a chevron-down icon (dropdown is available)
+4. Click the badge to open the native `<select>` dropdown
+5. Verify: Dropdown shows "API Key" option plus one entry per registered subscription
+6. Select a different subscription name
+7. Verify: Spinner appears on badge (`subscriptionChanging = true`)
+8. Verify: After API call completes, badge updates to amber with the new subscription name
+9. Select "API Key" option from the dropdown
+10. Verify: `DELETE /api/subscriptions/agents/{name}` is called
+11. Verify: Badge reverts to gray "API Key"
+
+#### Test: Non-Admin Cannot See Dropdown
+1. Log in as a non-admin user who owns an agent
+2. Navigate to Agent Detail page for that agent
+3. Verify: Auth badge does NOT show chevron-down icon (no dropdown rendered)
+4. Verify: `GET /api/subscriptions` returns 403 and `availableSubscriptions` stays `null`
+
 ---
 
 ### MCP Testing
@@ -1284,6 +1306,7 @@ The error flows through: Claude Code → `process_stream_line()` (stores in `met
 
 | Date | Changes |
 |------|---------|
+| 2026-03-18 | **Subscription switcher dropdown on Agent Detail** (commit d166976): Updated doc to reflect current `AgentHeader.vue` and `AgentDetail.vue` wiring — corrected line numbers, clarified that `loadAvailableSubscriptions` is called only once in `onMounted` (not on route change), documented the three props passed to `AgentHeader` (`:auth-status`, `:subscriptions`, `:subscription-changing`), and added switcher test cases for admin and non-admin paths. |
 | 2026-03-03 | **SUB-003 Agent assignment UI**: Added assign/unassign controls to expanded subscription rows in Settings. Agent badges have X buttons for removal, dropdown + Assign button for adding agents, agents on other subs shown with "(on sub-name)" suffix. No backend changes. |
 | 2026-03-03 | **SUB-002 complete rewrite**: Token-based auth replacing file-injection. Registration takes `token` (from `claude setup-token`, prefix `sk-ant-oat01-`) instead of `credentials_json`. Storage encrypts `{"token": ...}` instead of `{".credentials.json": ...}`. Injection via `CLAUDE_CODE_OAUTH_TOKEN` env var on container creation -- no file injection needed. Removed `inject_subscription_to_agent()`, `inject_subscription_on_start()`, HTTP credential verification, and monitoring/auto-remediation. `get_agent_auth_mode()` simplified to pure DB-state detection. Frontend changed from file upload to password input with prefix validation. |
 | 2026-03-02 | **Auth method badge in AgentHeader**: Added frontend documentation for Flow 4. |

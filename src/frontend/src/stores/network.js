@@ -11,30 +11,8 @@ export const useNetworkStore = defineStore('network', () => {
   const collaborationEdges = ref([])  // Edges from collaboration history
   const permissionEdges = ref([])     // Edges from permissions
 
-  // Combined edges computed property
-  const edges = computed(() => {
-    // Merge permission edges with collaboration edges
-    // Collaboration edges override permission edges for same source/target pair
-    const edgeMap = new Map()
-
-    // Add permission edges first (will be overridden by collaboration edges)
-    permissionEdges.value.forEach(edge => {
-      edgeMap.set(edge.id, edge)
-    })
-
-    // Add collaboration edges (may override permission edges)
-    collaborationEdges.value.forEach(edge => {
-      const permEdgeId = `perm-${edge.source}-${edge.target}`
-      // If there's an active collaboration edge, remove the permission edge
-      // and just show the collaboration edge
-      if (edge.animated && edgeMap.has(permEdgeId)) {
-        edgeMap.delete(permEdgeId)
-      }
-      edgeMap.set(edge.id, edge)
-    })
-
-    return Array.from(edgeMap.values())
-  })
+  // Only show permission-based edges
+  const edges = computed(() => permissionEdges.value)
   const collaborationHistory = ref([])
   const lastEventTime = ref(null)
   const activeCollaborations = ref(0)
