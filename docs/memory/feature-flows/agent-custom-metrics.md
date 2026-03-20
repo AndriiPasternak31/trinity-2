@@ -133,7 +133,7 @@ Same as above, plus:
 | Component | File | Purpose |
 |-----------|------|---------|
 | Agent Server | `docker/base-image/agent_server/routers/info.py:148-208` | GET /api/metrics endpoint |
-| Router | `src/backend/routers/agents.py:688-695` | GET /api/agents/{name}/metrics endpoint |
+| Router | `src/backend/routers/agent_files.py` | GET /api/agents/{name}/metrics endpoint |
 | Service | `src/backend/services/agent_service/metrics.py` (93 lines) | Metrics proxy logic |
 | Frontend | `src/frontend/src/components/MetricsPanel.vue` (365 lines) | Metrics display component |
 | Frontend | `src/frontend/src/views/AgentDetail.vue:88-91` | Dashboard tab content integration |

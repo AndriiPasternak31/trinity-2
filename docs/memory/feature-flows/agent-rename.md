@@ -123,7 +123,7 @@ async function renameAgent(newName) {
 
 ## Backend Layer
 
-### Endpoint (`src/backend/routers/agents.py:1362-1510`)
+### Endpoint (`src/backend/routers/agent_rename.py`)
 
 ```python
 class RenameAgentRequest(BaseModel):

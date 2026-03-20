@@ -99,7 +99,7 @@ The shared folders feature uses a **thin router + service layer** architecture:
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Router | `src/backend/routers/agents.py:702-740` | Endpoint definitions |
+| Router | `src/backend/routers/agent_files.py` | Endpoint definitions |
 | Service | `src/backend/services/agent_service/folders.py` (218 lines) | Folder business logic |
 
 ### Endpoints

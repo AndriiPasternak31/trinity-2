@@ -50,7 +50,7 @@ def get_agent_full_capabilities() -> bool:
 
 ### Per-Agent API Endpoints
 
-**File**: `src/backend/routers/agents.py:912-993`
+**File**: `src/backend/routers/agent_config.py`
 
 #### GET /api/agents/{name}/capabilities
 

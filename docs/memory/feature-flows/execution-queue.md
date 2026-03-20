@@ -662,7 +662,7 @@ The queue management endpoints use a **thin router + service layer** architectur
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Router | `src/backend/routers/agents.py:447-470` | Endpoint definitions |
+| Router | `src/backend/routers/agents.py` | Endpoint definitions |
 | Service | `src/backend/services/agent_service/queue.py` (125 lines) | Queue management logic |
 
 ### Key Files Summary
@@ -679,7 +679,7 @@ The queue management endpoints use a **thin router + service layer** architectur
 
 ### GET /api/agents/{name}/queue
 
-**Router**: `src/backend/routers/agents.py:447-453`
+**Router**: `src/backend/routers/agents.py`
 **Service**: `src/backend/services/agent_service/queue.py:18-43`
 
 Returns current queue status for an agent.
@@ -713,7 +713,7 @@ Returns current queue status for an agent.
 
 ### POST /api/agents/{name}/queue/clear
 
-**Router**: `src/backend/routers/agents.py:456-462`
+**Router**: `src/backend/routers/agents.py`
 **Service**: `src/backend/services/agent_service/queue.py:46-82`
 
 Clear all queued executions (does not stop running execution).
@@ -731,7 +731,7 @@ Clear all queued executions (does not stop running execution).
 
 ### POST /api/agents/{name}/queue/release
 
-**Router**: `src/backend/routers/agents.py:465-470`
+**Router**: `src/backend/routers/agents.py`
 **Service**: `src/backend/services/agent_service/queue.py:85-125`
 
 Emergency: force release agent from running state.

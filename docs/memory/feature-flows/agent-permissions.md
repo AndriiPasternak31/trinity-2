@@ -157,7 +157,7 @@ The permissions feature uses a **thin router + service layer** architecture:
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Router | `src/backend/routers/agents.py:641-681` | Endpoint definitions |
+| Router | `src/backend/routers/agent_files.py` | Endpoint definitions |
 | Service | `src/backend/services/agent_service/permissions.py` (169 lines) | Permission business logic |
 | Dependencies | `src/backend/dependencies.py:158-267` | Access control dependencies |
 
@@ -208,11 +208,11 @@ async def get_agent_permissions(
 
 ### Endpoint: GET /api/agents/{name}/permissions
 
-**Router**: `src/backend/routers/agents.py:641-648`
+**Router**: `src/backend/routers/agent_files.py`
 **Service**: `src/backend/services/agent_service/permissions.py:18-66`
 
 ```python
-# Router (agents.py:641-648)
+# Router (agent_files.py)
 @router.get("/{agent_name}/permissions")
 async def get_agent_permissions(
     agent_name: str,
@@ -256,7 +256,7 @@ async def get_agent_permissions_logic(agent_name: str, current_user: User) -> di
 
 ### Endpoint: PUT /api/agents/{name}/permissions
 
-**Router**: `src/backend/routers/agents.py:651-659`
+**Router**: `src/backend/routers/agent_files.py`
 **Service**: `src/backend/services/agent_service/permissions.py:69-106`
 
 ```python
@@ -287,14 +287,14 @@ async def set_agent_permissions_logic(
 
 ### Endpoint: POST /api/agents/{name}/permissions/{target}
 
-**Router**: `src/backend/routers/agents.py:662-670`
+**Router**: `src/backend/routers/agent_files.py`
 **Service**: `src/backend/services/agent_service/permissions.py:109-141`
 
 Adds a single permission. Returns `{status: "added"}` or `{status: "already_exists"}`.
 
 ### Endpoint: DELETE /api/agents/{name}/permissions/{target}
 
-**Router**: `src/backend/routers/agents.py:673-681`
+**Router**: `src/backend/routers/agent_files.py`
 **Service**: `src/backend/services/agent_service/permissions.py:144-168`
 
 Removes a single permission. Returns `{status: "removed"}` or `{status: "not_found"}`.
@@ -503,7 +503,7 @@ except Exception as e:
 
 ### Agent Deletion
 
-**File**: `src/backend/routers/agents.py:276-280`
+**File**: `src/backend/routers/agents.py` (delete_agent_endpoint)
 
 ```python
 # Delete agent permissions

@@ -151,7 +151,7 @@ Headers: Authorization: Bearer {token}
 
 ### Endpoint
 
-#### src/backend/routers/agents.py:431-497
+#### src/backend/routers/agent_files.py
 ```python
 @router.get("/{agent_name}/info")
 async def get_agent_info_endpoint(

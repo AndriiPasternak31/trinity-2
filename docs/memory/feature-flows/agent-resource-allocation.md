@@ -150,7 +150,7 @@ async function saveResourceLimits() {
 
 ### Endpoints
 
-**agents.py** (`src/backend/routers/agents.py:803-904`)
+**agent_config.py** (`src/backend/routers/agent_config.py`)
 
 #### GET /api/agents/{name}/resources (Lines 803-838)
 

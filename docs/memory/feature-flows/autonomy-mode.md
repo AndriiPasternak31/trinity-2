@@ -272,7 +272,7 @@ async function toggleAutonomy() {
 
 ### Router Endpoints
 
-**File**: `src/backend/routers/agents.py`
+**File**: `src/backend/routers/agent_config.py` (per-agent get/put autonomy endpoints; global `/autonomy-status` bulk view remains in `routers/agents.py`)
 
 #### Bulk Status Endpoint (lines 168-173)
 ```python

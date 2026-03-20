@@ -180,7 +180,11 @@ The agent router uses a **thin router + service layer** architecture:
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Router | `src/backend/routers/agents.py` (~842 lines) | Endpoint definitions, dependency injection |
+| Router | `src/backend/routers/agents.py` (642 lines) | Core CRUD, lifecycle, stats, queue, activities, terminal |
+| Router | `src/backend/routers/agent_config.py` | Per-agent settings (autonomy, read-only, resources, capabilities, capacity, timeout, api-key) |
+| Router | `src/backend/routers/agent_files.py` | Files, info, playbooks, permissions, metrics, folders |
+| Router | `src/backend/routers/agent_rename.py` | Rename endpoint |
+| Router | `src/backend/routers/agent_ssh.py` | SSH access endpoint |
 | Services | `src/backend/services/agent_service/` | Business logic modules |
 
 **Service Modules:**
@@ -313,7 +317,7 @@ async def delete_agent_endpoint(agent_name: str, request: Request, current_user:
     # Broadcast WebSocket (line 432-436), return response (line 438)
 ```
 
-#### Rename Agent (RENAME-001) (`src/backend/routers/agents.py:1361-1460`)
+#### Rename Agent (RENAME-001) (`src/backend/routers/agent_rename.py`)
 ```python
 @router.put("/{agent_name}/rename")
 async def rename_agent_endpoint(agent_name: str, body: RenameAgentRequest, ...):

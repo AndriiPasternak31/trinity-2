@@ -114,7 +114,7 @@ export interface SshAccessResponse {
 
 ### Endpoint
 
-**agents.py** (`src/backend/routers/agents.py:999-1166`)
+**agent_ssh.py** (`src/backend/routers/agent_ssh.py`)
 
 #### Request Model (Line 999)
 
