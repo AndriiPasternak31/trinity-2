@@ -1,5 +1,18 @@
 ### 2026-03-19
 
+**🔄 refactor: Split routers/agents.py into focused routers (#113)**
+
+Reduced `agents.py` from 1,774 lines to 642 by extracting four focused routers — all API paths unchanged, 102 tests pass.
+
+- `src/backend/routers/agents.py` — Slimmed to core CRUD, lifecycle, stats, queue, activities, terminal
+- `src/backend/routers/agent_config.py` — NEW: autonomy, read-only, resources, capabilities, capacity, timeout, api-key
+- `src/backend/routers/agent_files.py` — NEW: files, info, playbooks, permissions, metrics, folders
+- `src/backend/routers/agent_rename.py` — NEW: rename endpoint with WebSocket broadcast
+- `src/backend/routers/agent_ssh.py` — NEW: SSH access endpoint
+- `src/backend/main.py` — Registers 4 new routers
+
+---
+
 **feat: Inline playbook autocomplete in agent chat (UI-AUTOCOMPLETE)**
 
 The chat input now supports Claude Code-style slash-command autocomplete for agent playbooks. Typing `/` triggers a dropdown of available playbooks (filtered as you type), with `Tab` or `↵` to accept the top suggestion. An inline ghost-text completion previews the full command name in gray, and once a command is accepted a parameter hint bar appears showing the `argument_hint` from the skill's YAML frontmatter.

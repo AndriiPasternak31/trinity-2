@@ -101,7 +101,11 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 **Routers (`routers/`)** — 45 router modules:
 
 *Core Agent:*
-- `agents.py` - Agent CRUD, start/stop, logs, stats, timeout, read-only mode
+- `agents.py` - Core CRUD, start/stop, logs, stats, queue, activities, terminal (642 lines)
+- `agent_config.py` - Per-agent settings: autonomy, read-only, resources, capabilities, capacity, timeout, api-key
+- `agent_files.py` - Files, info, playbooks, permissions, metrics, shared folders
+- `agent_rename.py` - Rename endpoint (RENAME-001)
+- `agent_ssh.py` - SSH access endpoint
 - `credentials.py` - Credential injection/export/import (CRED-002 simplified system)
 - `chat.py` - Agent chat/activity monitoring
 - `chat/` - Chat sub-router directory
