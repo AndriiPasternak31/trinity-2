@@ -210,7 +210,7 @@ async def inject_assigned_credentials(agent_name: str, max_retries: int = 3, ret
 
 **Trigger**: `POST /api/agents/{name}/stop` (user action via UI or API)
 
-**Source**: `src/backend/routers/agents.py:342-360`
+**Source**: `src/backend/routers/agents.py`
 
 | Step | Action | Notes |
 |------|--------|-------|
@@ -226,7 +226,7 @@ async def inject_assigned_credentials(agent_name: str, max_retries: int = 3, ret
 
 **Trigger**: `DELETE /api/agents/{name}` (user action via UI or API)
 
-**Source**: `src/backend/routers/agents.py:211-313`
+**Source**: `src/backend/routers/agents.py`
 
 | Step | Action | Notes |
 |------|--------|-------|
@@ -380,7 +380,7 @@ PROHIBITED_CAPABILITIES = [
 | `src/backend/services/agent_service/lifecycle.py` | 1-390 | Start, stop, injection, recreation logic |
 | `src/backend/services/agent_service/crud.py` | 1-555 | Agent creation logic |
 | `src/backend/services/docker_service.py` | 1-242 | Docker container operations |
-| `src/backend/routers/agents.py` | 189-360 | API endpoints for lifecycle operations |
+| `src/backend/routers/agents.py` | — | API endpoints for lifecycle operations |
 | `docs/memory/feature-flows/agent-lifecycle.md` | 1-840 | Feature flow documentation |
 
 ---

@@ -159,7 +159,11 @@ Trinity implements infrastructure for "System 2" AI — agents that think delibe
 |-----------|------|-------------|
 | Backend Entry | `src/backend/main.py` | FastAPI app initialization, router mounting |
 | Database | `src/backend/database.py` | SQLite persistence layer |
-| Agent Router | `src/backend/routers/agents.py` | Agent CRUD and lifecycle endpoints |
+| Agent Router | `src/backend/routers/agents.py` | Core CRUD, lifecycle, stats, queue, activities, terminal |
+| Agent Config Router | `src/backend/routers/agent_config.py` | Per-agent settings (autonomy, read-only, resources, capabilities, capacity, timeout) |
+| Agent Files Router | `src/backend/routers/agent_files.py` | Files, info, playbooks, permissions, metrics, folders |
+| Agent Rename Router | `src/backend/routers/agent_rename.py` | Rename endpoint |
+| Agent SSH Router | `src/backend/routers/agent_ssh.py` | SSH access endpoint |
 | Agent Lifecycle | `src/backend/services/agent_service/lifecycle.py:63-171` | Container start/stop logic |
 | Agent Creation | `src/backend/services/agent_service/crud.py:48-552` | Agent creation with Docker SDK |
 | MCP Server | `src/mcp-server/src/server.ts:65-112` | FastMCP server configuration |

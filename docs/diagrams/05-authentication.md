@@ -304,7 +304,7 @@
 
 | Component | File | Lines | Description |
 |-----------|------|-------|-------------|
-| Permission Endpoints | `src/backend/routers/agents.py` | 642-681 | GET/PUT/POST/DELETE permissions |
+| Permission Endpoints | `src/backend/routers/agent_files.py` | — | GET/PUT/POST/DELETE permissions |
 | Permission Service | `src/backend/services/agent_service/permissions.py` | 18-168 | Business logic |
 | Permission DB Ops | `src/backend/db/permissions.py` | 39-223 | Database operations |
 | Database Delegation | `src/backend/database.py` | 1070-1091 | Manager delegation methods |

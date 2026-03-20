@@ -415,7 +415,7 @@ This document illustrates Trinity's multi-agent orchestration capabilities:
 | System deployment | `src/backend/services/system_service.py` | 1-552 | YAML parsing, validation, deployment logic |
 | Systems router | `src/backend/routers/systems.py` | 1-427 | POST /api/systems/deploy, list, restart, export |
 | Permission service | `src/backend/services/agent_service/permissions.py` | 1-169 | Permission business logic |
-| Permissions router | `src/backend/routers/agents.py` | 642-681 | GET/PUT permissions endpoints |
+| Permissions router | `src/backend/routers/agent_files.py` | — | GET/PUT permissions endpoints |
 | Shared folders service | `src/backend/services/agent_service/folders.py` | 1-218 | Folder configuration logic |
 | Parallel task endpoint | `src/backend/routers/chat.py` | 418-630 | POST /api/agents/{name}/task |
 | Parallel execution | `docker/base-image/agent_server/services/claude_code.py` | 553-739 | execute_headless_task() |
