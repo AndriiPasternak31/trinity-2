@@ -33,6 +33,7 @@ Migration Order (as of 2026-02-28):
 26. agent_ownership_default_avatar - AVATAR-003 default avatar flag
 27. agent_ownership_execution_timeout - TIMEOUT-001 per-agent execution timeout
 28. public_user_memory_table - MEM-001 per-user persistent memory for public link agents
+29. subscription_rate_limit_tracking - SUB-003 rate-limit event tracking for auto-switch
 """
 
 
@@ -71,6 +72,7 @@ def run_all_migrations(cursor, conn):
         ("agent_ownership_default_avatar", _migrate_agent_ownership_default_avatar),
         ("agent_ownership_execution_timeout", _migrate_agent_ownership_execution_timeout),
         ("public_user_memory_table", _migrate_public_user_memory_table),
+        ("subscription_rate_limit_tracking", _migrate_subscription_rate_limit_tracking),
     ]
 
     for name, migration_fn in migrations:
@@ -762,5 +764,33 @@ def _migrate_public_user_memory_table(cursor, conn):
     """)
     cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_public_user_memory_lookup ON public_user_memory(agent_name, user_email)"
+    )
+    conn.commit()
+
+
+def _migrate_subscription_rate_limit_tracking(cursor, conn):
+    """Create subscription_rate_limit_events table (SUB-003: Auto-Switch).
+
+    Tracks per-(agent, subscription) rate-limit events with timestamps.
+    Used to determine when auto-switching should trigger (2+ consecutive events)
+    and which subscriptions to skip (rate-limited within last 2 hours).
+    """
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_rate_limit_events (
+            id TEXT PRIMARY KEY,
+            agent_name TEXT NOT NULL,
+            subscription_id TEXT NOT NULL,
+            error_message TEXT,
+            occurred_at TEXT NOT NULL,
+            FOREIGN KEY (subscription_id) REFERENCES subscription_credentials(id) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rate_limit_agent_sub "
+        "ON subscription_rate_limit_events(agent_name, subscription_id, occurred_at DESC)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rate_limit_sub "
+        "ON subscription_rate_limit_events(subscription_id, occurred_at DESC)"
     )
     conn.commit()

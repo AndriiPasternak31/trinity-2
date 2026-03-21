@@ -390,8 +390,34 @@ async def chat_with_agent(
                 error=error_msg
             )
 
-        # Preserve 429 (rate limit) from agent so frontend can show clear message
+        # SUB-003: Auto-switch subscription on rate-limit errors from agent
         if agent_status_code == 429:
+            try:
+                from services.subscription_auto_switch import handle_rate_limit_error
+                switch_result = await handle_rate_limit_error(
+                    agent_name=name,
+                    error_message=error_msg,
+                )
+                if switch_result:
+                    # Auto-switch happened — inform the caller
+                    raise HTTPException(
+                        status_code=429,
+                        detail={
+                            "error": error_msg,
+                            "auto_switch": switch_result,
+                            "message": (
+                                f"Rate limit hit. Subscription auto-switched to "
+                                f"'{switch_result['new_subscription']}'. Please retry."
+                            ),
+                            "retry_after": 15,
+                        }
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"[SUB-003] Auto-switch check failed for '{name}': {e}")
+
+            # Preserve 429 from agent so frontend can show clear message
             raise HTTPException(status_code=429, detail=error_msg)
 
         raise HTTPException(
@@ -580,6 +606,15 @@ async def _execute_task_background(
                 if hasattr(e.response, 'text') and e.response.text:
                     error_msg = e.response.text[:500]
         logger.error(f"[Task Async] Background task failed for agent '{agent_name}': {error_msg}")
+
+        # SUB-003: Check for rate-limit auto-switch on background task failures
+        agent_status_code = getattr(getattr(e, 'response', None), 'status_code', None)
+        if agent_status_code == 429:
+            try:
+                from services.subscription_auto_switch import handle_rate_limit_error
+                await handle_rate_limit_error(agent_name=agent_name, error_message=error_msg)
+            except Exception as switch_err:
+                logger.error(f"[SUB-003] Auto-switch check failed for '{agent_name}': {switch_err}")
 
         # Update execution record with failure
         if execution_id:
