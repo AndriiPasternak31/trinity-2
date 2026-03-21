@@ -1068,6 +1068,23 @@ class DatabaseManager:
     def get_agent_subscription_id(self, agent_name: str):
         return self._subscription_ops.get_agent_subscription_id(agent_name)
 
+    # --- SUB-003: Rate-Limit Tracking ---
+
+    def record_rate_limit_event(self, agent_name: str, subscription_id: str, error_message: str = ""):
+        return self._subscription_ops.record_rate_limit_event(agent_name, subscription_id, error_message)
+
+    def is_subscription_rate_limited(self, subscription_id: str):
+        return self._subscription_ops.is_subscription_rate_limited(subscription_id)
+
+    def clear_rate_limit_events(self, agent_name: str, subscription_id: str):
+        return self._subscription_ops.clear_rate_limit_events(agent_name, subscription_id)
+
+    def cleanup_old_rate_limit_events(self):
+        return self._subscription_ops.cleanup_old_rate_limit_events()
+
+    def select_best_alternative_subscription(self, current_subscription_id: str):
+        return self._subscription_ops.select_best_alternative_subscription(current_subscription_id)
+
     # =========================================================================
     # Agent Monitoring (delegated to db/monitoring.py) - MON-001
     # =========================================================================

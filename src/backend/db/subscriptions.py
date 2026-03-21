@@ -465,3 +465,110 @@ class SubscriptionOperations:
             )
             row = cursor.fetchone()
             return row["subscription_id"] if row else None
+
+    # =========================================================================
+    # Rate-Limit Tracking (SUB-003: Auto-Switch)
+    # =========================================================================
+
+    def record_rate_limit_event(
+        self,
+        agent_name: str,
+        subscription_id: str,
+        error_message: str = ""
+    ) -> int:
+        """
+        Record a rate-limit event for an (agent, subscription) pair.
+
+        Returns the count of consecutive rate-limit events for this pair
+        (events within the last 2 hours, no successful execution in between).
+        """
+        now = datetime.utcnow().isoformat()
+        event_id = str(uuid.uuid4())
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO subscription_rate_limit_events
+                (id, agent_name, subscription_id, error_message, occurred_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (event_id, agent_name, subscription_id, error_message, now))
+            conn.commit()
+
+            # Count consecutive events in last 2 hours
+            cursor.execute("""
+                SELECT COUNT(*) as cnt
+                FROM subscription_rate_limit_events
+                WHERE agent_name = ? AND subscription_id = ?
+                  AND occurred_at > datetime('now', '-2 hours')
+            """, (agent_name, subscription_id))
+            return cursor.fetchone()["cnt"]
+
+    def is_subscription_rate_limited(self, subscription_id: str) -> bool:
+        """Check if a subscription has been rate-limited in the last 2 hours."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COUNT(*) as cnt
+                FROM subscription_rate_limit_events
+                WHERE subscription_id = ?
+                  AND occurred_at > datetime('now', '-2 hours')
+            """, (subscription_id,))
+            return cursor.fetchone()["cnt"] > 0
+
+    def clear_rate_limit_events(self, agent_name: str, subscription_id: str) -> None:
+        """Clear rate-limit events for an (agent, subscription) pair after successful switch."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM subscription_rate_limit_events
+                WHERE agent_name = ? AND subscription_id = ?
+            """, (agent_name, subscription_id))
+            conn.commit()
+
+    def cleanup_old_rate_limit_events(self) -> int:
+        """Remove rate-limit tracking records older than 24 hours. Returns count deleted."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM subscription_rate_limit_events
+                WHERE occurred_at < datetime('now', '-24 hours')
+            """)
+            count = cursor.rowcount
+            conn.commit()
+            return count
+
+    def select_best_alternative_subscription(
+        self,
+        current_subscription_id: str
+    ) -> Optional[SubscriptionCredential]:
+        """
+        Select the best alternative subscription for auto-switch.
+
+        Strategy:
+        - Exclude the current subscription
+        - Skip subscriptions rate-limited in the last 2 hours
+        - Prefer subscriptions with fewer assigned agents (load-balance)
+
+        Returns:
+            Best alternative SubscriptionCredential, or None if no viable option
+        """
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get all subscriptions except current, ordered by agent count (ascending)
+            cursor.execute("""
+                SELECT s.*, u.email as owner_email,
+                    (SELECT COUNT(*) FROM agent_ownership WHERE subscription_id = s.id) as agent_count
+                FROM subscription_credentials s
+                JOIN users u ON s.owner_id = u.id
+                WHERE s.id != ?
+                ORDER BY agent_count ASC
+            """, (current_subscription_id,))
+
+            for row in cursor.fetchall():
+                sub = self._row_to_subscription(row)
+                # Skip if rate-limited in the last 2 hours
+                if not self.is_subscription_rate_limited(sub.id):
+                    return sub
+
+            return None

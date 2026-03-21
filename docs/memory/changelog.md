@@ -1,5 +1,20 @@
 ### 2026-03-21
 
+**feat: Auto-switch subscriptions on repeated rate-limit errors (#153, SUB-003)**
+
+When an agent hits 2+ consecutive rate-limit (429) errors, Trinity can automatically switch it to a different subscription. Opt-in via Settings > Subscriptions toggle.
+
+- `src/backend/db/subscriptions.py` — Rate-limit event tracking (record, check, cleanup, select best alternative)
+- `src/backend/db/migrations.py` — New `subscription_rate_limit_events` table
+- `src/backend/services/subscription_auto_switch.py` — NEW: Auto-switch orchestration (detect, switch, log, notify, restart)
+- `src/backend/routers/subscriptions.py` — GET/PUT `/api/subscriptions/settings/auto-switch`
+- `src/backend/routers/chat.py` — Hook into 429 handler (chat proxy + background tasks)
+- `src/backend/database.py` — Delegation methods for rate-limit tracking
+- `src/frontend/src/views/Settings.vue` — Toggle in Subscriptions section with helper text
+- `tests/test_subscription_auto_switch.py` — NEW: 6 smoke tests for setting CRUD
+
+---
+
 **fix: Agent server stream-json parser crashes on non-dict JSON lines (#151)**
 
 Added `isinstance(raw_msg, dict)` guards in all four stream-json parsing locations in `claude_code.py`. Previously, `json.loads()` could return a string literal (valid JSON), and calling `.get()` on it raised `AttributeError`, killing the stdout loop and discarding all execution results.

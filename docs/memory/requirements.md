@@ -944,6 +944,28 @@ The Process Engine supports six step types:
   - `src/backend/services/subscription_service.py` - Auth mode detection
   - `src/mcp-server/src/tools/subscriptions.ts` - MCP tools
 
+### 20.4 Subscription Auto-Switch on Rate Limit (SUB-003)
+- **Status**: ✅ Implemented (2026-03-21)
+- **Requirement ID**: SUB-003
+- **Extends**: SUB-002
+- **Priority**: HIGH
+- **Spec**: `docs/requirements/SUB-003-subscription-auto-switch.md`
+- **Description**: Automatically switches an agent to a different subscription when it encounters 2+ consecutive rate-limit (429) errors. Requires opt-in system setting.
+- **Preconditions**: Setting enabled + 2+ consecutive errors + alternative subscription available
+- **Key Features**:
+  - System setting `auto_switch_subscriptions` (default OFF) with Settings UI toggle
+  - Rate-limit event tracking per (agent, subscription) with 2h window
+  - Best-alternative selection: prefer fewer assigned agents, skip recently rate-limited
+  - Activity event logged on auto-switch, notification sent to agent owner
+  - Hooks into chat proxy 429 handler and background task failure path
+- **Database**: `subscription_rate_limit_events` table
+- **Files**:
+  - `src/backend/db/subscriptions.py` - Rate-limit tracking queries
+  - `src/backend/services/subscription_auto_switch.py` - Auto-switch orchestration
+  - `src/backend/routers/subscriptions.py` - Setting endpoints
+  - `src/backend/routers/chat.py` - 429 interception hooks
+  - `src/frontend/src/views/Settings.vue` - Toggle UI
+
 ---
 
 ## Non-Functional Requirements

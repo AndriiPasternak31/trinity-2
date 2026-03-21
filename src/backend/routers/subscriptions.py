@@ -305,3 +305,29 @@ async def get_agent_auth_status(
     except Exception as e:
         logger.error(f"Failed to get auth status for agent {agent_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================
+# Auto-Switch Setting (SUB-003)
+# =========================================================================
+
+@router.get("/settings/auto-switch")
+async def get_auto_switch_setting(
+    current_user: User = Depends(get_current_user)
+):
+    """Get the auto-switch subscriptions setting."""
+    require_admin(current_user)
+    enabled = db.get_setting_value("auto_switch_subscriptions", default="false") == "true"
+    return {"enabled": enabled}
+
+
+@router.put("/settings/auto-switch")
+async def set_auto_switch_setting(
+    enabled: bool,
+    current_user: User = Depends(get_current_user)
+):
+    """Enable or disable automatic subscription switching on rate-limit errors."""
+    require_admin(current_user)
+    db.set_setting("auto_switch_subscriptions", "true" if enabled else "false")
+    logger.info(f"Auto-switch subscriptions {'enabled' if enabled else 'disabled'} by {current_user.username}")
+    return {"enabled": enabled}

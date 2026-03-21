@@ -620,6 +620,37 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                   Expand a subscription row to assign or remove agents. Running agents will restart automatically.
                 </p>
+
+                <!-- Auto-Switch Toggle (SUB-003) -->
+                <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div class="flex items-center justify-between">
+                    <div class="flex-1 mr-4">
+                      <label for="auto-switch-toggle" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Automatically switch subscriptions when usage limits are reached
+                      </label>
+                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        When enabled, agents will automatically try a different subscription after 2 consecutive rate-limit errors. Requires at least 2 registered subscriptions.
+                      </p>
+                    </div>
+                    <button
+                      id="auto-switch-toggle"
+                      type="button"
+                      :class="[
+                        autoSwitchEnabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600',
+                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2'
+                      ]"
+                      :disabled="savingAutoSwitch"
+                      @click="toggleAutoSwitch"
+                    >
+                      <span
+                        :class="[
+                          autoSwitchEnabled ? 'translate-x-5' : 'translate-x-0',
+                          'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out'
+                        ]"
+                      />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1232,6 +1263,10 @@ const slackSettings = ref({
 const sshAccessEnabled = ref(false)
 const savingSshAccess = ref(false)
 
+// Auto-Switch Subscriptions state (SUB-003)
+const autoSwitchEnabled = ref(false)
+const savingAutoSwitch = ref(false)
+
 // Skills Library state
 const skillsLibraryUrl = ref('')
 const skillsLibraryBranch = ref('main')
@@ -1738,6 +1773,40 @@ async function toggleSshAccess() {
   }
 }
 
+// Auto-Switch Subscriptions methods (SUB-003)
+async function loadAutoSwitchSetting() {
+  try {
+    const response = await axios.get('/api/subscriptions/settings/auto-switch', {
+      headers: authStore.authHeader
+    })
+    autoSwitchEnabled.value = response.data.enabled
+  } catch (e) {
+    console.error('Failed to load auto-switch setting:', e)
+  }
+}
+
+async function toggleAutoSwitch() {
+  savingAutoSwitch.value = true
+  error.value = null
+
+  try {
+    const newValue = !autoSwitchEnabled.value
+    await axios.put(`/api/subscriptions/settings/auto-switch?enabled=${newValue}`, null, {
+      headers: authStore.authHeader
+    })
+
+    autoSwitchEnabled.value = newValue
+    showSuccess.value = true
+    setTimeout(() => {
+      showSuccess.value = false
+    }, 3000)
+  } catch (e) {
+    error.value = e.response?.data?.detail || 'Failed to update auto-switch setting'
+  } finally {
+    savingAutoSwitch.value = false
+  }
+}
+
 // Skills Library methods
 async function loadSkillsLibrarySettings() {
   try {
@@ -1995,5 +2064,6 @@ onMounted(() => {
   loadOpsSettings()
   loadSkillsLibrarySettings()
   loadSubscriptions()
+  loadAutoSwitchSetting()
 })
 </script>
