@@ -73,6 +73,11 @@ async def chat_with_agent(
     If the agent is busy, the request is queued (up to 3 waiting).
     If the queue is full, returns 429 Too Many Requests.
 
+    Issue #98: Chat executions now also acquire a capacity slot so that
+    SlotService is the single source of truth for agent load. The queue
+    still enforces serial chat; the slot tracks resource usage visible
+    in the capacity meter.
+
     Headers:
     - X-Source-Agent: Set when one agent calls another (agent-to-agent)
     - X-Via-MCP: Set for all MCP calls (both user and agent-scoped)
@@ -119,6 +124,26 @@ async def chat_with_agent(
 
     # Track queue position for observability
     is_queued = queue_result.startswith("queued:")
+
+    # Issue #98: Acquire a capacity slot so chat executions are visible in the
+    # capacity meter. The queue still enforces serial chat; the slot makes the
+    # resource usage visible to SlotService (single source of truth for load).
+    slot_service = get_slot_service()
+    chat_slot_acquired = False
+    try:
+        chat_timeout = db.get_execution_timeout(name)
+        max_parallel_tasks = db.get_max_parallel_tasks(name)
+        chat_slot_acquired = await slot_service.acquire_slot(
+            agent_name=name,
+            execution_id=execution.id,
+            max_parallel_tasks=max_parallel_tasks,
+            message_preview=request.message[:100] if request.message else "",
+            timeout_seconds=chat_timeout,
+        )
+        if not chat_slot_acquired:
+            logger.warning(f"[Chat] Agent '{name}' at capacity, could not acquire slot for chat {execution.id}")
+    except Exception as e:
+        logger.warning(f"[Chat] Failed to acquire slot for chat execution {execution.id}: {e}")
 
     # Create execution record for ALL chat calls (user, MCP, and agent-to-agent)
     # This ensures every execution appears in the Tasks tab for unified tracking (#96)
@@ -206,8 +231,7 @@ async def chat_with_agent(
 
     execution_success = False
     try:
-        # TIMEOUT-001: Use agent's configured timeout for chat mode
-        chat_timeout = float(db.get_execution_timeout(name))
+        # chat_timeout already fetched above for slot acquisition (Issue #98)
 
         payload = {"message": request.message, "stream": False}
         if request.model:
@@ -377,6 +401,9 @@ async def chat_with_agent(
     finally:
         # Always release the queue slot when done
         await queue.complete(name, success=execution_success)
+        # Issue #98: Release the capacity slot acquired for this chat execution
+        if chat_slot_acquired:
+            await slot_service.release_slot(name, execution.id)
 
 
 async def _execute_task_background(
@@ -1339,11 +1366,19 @@ async def terminate_agent_execution(
                 detail=result.get("detail", "Termination failed")
             )
 
-        # Clear queue state if termination succeeded
+        # Clear queue state and release capacity slot if termination succeeded
         if result.get("status") in ["terminated", "already_finished"]:
             queue = get_execution_queue()
             await queue.force_release(name)
             logger.info(f"[Terminate] Released queue for agent '{name}' after terminating execution {execution_id}")
+
+            # Issue #98: Also release any capacity slot held by this execution
+            try:
+                term_slot_service = get_slot_service()
+                await term_slot_service.release_slot(name, execution_id)
+                logger.info(f"[Terminate] Released capacity slot for agent '{name}' execution {execution_id}")
+            except Exception as e:
+                logger.warning(f"[Terminate] Failed to release slot for {name}: {e}")
 
             # Update database execution record if provided
             if task_execution_id:

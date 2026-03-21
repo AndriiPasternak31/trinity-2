@@ -1,3 +1,25 @@
+### 2026-03-21
+
+**feat: Add chart widget type to agent dashboards**
+
+Agents can now display charts (line, bar, area, pie, donut) in their dashboard via a new `type: chart` widget. Uses Chart.js/vue-chartjs (already in deps). Fully additive — no breaking changes to existing dashboards.
+
+- `docker/base-image/agent_server/routers/dashboard.py` — Added `chart` to valid widget types with validation for chart_type, series/segments, height
+- `src/frontend/src/components/DashboardChart.vue` — NEW: Chart renderer component using vue-chartjs
+- `src/frontend/src/components/DashboardPanel.vue` — Integrated DashboardChart widget
+- `src/backend/services/agent_service/dashboard.py` — Updated docstring
+
+---
+
+**🔧 fix: Unify ExecutionQueue and SlotService — chat now acquires capacity slots (#98)**
+
+Chat executions (`/api/chat`) now acquire a capacity slot via SlotService in addition to using the ExecutionQueue. This makes SlotService the single source of truth for agent load — the capacity meter now reflects ALL execution types (chat, task, schedule, public, paid). Previously, chat occupied the queue but NOT a slot, so capacity meters showed incorrect load.
+
+- `src/backend/routers/chat.py` — `chat_with_agent()` acquires/releases a slot around the chat execution; `terminate_agent_execution()` releases slot on termination
+- `src/backend/services/agent_service/queue.py` — `force_release_agent_logic()` now also clears capacity slots
+
+---
+
 ### 2026-03-19
 
 **🔄 refactor: Split routers/agents.py into focused routers (#113)**

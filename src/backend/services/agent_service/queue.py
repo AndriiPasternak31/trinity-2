@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from models import User
 from services.docker_service import get_agent_container
 from services.execution_queue import get_execution_queue
+from services.slot_service import get_slot_service
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +93,20 @@ async def force_release_agent_logic(
         queue = get_execution_queue()
         was_running = await queue.force_release(agent_name)
 
+        # Issue #98: Also clear all capacity slots since we're force-releasing
+        slots_cleared = 0
+        try:
+            slot_service = get_slot_service()
+            slots_cleared = await slot_service.force_clear_slots(agent_name)
+        except Exception as e:
+            logger.warning(f"[Queue] Failed to clear slots during force release of '{agent_name}': {e}")
+
         return {
             "status": "released",
             "agent": agent_name,
             "was_running": was_running,
-            "warning": "Agent queue state has been reset. Any in-progress execution may still be running."
+            "slots_cleared": slots_cleared,
+            "warning": "Agent queue state and capacity slots have been reset. Any in-progress execution may still be running."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to release agent: {str(e)}")

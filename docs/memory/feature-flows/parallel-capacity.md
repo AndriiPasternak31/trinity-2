@@ -10,6 +10,7 @@
 
 | Date | Changes |
 |------|---------|
+| 2026-03-21 | Issue #98: Chat executions (`/api/chat`) now acquire capacity slots, making SlotService the single source of truth for agent load across all execution types |
 | 2026-03-12 | TIMEOUT-001: Slot TTL now dynamic (agent timeout + 5 min buffer), not fixed 30 min. Aligns with per-agent configurable execution timeout. |
 | 2026-03-09 | Scheduled tasks now route through TaskExecutionService via internal API — capacity meter shows slot usage for cron/manual schedule executions |
 | 2026-03-04 | EXEC-024: Slot management split - sync path delegated to TaskExecutionService, public links gain slot enforcement |

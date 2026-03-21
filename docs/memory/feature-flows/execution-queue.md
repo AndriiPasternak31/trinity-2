@@ -1,6 +1,8 @@
 # Feature: Execution Queue System
 
-> **Updated**: 2026-03-18 - **Execution Records for All /api/chat Calls (#96)**: Every call to `POST /api/agents/{name}/chat` now creates a `task_execution` DB record regardless of call source. `triggered_by` values: `"chat"` (UI), `"mcp"` (user via MCP), `"agent"` (agent-to-agent). The response always includes `execution.task_execution_id`. New headers accepted: `X-Via-MCP`, `X-MCP-Key-ID`, `X-MCP-Key-Name` for MCP attribution. **Default model changed** to `"sonnet"` in the Chat tab frontend (`AgentDetail.vue:511`) for subscription compatibility (#138).
+> **Updated**: 2026-03-21 - **Unified Capacity Tracking (#98)**: Chat executions (`/api/chat`) now acquire a capacity slot via `SlotService` in addition to using `ExecutionQueue`. This makes `SlotService` the single source of truth for agent load — the capacity meter reflects ALL execution types. The queue still enforces serial chat; the slot tracks resource usage. `force_release_agent_logic()` now also clears capacity slots. Termination also releases slots.
+>
+> **Previous (2026-03-18)** - **Execution Records for All /api/chat Calls (#96)**: Every call to `POST /api/agents/{name}/chat` now creates a `task_execution` DB record regardless of call source. `triggered_by` values: `"chat"` (UI), `"mcp"` (user via MCP), `"agent"` (agent-to-agent). The response always includes `execution.task_execution_id`. New headers accepted: `X-Via-MCP`, `X-MCP-Key-ID`, `X-MCP-Key-Name` for MCP attribution. **Default model changed** to `"sonnet"` in the Chat tab frontend (`AgentDetail.vue:511`) for subscription compatibility (#138).
 >
 > **Previous (2026-02-16)** - **Security Fix (Credential Leakage Prevention)**: Execution logs, tool calls, and responses are now sanitized before database persistence to prevent credential leakage. Backend uses `sanitize_execution_log()` and `sanitize_response()` from `src/backend/utils/credential_sanitizer.py` in `routers/chat.py` for both `/chat` and `/task` endpoints.
 >
@@ -348,31 +350,30 @@ async def chat_with_agent(
     except QueueFullError as e:
         raise HTTPException(status_code=429, detail={...})
 
+    # Issue #98: Acquire capacity slot so SlotService tracks ALL execution types
+    slot_service = get_slot_service()
+    chat_slot_acquired = await slot_service.acquire_slot(
+        agent_name=name, execution_id=execution.id,
+        max_parallel_tasks=db.get_max_parallel_tasks(name),
+        message_preview=request.message[:100],
+        timeout_seconds=db.get_execution_timeout(name),
+    )
+
     # Create execution record for ALL chat calls (#96)
     # triggered_by: "agent" | "mcp" | "chat"
-    if x_source_agent:
-        triggered_by = "agent"
-    elif x_via_mcp:
-        triggered_by = "mcp"
-    else:
-        triggered_by = "chat"
     task_execution = db.create_task_execution(
-        agent_name=name,
-        message=request.message,
-        triggered_by=triggered_by,
-        source_user_id=current_user.id,
-        source_user_email=current_user.email or current_user.username,
-        source_agent_name=x_source_agent,
-        source_mcp_key_id=x_mcp_key_id,
-        source_mcp_key_name=x_mcp_key_name
+        agent_name=name, message=request.message,
+        triggered_by=triggered_by, ...
     )
-    task_execution_id = task_execution.id if task_execution else None
 
     # ... execute chat, track activities, update execution record on success/failure ...
 
     finally:
         # ALWAYS release queue slot when done
         await queue.complete(name, success=execution_success)
+        # Issue #98: Release capacity slot
+        if chat_slot_acquired:
+            await slot_service.release_slot(name, execution.id)
 ```
 
 **Response includes execution metadata:**
@@ -391,6 +392,7 @@ async def chat_with_agent(
 - Accepts three new headers: `X-Via-MCP`, `X-MCP-Key-ID`, `X-MCP-Key-Name` for MCP call attribution
 - Creates execution with source tracking (USER/AGENT)
 - **Always** creates a `task_execution` DB record for every call (user, MCP, agent-to-agent) — #96
+- **Acquires a capacity slot** via `SlotService` so the capacity meter reflects chat load — #98
 - `triggered_by` values: `"chat"` (UI), `"mcp"` (user via MCP key), `"agent"` (agent-to-agent)
 - `task_execution_id` is always non-null in the response `execution` block
 - On success: calls `db.update_execution_status(status=SUCCESS, response, context_used, cost, tool_calls, execution_log)`
