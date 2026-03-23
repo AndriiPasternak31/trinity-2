@@ -38,9 +38,10 @@ class SlackAdapter(ChannelAdapter):
         """
         Parse a Slack event_callback payload into a NormalizedMessage.
 
-        Handles both:
+        Handles:
         - message.im (DM to bot)
         - app_mention (bot @mentioned in channel)
+        - message in thread where bot already responded (no @mention needed)
         """
         event = raw_event.get("event", {})
         team_id = raw_event.get("team_id")
@@ -53,6 +54,10 @@ class SlackAdapter(ChannelAdapter):
         # Handle @mentions in channels
         if event_type == "app_mention":
             return self._parse_mention(event, team_id)
+
+        # Handle thread replies in bot channels (no @mention needed)
+        if event_type == "message" and event.get("thread_ts"):
+            return self._parse_thread_reply(event, team_id)
 
         return None
 
@@ -79,6 +84,35 @@ class SlackAdapter(ChannelAdapter):
             icon_url=avatar_url,
             thread_ts=thread_id,
         )
+
+    async def indicate_processing(self, message: NormalizedMessage) -> None:
+        """Add ⏳ reaction to the user's message."""
+        bot_token = self.get_bot_token(message.metadata.get("team_id"))
+        if bot_token and message.timestamp:
+            await slack_service.add_reaction(
+                bot_token, message.channel_id, message.timestamp, "hourglass_flowing_sand"
+            )
+
+    async def indicate_done(self, message: NormalizedMessage) -> None:
+        """Remove ⏳, add ✅ to the user's message."""
+        bot_token = self.get_bot_token(message.metadata.get("team_id"))
+        if bot_token and message.timestamp:
+            await slack_service.remove_reaction(
+                bot_token, message.channel_id, message.timestamp, "hourglass_flowing_sand"
+            )
+            await slack_service.add_reaction(
+                bot_token, message.channel_id, message.timestamp, "white_check_mark"
+            )
+
+    async def on_response_sent(self, message: NormalizedMessage, agent_name: str) -> None:
+        """Register active thread so subsequent replies don't need @mention."""
+        if message.thread_id and message.metadata.get("team_id"):
+            db.register_slack_active_thread(
+                team_id=message.metadata["team_id"],
+                channel_id=message.channel_id,
+                thread_ts=message.thread_id,
+                agent_name=agent_name,
+            )
 
     async def get_agent_name(self, message: NormalizedMessage) -> Optional[str]:
         """
@@ -169,6 +203,56 @@ class SlackAdapter(ChannelAdapter):
             text=text,
             channel_id=event.get("channel"),
             thread_id=event.get("thread_ts") or event.get("ts"),  # Reply in thread
+            timestamp=event.get("ts", ""),
+            metadata={
+                "team_id": team_id,
+                "is_dm": False,
+            }
+        )
+
+    def _parse_thread_reply(self, event: dict, team_id: str) -> Optional[NormalizedMessage]:
+        """
+        Parse a thread reply in a bot channel (no @mention needed).
+
+        Only responds if:
+        1. Channel is bound to an agent (slack_channel_agents table)
+        2. Thread was started by the bot (slack_active_threads table)
+        """
+        if event.get("bot_id") or event.get("subtype"):
+            return None
+
+        channel_id = event.get("channel")
+        thread_ts = event.get("thread_ts")
+
+        if not channel_id or not thread_ts:
+            return None
+
+        # Check 1: Is this a Trinity agent channel?
+        agent_from_channel = db.get_slack_agent_name_for_channel(team_id, channel_id)
+        if not agent_from_channel:
+            return None  # Not our channel — ignore
+
+        # Check 2: Is this a thread where the bot already responded?
+        agent_from_thread = db.is_slack_active_thread(team_id, channel_id, thread_ts)
+        if not agent_from_thread:
+            return None  # Bot didn't start this thread — ignore
+
+        user_id = event.get("user")
+        text = event.get("text", "").strip()
+
+        if not text or not user_id:
+            return None
+
+        # Strip any @mentions (user might still @mention out of habit)
+        text = re.sub(r'<@[A-Z0-9]+>\s*', '', text).strip()
+        if not text:
+            return None
+
+        return NormalizedMessage(
+            sender_id=user_id,
+            text=text,
+            channel_id=channel_id,
+            thread_id=thread_ts,
             timestamp=event.get("ts", ""),
             metadata={
                 "team_id": team_id,

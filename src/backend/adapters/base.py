@@ -68,3 +68,56 @@ class ChannelAdapter(ABC):
 
         Returns agent name, or None if no agent is configured for this channel/user.
         """
+
+    async def indicate_processing(self, message: NormalizedMessage) -> None:
+        """
+        Show a processing indicator to the user.
+
+        Called when the agent starts working on a message.
+        Each channel implements this differently:
+        - Slack: add ⏳ reaction to the user's message
+        - Telegram: send typing action
+        - Discord: trigger typing indicator
+
+        Default: no-op. Override in concrete adapters.
+        """
+        pass
+
+    async def indicate_done(self, message: NormalizedMessage) -> None:
+        """
+        Remove the processing indicator / show completion.
+
+        Called when the agent finishes (success or error).
+        - Slack: remove ⏳, add ✅
+        - Telegram: no-op (typing auto-expires)
+
+        Default: no-op. Override in concrete adapters.
+        """
+        pass
+
+    async def handle_verification(self, message: NormalizedMessage) -> bool:
+        """
+        Verify the sender is authorized to use the agent.
+
+        Called before processing. Return True to proceed, False to stop.
+        Channels that don't need verification should leave this as-is.
+
+        Default: always verified. Override in concrete adapters.
+        """
+        return True
+
+    async def on_response_sent(
+        self,
+        message: NormalizedMessage,
+        agent_name: str,
+    ) -> None:
+        """
+        Called after a response is successfully sent.
+
+        Adapters can use this to track state, e.g.:
+        - Slack: register active thread for reply-without-mention
+        - Telegram: no-op
+
+        Default: no-op. Override in concrete adapters.
+        """
+        pass

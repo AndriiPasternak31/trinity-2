@@ -203,6 +203,19 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `slack_service.py` - Slack API client (OAuth, messaging, verification) (SLACK-001)
 - `nevermined_payment_service.py` - x402 payment verification and settlement (NVM-001)
 
+**Channel Adapters (`adapters/`)** — Pluggable external messaging (SLACK-002):
+
+*Core:*
+- `base.py` - `ChannelAdapter` ABC, `NormalizedMessage`, `ChannelResponse` models
+- `message_router.py` - `ChannelMessageRouter`: rate limiting, agent resolution, execution pipeline
+
+*Slack:*
+- `slack_adapter.py` - Slack adapter: DMs, @mentions, thread replies, agent identity
+- `transports/slack_socket.py` - Socket Mode transport (WebSocket, auto-reconnect)
+
+*Database:*
+- `db/slack_channels.py` - Workspace connections, channel-agent bindings, active threads
+
 *Content & Media:*
 - `image_generation_service.py` - Platform image generation via Gemini (prompt refinement + image gen) (IMG-001)
 - `image_generation_prompts.py` - Best practices prompts for image generation use cases (IMG-001)
@@ -892,6 +905,46 @@ CREATE INDEX idx_shared_folders_consume ON agent_shared_folder_config(consume_en
 - Permission-gated: only agents with permissions (via `agent_permissions`) can mount
 - Container recreation on restart when mount config changes
 - Volume ownership automatically fixed to UID 1000
+
+**slack_workspaces:** (SLACK-002 - Channel Adapters)
+```sql
+CREATE TABLE slack_workspaces (
+    id TEXT PRIMARY KEY,
+    team_id TEXT UNIQUE NOT NULL,          -- Slack workspace team ID
+    team_name TEXT,                        -- Workspace display name
+    bot_token TEXT NOT NULL,               -- Bot OAuth token
+    connected_by TEXT,                     -- User who connected
+    connected_at TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1
+);
+```
+
+**slack_channel_agents:** (SLACK-002 - Channel Adapters)
+```sql
+CREATE TABLE slack_channel_agents (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,                 -- FK to slack_workspaces.team_id
+    slack_channel_id TEXT NOT NULL,        -- Slack channel/DM ID
+    slack_channel_name TEXT,               -- Channel display name
+    agent_name TEXT NOT NULL,              -- Trinity agent name
+    is_dm_default INTEGER DEFAULT 0,      -- 1 = default agent for DMs
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(team_id, slack_channel_id)
+);
+```
+
+**slack_active_threads:** (SLACK-002 - Channel Adapters)
+```sql
+CREATE TABLE slack_active_threads (
+    team_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    thread_ts TEXT NOT NULL,               -- Slack thread timestamp
+    agent_name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(team_id, channel_id, thread_ts)
+);
+```
 
 **process_definitions:** (Phase 14 - Process Engine, NEW: 2026-01-16)
 ```sql

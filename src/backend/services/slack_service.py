@@ -102,7 +102,7 @@ class SlackService:
 
         params = {
             "client_id": get_slack_client_id(),
-            "scope": "im:history,im:read,im:write,chat:write,chat:write.customize,users:read,users:read.email,app_mentions:read,channels:history,channels:read,channels:join,channels:manage",
+            "scope": "im:history,im:read,im:write,chat:write,chat:write.customize,users:read,users:read.email,app_mentions:read,channels:history,channels:read,channels:join,channels:manage,reactions:write",
             "redirect_uri": redirect_uri,
             "state": state
         }
@@ -319,6 +319,52 @@ class SlackService:
         except Exception as e:
             logger.error(f"Failed to open Slack DM channel: {e}")
             return None
+
+    async def add_reaction(
+        self,
+        bot_token: str,
+        channel: str,
+        timestamp: str,
+        emoji: str = "hourglass_flowing_sand",
+    ) -> bool:
+        """Add a reaction emoji to a message. Returns True on success."""
+        try:
+            response = await self.client.post(
+                f"{self.SLACK_API_BASE}/reactions.add",
+                headers={"Authorization": f"Bearer {bot_token}"},
+                json={"channel": channel, "timestamp": timestamp, "name": emoji}
+            )
+            data = response.json()
+            if not data.get("ok") and data.get("error") != "already_reacted":
+                logger.warning(f"Failed to add reaction: {data.get('error')}")
+                return False
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to add reaction: {e}")
+            return False
+
+    async def remove_reaction(
+        self,
+        bot_token: str,
+        channel: str,
+        timestamp: str,
+        emoji: str = "hourglass_flowing_sand",
+    ) -> bool:
+        """Remove a reaction emoji from a message. Returns True on success."""
+        try:
+            response = await self.client.post(
+                f"{self.SLACK_API_BASE}/reactions.remove",
+                headers={"Authorization": f"Bearer {bot_token}"},
+                json={"channel": channel, "timestamp": timestamp, "name": emoji}
+            )
+            data = response.json()
+            if not data.get("ok") and data.get("error") != "no_reaction":
+                logger.warning(f"Failed to remove reaction: {data.get('error')}")
+                return False
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to remove reaction: {e}")
+            return False
 
     async def create_channel(
         self,

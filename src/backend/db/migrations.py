@@ -862,6 +862,21 @@ def _migrate_slack_channel_agents(cursor, conn):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_slack_channel_agents_team ON slack_channel_agents(team_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_slack_channel_agents_agent ON slack_channel_agents(agent_name)")
 
+    # 3. Create slack_active_threads table (tracks threads where bot responded)
+    # Enables reply-without-mention in bot threads
+    # TODO: Add cleanup job to delete threads older than 7 days (see slack-implementation-questions.md Q10)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS slack_active_threads (
+            team_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            thread_ts TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (team_id, channel_id, thread_ts)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_slack_active_threads_lookup ON slack_active_threads(team_id, channel_id, thread_ts)")
+
     # 3. Migrate existing data from slack_link_connections → slack_workspaces
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='slack_link_connections'")
     if cursor.fetchone():

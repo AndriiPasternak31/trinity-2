@@ -212,6 +212,43 @@ class SlackChannelOperations:
             "enabled": bool(row[6]),
         }
 
+    # =========================================================================
+    # Active Thread Operations (for reply-without-mention)
+    # =========================================================================
+
+    def register_active_thread(
+        self,
+        team_id: str,
+        channel_id: str,
+        thread_ts: str,
+        agent_name: str,
+    ) -> None:
+        """Record that the bot responded in a thread (enables reply-without-mention)."""
+        now = datetime.utcnow().isoformat()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR IGNORE INTO slack_active_threads
+                (team_id, channel_id, thread_ts, agent_name, created_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (team_id, channel_id, thread_ts, agent_name, now))
+            conn.commit()
+
+    def is_active_thread(self, team_id: str, channel_id: str, thread_ts: str) -> Optional[str]:
+        """Check if a thread is active (bot participated). Returns agent_name or None."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT agent_name FROM slack_active_threads
+                WHERE team_id = ? AND channel_id = ? AND thread_ts = ?
+            """, (team_id, channel_id, thread_ts))
+            row = cursor.fetchone()
+        return row[0] if row else None
+
+    # =========================================================================
+    # Row converters
+    # =========================================================================
+
     def _row_to_channel_agent(self, row) -> dict:
         return {
             "id": row[0],

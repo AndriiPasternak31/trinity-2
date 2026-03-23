@@ -146,6 +146,16 @@ Email-verified public chat sessions now maintain persistent per-user memory acro
 - `src/backend/services/platform_prompt_service.py` — Added `format_user_memory_block()` helper
 - `src/backend/routers/public.py` — Memory injection + background `_summarize_user_memory()` task (sync and async paths)
 - `tests/test_public_user_memory.py` — Unit tests for DB ops and prompt formatting
+**feat: Channel adapter abstraction + multi-agent Slack integration (SLACK-002)**
+
+Added pluggable channel adapter architecture for external messaging platforms (Slack, future Telegram/Discord). Messages from any channel flow through a unified router: message → adapter → router → agent → response.
+
+- `src/backend/adapters/base.py` — Added `handle_verification()` optional method to `ChannelAdapter` base class (replaces duck-typed `hasattr()` check)
+- `src/backend/adapters/message_router.py` — Fixed memory leak: `_rate_limit_buckets` now periodically prunes stale empty buckets. Moved hardcoded rate limit (30/60s), timeout (120s), and allowed tools to `settings_service` for operational flexibility. Downgraded step-by-step logging from INFO to DEBUG to reduce log volume.
+- `src/backend/adapters/slack_adapter.py` — Slack-specific adapter: DMs, @mentions, thread replies, agent identity override
+- `src/backend/adapters/transports/slack_socket.py` — Socket Mode transport with auto-reconnect
+- `src/backend/db/slack_channels.py` — New tables: `slack_workspaces` (workspace→bot token), `slack_channel_agents` (channel→agent binding), `slack_active_threads` (reply-without-mention)
+- `src/backend/services/settings_service.py` — New settings: `channel_rate_limit_max`, `channel_rate_limit_window`, `channel_timeout_seconds`, `channel_allowed_tools`
 
 ---
 

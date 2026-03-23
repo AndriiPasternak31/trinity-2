@@ -1261,6 +1261,12 @@ class DatabaseManager:
     def unbind_slack_agent(self, team_id, agent_name):
         return self._slack_channel_ops.unbind_agent(team_id, agent_name)
 
+    def register_slack_active_thread(self, team_id, channel_id, thread_ts, agent_name):
+        return self._slack_channel_ops.register_active_thread(team_id, channel_id, thread_ts, agent_name)
+
+    def is_slack_active_thread(self, team_id, channel_id, thread_ts):
+        return self._slack_channel_ops.is_active_thread(team_id, channel_id, thread_ts)
+
     # =========================================================================
     # Nevermined Payment Integration (delegated to db/nevermined.py) - NVM-001
     # =========================================================================
