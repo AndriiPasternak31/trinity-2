@@ -77,6 +77,9 @@ def run_all_migrations(cursor, conn):
         ("agent_ownership_voice_prompt", _migrate_agent_ownership_voice_prompt),
     ]
 
+    # Add new migrations at the end
+    migrations.append(("slack_channel_agents", _migrate_slack_channel_agents))
+
     for name, migration_fn in migrations:
         try:
             migration_fn(cursor, conn)
@@ -821,3 +824,54 @@ def _migrate_agent_ownership_voice_prompt(cursor, conn):
         conn.commit()
     except Exception:
         pass  # Column already exists
+
+def _migrate_slack_channel_agents(cursor, conn):
+    """Add multi-agent Slack support: workspace table + channel-agent bindings.
+
+    Separates workspace OAuth (one bot token per workspace) from agent routing
+    (many agents per workspace, each bound to a channel).
+    """
+    # 1. Create slack_workspaces table (one per connected workspace)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS slack_workspaces (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL UNIQUE,
+            team_name TEXT,
+            bot_token TEXT NOT NULL,
+            connected_by TEXT,
+            connected_at TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1
+        )
+    """)
+
+    # 2. Create slack_channel_agents table (channel → agent binding)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS slack_channel_agents (
+            id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL,
+            slack_channel_id TEXT NOT NULL,
+            slack_channel_name TEXT,
+            agent_name TEXT NOT NULL,
+            is_dm_default INTEGER DEFAULT 0,
+            created_by TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(team_id, slack_channel_id),
+            FOREIGN KEY (agent_name) REFERENCES agent_ownership(agent_name) ON DELETE CASCADE
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_slack_channel_agents_team ON slack_channel_agents(team_id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_slack_channel_agents_agent ON slack_channel_agents(agent_name)")
+
+    # 3. Migrate existing data from slack_link_connections → slack_workspaces
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='slack_link_connections'")
+    if cursor.fetchone():
+        cursor.execute("""
+            INSERT OR IGNORE INTO slack_workspaces (id, team_id, team_name, bot_token, connected_by, connected_at, enabled)
+            SELECT id, slack_team_id, slack_team_name, slack_bot_token, connected_by, connected_at, enabled
+            FROM slack_link_connections
+        """)
+        migrated = cursor.rowcount
+        if migrated > 0:
+            print(f"Migrated {migrated} workspace(s) from slack_link_connections to slack_workspaces")
+
+    conn.commit()
