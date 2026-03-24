@@ -1,4 +1,4 @@
-### 2026-03-24
+### 2026-03-24 12:00:00
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
 
@@ -146,7 +146,12 @@ Email-verified public chat sessions now maintain persistent per-user memory acro
 - `src/backend/services/platform_prompt_service.py` — Added `format_user_memory_block()` helper
 - `src/backend/routers/public.py` — Memory injection + background `_summarize_user_memory()` task (sync and async paths)
 - `tests/test_public_user_memory.py` — Unit tests for DB ops and prompt formatting
-**feat: Channel adapter abstraction + multi-agent Slack integration (SLACK-002)**
+
+---
+
+### 2026-03-24 12:00:00
+
+✨ **feat: Channel adapter abstraction + multi-agent Slack integration (SLACK-002)**
 
 Added pluggable channel adapter architecture for external messaging platforms (Slack, future Telegram/Discord). Single Slack App supports multiple agents, each with a dedicated channel. Messages flow: Transport → Adapter → Router → Agent → Response.
 

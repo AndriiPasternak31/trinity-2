@@ -75,10 +75,8 @@ def run_all_migrations(cursor, conn):
         ("subscription_rate_limit_tracking", _migrate_subscription_rate_limit_tracking),
         ("chat_messages_source_column", _migrate_chat_messages_source_column),
         ("agent_ownership_voice_prompt", _migrate_agent_ownership_voice_prompt),
+        ("slack_channel_agents", _migrate_slack_channel_agents),
     ]
-
-    # Add new migrations at the end
-    migrations.append(("slack_channel_agents", _migrate_slack_channel_agents))
 
     for name, migration_fn in migrations:
         try:
