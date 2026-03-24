@@ -221,18 +221,21 @@ Public users receive this same prompt, which is why the agent responds with flee
 
 ### Immediate (this PR)
 1. ✅ Keep `--allowedTools WebSearch,WebFetch` for Slack
-2. Document MCP bypass as known limitation
-3. Consider applying same `allowed_tools` to web public chat for parity
+2. ✅ Bot token encrypted at rest (AES-256-GCM via `credential_encryption.py`)
+3. Document MCP bypass as known limitation
+4. Consider applying same `allowed_tools` to web public chat for parity
 
 ### Next PR
 4. Investigate `--allowedTools` behavior with MCP tool names
 5. Implement Approach C (different system prompt for public executions)
 6. Apply tool restrictions to `routers/public.py` and `routers/paid.py`
+7. **Bot token health check**: Periodic background job calling Slack `auth.test` to verify tokens are still valid. If revoked → mark workspace disconnected, notify admin. Pattern: `monitoring_service.py` health checks.
+8. **Encrypt legacy `slack_link_connections.slack_bot_token`**: Migration to encrypt existing plaintext tokens in old table
 
 ### GUARD-001 (Issue #140)
-7. Full PreToolUse hook system in base image
-8. Credential isolation (GUARD-004)
-9. Per-request MCP tool filtering
+9. Full PreToolUse hook system in base image
+10. Credential isolation (GUARD-004)
+11. Per-request MCP tool filtering
 
 ---
 

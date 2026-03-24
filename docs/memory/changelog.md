@@ -1,4 +1,4 @@
-### 2026-03-23
+### 2026-03-24
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
 
@@ -148,14 +148,33 @@ Email-verified public chat sessions now maintain persistent per-user memory acro
 - `tests/test_public_user_memory.py` — Unit tests for DB ops and prompt formatting
 **feat: Channel adapter abstraction + multi-agent Slack integration (SLACK-002)**
 
-Added pluggable channel adapter architecture for external messaging platforms (Slack, future Telegram/Discord). Messages from any channel flow through a unified router: message → adapter → router → agent → response.
+Added pluggable channel adapter architecture for external messaging platforms (Slack, future Telegram/Discord). Single Slack App supports multiple agents, each with a dedicated channel. Messages flow: Transport → Adapter → Router → Agent → Response.
 
-- `src/backend/adapters/base.py` — Added `handle_verification()` optional method to `ChannelAdapter` base class (replaces duck-typed `hasattr()` check)
-- `src/backend/adapters/message_router.py` — Fixed memory leak: `_rate_limit_buckets` now periodically prunes stale empty buckets. Moved hardcoded rate limit (30/60s), timeout (120s), and allowed tools to `settings_service` for operational flexibility. Downgraded step-by-step logging from INFO to DEBUG to reduce log volume.
-- `src/backend/adapters/slack_adapter.py` — Slack-specific adapter: DMs, @mentions, thread replies, agent identity override
-- `src/backend/adapters/transports/slack_socket.py` — Socket Mode transport with auto-reconnect
-- `src/backend/db/slack_channels.py` — New tables: `slack_workspaces` (workspace→bot token), `slack_channel_agents` (channel→agent binding), `slack_active_threads` (reply-without-mention)
-- `src/backend/services/settings_service.py` — New settings: `channel_rate_limit_max`, `channel_rate_limit_window`, `channel_timeout_seconds`, `channel_allowed_tools`
+**Channel Adapter Abstraction:**
+- `src/backend/adapters/base.py` — `ChannelAdapter` base class: `parse_message()`, `send_response()`, `get_agent_name()`, `indicate_processing()`, `indicate_done()`, `handle_verification()`, `on_response_sent()`
+- `src/backend/adapters/transports/base.py` — `ChannelTransport` base class: `start()`, `stop()`, `on_event()`
+- `src/backend/adapters/message_router.py` — Channel-agnostic dispatcher with TaskExecutionService integration, rate limiting, configurable allowed tools
+
+**Slack Implementation:**
+- `src/backend/adapters/slack_adapter.py` — DMs, @mentions, thread replies without @mention, agent identity via `chat:write.customize`
+- `src/backend/adapters/transports/slack_socket.py` — Socket Mode transport (no public URL needed)
+- `src/backend/adapters/transports/slack_webhook.py` — HTTP webhook transport (backward compatible fallback)
+- `src/backend/services/slack_service.py` — Channel creation (`conversations.create`), reaction emoji (⏳→✅), `chat:write.customize` params, new OAuth scopes
+- `src/backend/routers/slack.py` — Refactored: multi-agent "Connect Slack" (auto-creates channel per agent), webhook endpoint delegates to transport
+
+**Database & Security:**
+- `src/backend/db/slack_channels.py` — `SlackChannelOperations` with AES-256-GCM encrypted bot tokens
+- `src/backend/db/migrations.py` — New tables: `slack_workspaces`, `slack_channel_agents`, `slack_active_threads`
+- `src/backend/database.py` — Wired `SlackChannelOperations` delegation methods
+- Tool restrictions for public Slack users (`--allowedTools WebSearch,WebFetch`)
+- Rate limiting: 30 msg/min per Slack user (configurable via settings)
+
+**Settings & Config:**
+- `src/backend/services/settings_service.py` — `public_chat_url`, `slack_transport_mode`, `slack_app_token`, `channel_rate_limit_max`, `channel_timeout_seconds`, `channel_allowed_tools`
+- `src/backend/routers/public_links.py` — Uses `get_public_chat_url()` from settings (was env-only)
+- `src/backend/main.py` — Startup/shutdown hooks for Slack transport
+- `docker/backend/Dockerfile` — Added `slack_sdk[socket-mode]` dependency
+- `src/frontend/src/components/PublicLinksPanel.vue` — Handle new Connect Slack response format
 
 ---
 

@@ -2,19 +2,51 @@
 Database operations for Slack multi-agent channel routing.
 
 Handles:
-- Workspace connections (one bot token per workspace)
+- Workspace connections (one bot token per workspace, encrypted)
 - Channel-agent bindings (which agent responds in which channel)
+- Active thread tracking (reply-without-mention)
 """
 
+import logging
 import secrets
 from datetime import datetime
 from typing import Optional, List
 
 from db.connection import get_db_connection
 
+logger = logging.getLogger(__name__)
+
 
 class SlackChannelOperations:
     """Operations for Slack workspace connections and channel-agent bindings."""
+
+    # =========================================================================
+    # Encryption helpers (same pattern as subscription_credentials)
+    # =========================================================================
+
+    def _get_encryption_service(self):
+        """Lazy-load encryption service."""
+        from services.credential_encryption import CredentialEncryptionService
+        return CredentialEncryptionService()
+
+    def _encrypt_token(self, token: str) -> str:
+        """Encrypt a bot token for storage."""
+        svc = self._get_encryption_service()
+        return svc.encrypt({"bot_token": token})
+
+    def _decrypt_token(self, encrypted: str) -> Optional[str]:
+        """Decrypt a bot token from storage. Returns None if decryption fails."""
+        try:
+            svc = self._get_encryption_service()
+            decrypted = svc.decrypt(encrypted)
+            return decrypted.get("bot_token")
+        except Exception as e:
+            logger.error(f"Failed to decrypt bot token: {e}")
+            # Fallback: might be plaintext from before encryption was added
+            if encrypted.startswith("xoxb-"):
+                logger.warning("Bot token stored in plaintext — will re-encrypt on next update")
+                return encrypted
+            return None
 
     # =========================================================================
     # Workspace Operations
@@ -27,13 +59,13 @@ class SlackChannelOperations:
         bot_token: str,
         connected_by: Optional[str] = None
     ) -> dict:
-        """Create or update a workspace connection."""
+        """Create or update a workspace connection. Bot token is encrypted at rest."""
         workspace_id = secrets.token_urlsafe(16)
         now = datetime.utcnow().isoformat()
+        encrypted_token = self._encrypt_token(bot_token)
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # Upsert — update bot token if workspace already exists
             cursor.execute("""
                 INSERT INTO slack_workspaces (id, team_id, team_name, bot_token, connected_by, connected_at, enabled)
                 VALUES (?, ?, ?, ?, ?, ?, 1)
@@ -41,13 +73,13 @@ class SlackChannelOperations:
                     bot_token = excluded.bot_token,
                     team_name = excluded.team_name,
                     connected_at = excluded.connected_at
-            """, (workspace_id, team_id, team_name, bot_token, connected_by, now))
+            """, (workspace_id, team_id, team_name, encrypted_token, connected_by, now))
             conn.commit()
 
         return self.get_workspace_by_team(team_id)
 
     def get_workspace_by_team(self, team_id: str) -> Optional[dict]:
-        """Get workspace connection by Slack team ID."""
+        """Get workspace connection by Slack team ID. Bot token is decrypted."""
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -59,10 +91,14 @@ class SlackChannelOperations:
 
         if not row:
             return None
-        return self._row_to_workspace(row)
+
+        result = self._row_to_workspace(row)
+        # Decrypt the bot token
+        result["bot_token"] = self._decrypt_token(result["bot_token"]) or ""
+        return result
 
     def get_workspace_bot_token(self, team_id: str) -> Optional[str]:
-        """Get bot token for a workspace."""
+        """Get decrypted bot token for a workspace."""
         ws = self.get_workspace_by_team(team_id)
         return ws["bot_token"] if ws else None
 

@@ -146,7 +146,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `public.py` - Public chat endpoints
 - `paid.py` - x402 payment-gated chat (NVM-001)
 - `nevermined.py` - Nevermined payment config management
-- `slack.py` - Slack integration (OAuth, events, DM handling) (SLACK-001)
+- `slack.py` - Slack integration (OAuth, events, multi-agent channel routing) (SLACK-001/002)
 
 *Subscriptions & Skills:*
 - `subscriptions.py` - Subscription management (SUB-002)
@@ -210,11 +210,12 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `message_router.py` - `ChannelMessageRouter`: rate limiting, agent resolution, execution pipeline
 
 *Slack:*
-- `slack_adapter.py` - Slack adapter: DMs, @mentions, thread replies, agent identity
-- `transports/slack_socket.py` - Socket Mode transport (WebSocket, auto-reconnect)
+- `slack_adapter.py` - Slack adapter: DMs, @mentions, thread replies, agent identity via `chat:write.customize`
+- `transports/slack_socket.py` - Socket Mode transport (WebSocket, auto-reconnect, default)
+- `transports/slack_webhook.py` - HTTP webhook transport (fallback for production)
 
 *Database:*
-- `db/slack_channels.py` - Workspace connections, channel-agent bindings, active threads
+- `db/slack_channels.py` - Workspace connections (encrypted bot tokens), channel-agent bindings, active threads
 
 *Content & Media:*
 - `image_generation_service.py` - Platform image generation via Gemini (prompt refinement + image gen) (IMG-001)
