@@ -1,5 +1,14 @@
 ### 2026-03-25
 
+✨ **Auto-assign subscription to new agents via round-robin (#74)**
+
+When creating a new agent, Trinity now automatically assigns a subscription using round-robin distribution (fewest agents first, alphabetical tie-break). Removes the manual step of assigning subscriptions after agent creation. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents are unaffected (separate creation path).
+
+- `src/backend/db/subscriptions.py` — Added `get_least_used_subscription()` method (SQL: COUNT + ORDER BY agent_count ASC, name ASC)
+- `src/backend/database.py` — Added delegation method
+- `src/backend/services/agent_service/crud.py` — Auto-assign logic in `create_agent_internal()`: lookup before container creation, DB persist after `register_agent_owner()`
+- `tests/test_subscriptions.py` — Added `TestSubscriptionAutoAssign` class (4 tests: no-subs fallback, auto-assign, round-robin, alphabetical tie-break)
+
 📝 **docs: Update stale feature flow documentation for execution layer (#100)**
 
 Fixed contradictions between feature flow documents and actual code after the 2026-03-09 EXEC-024 consolidation:

@@ -952,6 +952,17 @@ The Process Engine supports six step types:
   - `src/backend/services/subscription_service.py` - Auth mode detection
   - `src/mcp-server/src/tools/subscriptions.ts` - MCP tools
 
+### 20.3a Subscription Auto-Assign on Agent Creation (#74)
+- **Status**: ✅ Implemented (2026-03-25)
+- **GitHub Issue**: #74
+- **Extends**: SUB-002
+- **Description**: When a new agent is created, automatically assign the subscription with fewest assigned agents (round-robin). Tie-break: alphabetical by name. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents (`trinity-system`) are unaffected (separate creation path).
+- **Key Features**:
+  - `get_least_used_subscription()` DB method (SQL: COUNT + ORDER BY)
+  - Auto-assign logic in `create_agent_internal()` — token injected before container creation, DB assignment after `register_agent_owner()`
+  - Graceful fallback: no subs → API key, decrypt fail → API key, exception → API key
+- **Files**: `db/subscriptions.py`, `database.py`, `services/agent_service/crud.py`
+
 ### 20.4 Subscription Auto-Switch on Rate Limit (SUB-003)
 - **Status**: ✅ Implemented (2026-03-21)
 - **Requirement ID**: SUB-003

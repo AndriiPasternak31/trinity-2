@@ -1073,6 +1073,9 @@ class DatabaseManager:
     def get_agent_subscription_id(self, agent_name: str):
         return self._subscription_ops.get_agent_subscription_id(agent_name)
 
+    def get_least_used_subscription(self):
+        return self._subscription_ops.get_least_used_subscription()
+
     # --- SUB-003: Rate-Limit Tracking ---
 
     def record_rate_limit_event(self, agent_name: str, subscription_id: str, error_message: str = ""):
