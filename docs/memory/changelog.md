@@ -1,6 +1,6 @@
 ### 2026-03-25
 
-**docs: Update stale feature flow documentation for execution layer (#100)**
+📝 **docs: Update stale feature flow documentation for execution layer (#100)**
 
 Fixed contradictions between feature flow documents and actual code after the 2026-03-09 EXEC-024 consolidation:
 
