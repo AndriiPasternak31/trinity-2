@@ -1,5 +1,17 @@
 ### 2026-03-25
 
+**fix: Subscription registration fails silently when CREDENTIAL_ENCRYPTION_KEY is not set (#148)**
+
+Fresh Trinity deployments had no `CREDENTIAL_ENCRYPTION_KEY` configured, causing subscription registration to fail with a 500 error that was not clearly communicated to the user. Three fixes applied:
+
+1. `scripts/deploy/start.sh` now auto-generates `CREDENTIAL_ENCRYPTION_KEY` if missing from `.env`, so new deployments work out of the box.
+2. Backend adds `GET /api/subscriptions/encryption-status` endpoint and returns HTTP 503 with actionable instructions when the key is missing (instead of a generic 500).
+3. Frontend checks encryption status on page load and shows a yellow warning banner with setup instructions when not configured, disabling the Register button.
+
+- `scripts/deploy/start.sh` — Auto-generate CREDENTIAL_ENCRYPTION_KEY on startup if empty
+- `src/backend/routers/subscriptions.py` — Added `/encryption-status` endpoint; early validation in `register_subscription()` returns 503
+- `src/frontend/src/views/Settings.vue` — `encryptionConfigured` ref, warning banner, disabled button
+
 ✨ **Auto-assign subscription to new agents via round-robin (#74)**
 
 When creating a new agent, Trinity now automatically assigns a subscription using round-robin distribution (fewest agents first, alphabetical tie-break). Removes the manual step of assigning subscriptions after agent creation. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents are unaffected (separate creation path).
