@@ -1,3 +1,16 @@
+### 2026-03-25
+
+**feat: Configurable MCP Server URL in Admin Settings (#76)**
+
+The MCP server URL shown on the API Keys page was hardcoded to `http://{hostname}:8080/mcp`, which is wrong for production deployments where MCP is proxied through nginx (e.g., `https://us14.abilityai.dev/mcp`). Admins can now set a custom MCP URL in Settings, which is used across the API Keys page connection snippets for all users.
+
+- `src/backend/routers/settings.py` — Added `GET/PUT/DELETE /api/settings/mcp-url` endpoints (GET: any auth user; PUT/DELETE: admin-only). URL validation requires `http(s)://` and `/mcp` suffix.
+- `src/frontend/src/views/Settings.vue` — Added MCP Server URL section with custom/auto-detect badge, save/reset buttons, inline validation feedback.
+- `src/frontend/src/views/ApiKeys.vue` — Fetches configured MCP URL on mount; falls back to hostname auto-detect if not set.
+- `tests/test_settings.py` — Added `TestMcpUrlSettings` class (9 tests: CRUD, validation, auth).
+
+---
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
