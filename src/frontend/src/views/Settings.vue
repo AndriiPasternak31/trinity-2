@@ -390,6 +390,24 @@
 
             <div class="px-6 py-4">
               <div class="space-y-4">
+                <!-- Encryption Not Configured Warning -->
+                <div v-if="!encryptionConfigured" class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                  <div class="flex">
+                    <div class="flex-shrink-0">
+                      <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                      </svg>
+                    </div>
+                    <div class="ml-3">
+                      <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-300">Encryption not configured</h3>
+                      <p class="mt-1 text-sm text-yellow-700 dark:text-yellow-400">
+                        Subscription storage requires <code class="px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900 rounded text-xs">CREDENTIAL_ENCRYPTION_KEY</code> in your <code class="px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900 rounded text-xs">.env</code> file.
+                        Generate with: <code class="px-1 py-0.5 bg-yellow-100 dark:bg-yellow-900 rounded text-xs">openssl rand -hex 32</code> and restart the backend.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Add Subscription Form -->
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                   <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Add Subscription</h3>
@@ -460,7 +478,7 @@
                     </button>
                     <button
                       @click="addSubscription"
-                      :disabled="!newSubscription.name || !newSubscription.token.startsWith('sk-ant-oat01-') || addingSubscription"
+                      :disabled="!newSubscription.name || !newSubscription.token.startsWith('sk-ant-oat01-') || addingSubscription || !encryptionConfigured"
                       class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <svg v-if="addingSubscription" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
@@ -1290,6 +1308,7 @@ const loadingSubscriptions = ref(false)
 const addingSubscription = ref(false)
 const deletingSubscription = ref(null)
 const expandedSubscriptions = ref(new Set())
+const encryptionConfigured = ref(true)
 const newSubscription = ref({
   name: '',
   type: 'max',
@@ -1900,6 +1919,17 @@ async function generateDefaultAvatars() {
 async function loadSubscriptions() {
   loadingSubscriptions.value = true
   try {
+    // Check encryption status first
+    try {
+      const statusResponse = await axios.get('/api/subscriptions/encryption-status', {
+        headers: authStore.authHeader
+      })
+      encryptionConfigured.value = statusResponse.data?.configured ?? true
+    } catch {
+      // Endpoint may not exist on older backends - assume configured
+      encryptionConfigured.value = true
+    }
+
     const response = await axios.get('/api/subscriptions', {
       headers: authStore.authHeader
     })
