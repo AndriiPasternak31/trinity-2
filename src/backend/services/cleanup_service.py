@@ -23,7 +23,7 @@ import httpx
 from database import db
 from services.slot_service import get_slot_service
 from services.execution_queue import get_execution_queue
-from utils.helpers import utc_now_iso, parse_iso_timestamp
+from utils.helpers import utc_now, utc_now_iso, parse_iso_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -236,8 +236,7 @@ class CleanupService:
                         else:
                             # Execution is on agent — check timeout
                             started_at = parse_iso_timestamp(ex["started_at"])
-                            now = parse_iso_timestamp(utc_now_iso())
-                            age_seconds = (now - started_at).total_seconds()
+                            age_seconds = (utc_now() - started_at).total_seconds()
                             timeout_seconds = ex["timeout_seconds"]
 
                             if age_seconds > timeout_seconds:
@@ -291,7 +290,7 @@ class CleanupService:
             if response.status_code == 200:
                 data = response.json()
                 executions = data.get("executions", [])
-                return {ex.get("execution_id", "") for ex in executions}
+                return {eid for ex in executions if (eid := ex.get("execution_id"))}
             else:
                 logger.warning(
                     f"[Watchdog] Agent '{agent_name}' returned {response.status_code} "
@@ -383,6 +382,7 @@ class CleanupService:
     ) -> None:
         """Broadcast a watchdog recovery event via WebSocket."""
         if _ws_manager is None:
+            logger.debug("[Watchdog] WebSocket manager not set — recovery event not broadcast")
             return
 
         event = json.dumps({
