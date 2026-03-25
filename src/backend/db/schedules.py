@@ -1102,6 +1102,78 @@ class ScheduleOperations:
             conn.commit()
             return cursor.rowcount
 
+    def get_running_executions_with_agent_info(self) -> List[Dict]:
+        """Get all running executions with their schedule's timeout_seconds.
+
+        Returns executions joined with schedule data for watchdog reconciliation.
+        Manual executions (schedule_id='__manual__') get a default 900s timeout.
+
+        Returns:
+            List of dicts with id, schedule_id, agent_name, started_at,
+            message, and timeout_seconds.
+        """
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT e.id, e.schedule_id, e.agent_name, e.started_at, e.message,
+                       COALESCE(s.timeout_seconds, 900) as timeout_seconds
+                FROM schedule_executions e
+                LEFT JOIN agent_schedules s ON e.schedule_id = s.id
+                WHERE e.status = ?
+            """, (TaskExecutionStatus.RUNNING,))
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    def mark_execution_failed_by_watchdog(self, execution_id: str, error_message: str) -> bool:
+        """Mark a running execution as failed by the watchdog.
+
+        Uses a conditional update (WHERE status='running') to prevent overwriting
+        a normal completion that happened between the watchdog check and this update.
+
+        Args:
+            execution_id: The execution to mark as failed.
+            error_message: Descriptive error message for the failure.
+
+        Returns:
+            True if the execution was updated (was still running),
+            False if it had already transitioned to another status.
+        """
+        now = utc_now_iso()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get started_at for duration calculation
+            cursor.execute(
+                "SELECT started_at FROM schedule_executions WHERE id = ?",
+                (execution_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+
+            completed_at = parse_iso_timestamp(now)
+            started_at = parse_iso_timestamp(row["started_at"])
+            duration_ms = int((completed_at - started_at).total_seconds() * 1000)
+
+            cursor.execute("""
+                UPDATE schedule_executions
+                SET status = ?,
+                    completed_at = ?,
+                    duration_ms = ?,
+                    error = ?
+                WHERE id = ? AND status = ?
+            """, (
+                TaskExecutionStatus.FAILED,
+                now,
+                duration_ms,
+                error_message,
+                execution_id,
+                TaskExecutionStatus.RUNNING,
+            ))
+
+            conn.commit()
+            return cursor.rowcount > 0
+
     def list_git_enabled_agents(self) -> List[AgentGitConfig]:
         """List all agents with git sync enabled."""
         with get_db_connection() as conn:
