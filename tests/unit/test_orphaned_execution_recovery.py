@@ -26,12 +26,18 @@ _BACKEND = os.path.abspath(os.path.join(
 _mock_db = MagicMock()
 _mock_slot_service = AsyncMock()
 _mock_docker_svc = MagicMock()
+_mock_agent_client = AsyncMock()
+_AgentClientError = type('AgentClientError', (Exception,), {})
 
 _SYS_MOCKS = {
     'database': Mock(db=_mock_db),
     'models': Mock(TaskExecutionStatus=Mock(RUNNING='running', FAILED='failed')),
     'services.slot_service': Mock(get_slot_service=Mock(return_value=_mock_slot_service)),
     'services.docker_service': _mock_docker_svc,
+    'services.agent_client': Mock(
+        get_agent_client=Mock(return_value=_mock_agent_client),
+        AgentClientError=_AgentClientError,
+    ),
     'utils.helpers': Mock(utc_now_iso=Mock(return_value="2026-03-25T12:00:00Z")),
     'db_models': Mock(),
     'docker': Mock(),
@@ -66,16 +72,13 @@ def _run(coro):
         loop.close()
 
 
-def _mock_httpx_client(response=None, side_effect=None):
-    """Create a mock httpx.AsyncClient context manager."""
-    client = AsyncMock()
-    if side_effect:
-        client.get.side_effect = side_effect
-    else:
-        client.get.return_value = response
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=False)
-    return client
+def _set_agent_registry(execution_ids: list[str]):
+    """Configure mock agent client to return given execution IDs."""
+    resp = Mock(status_code=200)
+    resp.json.return_value = {
+        "executions": [{"execution_id": eid} for eid in execution_ids]
+    }
+    _mock_agent_client.get.return_value = resp
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────
@@ -84,6 +87,7 @@ def _reset_mocks():
     _mock_db.reset_mock()
     _mock_slot_service.reset_mock()
     _mock_docker_svc.reset_mock()
+    _mock_agent_client.reset_mock()
 
 
 class TestRecoverOrphanedExecutions:
@@ -119,12 +123,9 @@ class TestRecoverOrphanedExecutions:
             _make_execution("exec-2", "agent-beta")
         ]
         _mock_docker_svc.get_agent_container.return_value = Mock(status="running")
+        _set_agent_registry([])  # Empty registry
 
-        resp = Mock(status_code=200)
-        resp.json.return_value = {"executions": []}
-
-        with patch.dict('sys.modules', _SYS_MOCKS), \
-             patch('httpx.AsyncClient', return_value=_mock_httpx_client(response=resp)):
+        with patch.dict('sys.modules', _SYS_MOCKS):
             result = _run(_recover_fn())
 
         assert result["recovered"] == 1
@@ -135,14 +136,9 @@ class TestRecoverOrphanedExecutions:
             _make_execution("exec-3", "agent-gamma")
         ]
         _mock_docker_svc.get_agent_container.return_value = Mock(status="running")
+        _set_agent_registry(["exec-3"])
 
-        resp = Mock(status_code=200)
-        resp.json.return_value = {
-            "executions": [{"execution_id": "exec-3"}]
-        }
-
-        with patch.dict('sys.modules', _SYS_MOCKS), \
-             patch('httpx.AsyncClient', return_value=_mock_httpx_client(response=resp)):
+        with patch.dict('sys.modules', _SYS_MOCKS):
             result = _run(_recover_fn())
 
         assert result["recovered"] == 0
@@ -158,14 +154,9 @@ class TestRecoverOrphanedExecutions:
         _mock_docker_svc.get_agent_container.side_effect = (
             lambda n: Mock(status="running") if n == "agent-up" else None
         )
+        _set_agent_registry(["exec-a"])  # Only exec-a still running
 
-        resp = Mock(status_code=200)
-        resp.json.return_value = {
-            "executions": [{"execution_id": "exec-a"}]
-        }
-
-        with patch.dict('sys.modules', _SYS_MOCKS), \
-             patch('httpx.AsyncClient', return_value=_mock_httpx_client(response=resp)):
+        with patch.dict('sys.modules', _SYS_MOCKS):
             result = _run(_recover_fn())
 
         # exec-b not in registry + exec-c container down = 2 recovered
@@ -173,16 +164,14 @@ class TestRecoverOrphanedExecutions:
         assert result["still_running"] == 1
         assert _mock_db.update_execution_status.call_count == 2
 
-    def test_http_timeout_treats_as_orphaned(self):
+    def test_agent_unreachable_treats_as_orphaned(self):
         _mock_db.get_running_executions.return_value = [
             _make_execution("exec-t", "agent-slow")
         ]
         _mock_docker_svc.get_agent_container.return_value = Mock(status="running")
+        _mock_agent_client.get.side_effect = _AgentClientError("Connection timeout")
 
-        with patch.dict('sys.modules', _SYS_MOCKS), \
-             patch('httpx.AsyncClient', return_value=_mock_httpx_client(
-                 side_effect=Exception("timeout")
-             )):
+        with patch.dict('sys.modules', _SYS_MOCKS):
             result = _run(_recover_fn())
 
         assert result["recovered"] == 1

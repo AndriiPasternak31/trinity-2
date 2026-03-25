@@ -176,10 +176,7 @@ async def recover_orphaned_executions() -> Dict:
     Returns:
         Dict with recovered, still_running, and errors counts.
     """
-    from collections import defaultdict
-
-    import httpx
-
+    from services.agent_client import AgentClientError, get_agent_client
     from services.docker_service import get_agent_container
 
     running = db.get_running_executions()
@@ -189,9 +186,9 @@ async def recover_orphaned_executions() -> Dict:
     slot_service = get_slot_service()
 
     # Group by agent to minimize container/HTTP checks
-    by_agent: Dict[str, list] = defaultdict(list)
+    by_agent: Dict[str, list] = {}
     for execution in running:
-        by_agent[execution["agent_name"]].append(execution)
+        by_agent.setdefault(execution["agent_name"], []).append(execution)
 
     recovered = 0
     still_running = 0
@@ -203,41 +200,31 @@ async def recover_orphaned_executions() -> Dict:
         if not container or container.status != "running":
             # Container down — all executions for this agent are orphaned
             for execution in executions:
-                try:
-                    _mark_execution_orphaned(execution)
-                    await slot_service.release_slot(agent_name, execution["id"])
+                if await _recover_execution(execution, agent_name, slot_service):
                     recovered += 1
-                except Exception as e:
-                    logger.error(f"[Recovery] Error recovering execution {execution['id']}: {e}")
+                else:
                     errors += 1
             continue
 
         # Container is up — check agent's process registry
-        registry_ids: set = set()
+        registry_ids: set[str] = set()
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(
-                    f"http://agent-{agent_name}:8000/api/executions/running"
-                )
-                if resp.status_code == 200:
-                    registry_ids = {
-                        e["execution_id"] for e in resp.json().get("executions", [])
-                    }
-                # Non-200 means registry unreachable — treat all as orphaned
-        except Exception:
-            # Timeout or connection error — treat all as orphaned
-            pass
+            client = get_agent_client(agent_name)
+            resp = await client.get("/api/executions/running", timeout=5.0)
+            if resp.status_code == 200:
+                registry_ids = {
+                    e["execution_id"] for e in resp.json().get("executions", [])
+                }
+        except AgentClientError as e:
+            logger.warning(f"[Recovery] Could not reach agent {agent_name} registry: {e}")
 
         for execution in executions:
             if execution["id"] in registry_ids:
                 still_running += 1
             else:
-                try:
-                    _mark_execution_orphaned(execution)
-                    await slot_service.release_slot(agent_name, execution["id"])
+                if await _recover_execution(execution, agent_name, slot_service):
                     recovered += 1
-                except Exception as e:
-                    logger.error(f"[Recovery] Error recovering execution {execution['id']}: {e}")
+                else:
                     errors += 1
 
     logger.info(
@@ -247,10 +234,16 @@ async def recover_orphaned_executions() -> Dict:
     return {"recovered": recovered, "still_running": still_running, "errors": errors}
 
 
-def _mark_execution_orphaned(execution: Dict) -> None:
-    """Mark a single execution as failed due to orphan recovery."""
-    db.update_execution_status(
-        execution_id=execution["id"],
-        status=TaskExecutionStatus.FAILED,
-        error="Execution orphaned — recovered on backend restart",
-    )
+async def _recover_execution(execution: Dict, agent_name: str, slot_service) -> bool:
+    """Mark a single execution as orphaned and release its slot. Returns True on success."""
+    try:
+        db.update_execution_status(
+            execution_id=execution["id"],
+            status=TaskExecutionStatus.FAILED,
+            error="Execution orphaned — recovered on backend restart",
+        )
+        await slot_service.release_slot(agent_name, execution["id"])
+        return True
+    except Exception as e:
+        logger.error(f"[Recovery] Error recovering execution {execution['id']}: {e}")
+        return False
