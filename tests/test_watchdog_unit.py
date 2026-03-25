@@ -102,7 +102,11 @@ class TestGetRunningExecutionsWithAgentInfo:
     pytestmark = pytest.mark.unit
 
     def _setup_db(self):
-        """Create in-memory SQLite with required tables and return connection."""
+        """Create in-memory SQLite with required tables and return connection.
+
+        Includes agent_ownership table to match the production 3-way COALESCE
+        query: COALESCE(s.timeout_seconds, ao.execution_timeout_seconds, 900).
+        """
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         conn.execute("""
@@ -137,6 +141,13 @@ class TestGetRunningExecutionsWithAgentInfo:
                 claude_session_id TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE agent_ownership (
+                agent_name TEXT PRIMARY KEY,
+                owner_id INTEGER NOT NULL,
+                execution_timeout_seconds INTEGER DEFAULT 900
+            )
+        """)
         conn.commit()
         return conn
 
@@ -158,9 +169,10 @@ class TestGetRunningExecutionsWithAgentInfo:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT e.id, e.schedule_id, e.agent_name, e.started_at, e.message,
-                   COALESCE(s.timeout_seconds, 900) as timeout_seconds
+                   COALESCE(s.timeout_seconds, ao.execution_timeout_seconds, 900) as timeout_seconds
             FROM schedule_executions e
             LEFT JOIN agent_schedules s ON e.schedule_id = s.id
+            LEFT JOIN agent_ownership ao ON e.agent_name = ao.agent_name
             WHERE e.status = 'running'
         """)
         rows = [dict(r) for r in cursor.fetchall()]
@@ -182,15 +194,51 @@ class TestGetRunningExecutionsWithAgentInfo:
 
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT e.id, COALESCE(s.timeout_seconds, 900) as timeout_seconds
+            SELECT e.id, COALESCE(s.timeout_seconds, ao.execution_timeout_seconds, 900) as timeout_seconds
             FROM schedule_executions e
             LEFT JOIN agent_schedules s ON e.schedule_id = s.id
+            LEFT JOIN agent_ownership ao ON e.agent_name = ao.agent_name
             WHERE e.status = 'running'
         """)
         rows = [dict(r) for r in cursor.fetchall()]
 
         assert len(rows) == 1
         assert rows[0]["timeout_seconds"] == 900
+
+    def test_agent_timeout_fallback(self):
+        """When schedule has no timeout but agent_ownership does, use agent timeout."""
+        conn = self._setup_db()
+        # Schedule with NULL timeout
+        conn.execute(
+            "INSERT INTO agent_schedules (id, agent_name, name, cron_expression, message, owner_id, created_at, updated_at, timeout_seconds) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("sched-1", "agent-a", "Test Schedule", "0 * * * *", "do something", 1, _utc_now_iso(), _utc_now_iso(), None),
+        )
+        # Agent ownership with custom timeout
+        conn.execute(
+            "INSERT INTO agent_ownership (agent_name, owner_id, execution_timeout_seconds) "
+            "VALUES (?, ?, ?)",
+            ("agent-a", 1, 1800),
+        )
+        conn.execute(
+            "INSERT INTO schedule_executions (id, schedule_id, agent_name, status, started_at, message) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("exec-1", "sched-1", "agent-a", "running", _past_iso(10), "test"),
+        )
+        conn.commit()
+
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT e.id, COALESCE(s.timeout_seconds, ao.execution_timeout_seconds, 900) as timeout_seconds
+            FROM schedule_executions e
+            LEFT JOIN agent_schedules s ON e.schedule_id = s.id
+            LEFT JOIN agent_ownership ao ON e.agent_name = ao.agent_name
+            WHERE e.status = 'running'
+        """)
+        rows = [dict(r) for r in cursor.fetchall()]
+
+        assert len(rows) == 1
+        assert rows[0]["timeout_seconds"] == 1800
 
     def test_empty_result_when_no_running(self):
         """Returns empty list when no running executions."""
@@ -362,7 +410,8 @@ class TestReconcileOrphanedExecutions:
         assert terminated == 0
         mock_db.mark_execution_failed_by_watchdog.assert_called_once()
         mock_slot.release_slot.assert_called_once_with("agent-a", "exec-1")
-        mock_q.force_release.assert_called_once_with("agent-a")
+        # Atomic conditional release — no TOCTOU race
+        mock_q.force_release_if_matches.assert_called_once_with("agent-a", "exec-1")
 
     @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
@@ -409,7 +458,7 @@ class TestReconcileOrphanedExecutions:
 
         service = self._make_service()
         service._get_agent_running_ids = AsyncMock(return_value={"exec-1"})
-        service._terminate_on_agent = AsyncMock()
+        service._terminate_on_agent = AsyncMock(return_value=True)
         service._broadcast_watchdog_event = AsyncMock()
 
         orphaned, terminated = asyncio.get_event_loop().run_until_complete(
@@ -425,15 +474,14 @@ class TestReconcileOrphanedExecutions:
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_terminate_fails_still_recovers(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
-        """If POST terminate fails, per-execution isolation catches the error."""
+    def test_terminate_fails_skips_recovery(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
+        """If terminate returns False, DB/resource cleanup is skipped."""
         mock_cm, _ = self._mock_httpx_client()
         mock_httpx.return_value = mock_cm
 
         mock_db.get_running_executions_with_agent_info.return_value = [
             {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(20), "timeout_seconds": 600, "schedule_id": "s1"},
         ]
-        mock_db.mark_execution_failed_by_watchdog.return_value = True
 
         mock_slot = AsyncMock()
         mock_slot_fn.return_value = mock_slot
@@ -442,13 +490,17 @@ class TestReconcileOrphanedExecutions:
 
         service = self._make_service()
         service._get_agent_running_ids = AsyncMock(return_value={"exec-1"})
-        service._terminate_on_agent = AsyncMock(side_effect=Exception("terminate failed"))
+        service._terminate_on_agent = AsyncMock(return_value=False)
         service._broadcast_watchdog_event = AsyncMock()
 
-        # Should not raise — per-execution isolation catches the error
-        asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
             service._reconcile_orphaned_executions()
         )
+
+        # Terminate failed — should NOT mark as failed or release resources
+        assert terminated == 0
+        mock_db.mark_execution_failed_by_watchdog.assert_not_called()
+        mock_slot.release_slot.assert_not_called()
 
     @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
@@ -479,7 +531,7 @@ class TestReconcileOrphanedExecutions:
 
         assert orphaned == 0
         mock_slot.release_slot.assert_not_called()
-        mock_q.force_release.assert_not_called()
+        mock_q.force_release_if_matches.assert_not_called()
 
     @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")

@@ -113,23 +113,26 @@ Active reconciliation of DB execution state against agent process registries. Re
 
 | Agent reachable? | In agent's list? | Age > timeout? | Action |
 |---|---|---|---|
-| No (ConnectError) | — | — | **SKIP** (retry next cycle) |
-| Yes | No | — | **ORPHAN RECOVERY** |
+| No (ConnectError/Timeout) | — | — | **SKIP** (retry next cycle) |
+| Yes | No | Age < 60s | **SKIP** (dispatch grace window) |
+| Yes | No | Age >= 60s | **ORPHAN RECOVERY** |
 | Yes | Yes | No | **NO ACTION** |
-| Yes | Yes | Yes | **AUTO-TERMINATE** |
+| Yes | Yes | Yes, terminate succeeds | **AUTO-TERMINATE** |
+| Yes | Yes | Yes, terminate fails | **SKIP** (defer to 120-min stale cleanup) |
 
 6. **Per-execution error isolation**: each recovery in its own try/except
-7. **Systemic failure detection**: warns if >50% of recovery attempts fail in a cycle
+7. **Systemic failure detection**: warns if >50% of actual recovery attempts fail in a cycle (only counts orphan/terminate attempts, not healthy executions checked)
+8. **Concurrency guard**: `asyncio.Lock` prevents overlapping cleanup cycles from background loop + manual trigger
 
 #### `_recover_execution(execution_id, agent_name, error_msg, action)` → `bool`
 Shared DRY helper for both orphan recovery and auto-terminate:
 1. `db.mark_execution_failed_by_watchdog()` — conditional UPDATE with `WHERE status='running'` race guard. Returns False if execution already completed (no-op).
 2. `slot_service.release_slot()` — idempotent Redis ZREM
-3. `queue.force_release()` — only if this execution holds the queue running slot (prevents corrupting another execution's queue state)
+3. `queue.force_release_if_matches()` — atomic Lua script: GET running key, compare execution ID, conditional DELETE. Prevents TOCTOU race where a new execution could start between check and release.
 4. `_broadcast_watchdog_event()` — WebSocket JSON event: `{"type": "watchdog_recovery", "agent_name", "execution_id", "action", "reason", "timestamp"}`
 
-#### `_terminate_on_agent(client, agent_name, execution_id)`
-Best-effort `POST http://agent-{name}:8000/api/executions/{id}/terminate`. If it fails, DB and capacity are still cleaned up (the process may linger as a zombie until the 120-min stale cleanup).
+#### `_terminate_on_agent(client, agent_name, execution_id)` → `bool`
+`POST http://agent-{name}:8000/api/executions/{id}/terminate`. Returns True if HTTP 2xx (agent confirmed termination), False otherwise. Callers only proceed with DB/resource cleanup on success — failed terminations are deferred to the 120-min stale cleanup safety net.
 
 ### Startup Loop (`_cleanup_loop`)
 
