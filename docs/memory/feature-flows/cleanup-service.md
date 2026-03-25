@@ -1,7 +1,7 @@
 # Feature: Cleanup Service (CLEANUP-001)
 
 ## Overview
-Background service that periodically recovers stuck intermediate states by marking stale executions, activities, and Redis slots as failed. Runs every 5 minutes with an immediate startup sweep.
+Background service that periodically recovers stuck intermediate states. Includes active watchdog reconciliation (Issue #129) that checks agent process registries, recovers orphaned executions, auto-terminates timed-out executions, and releases capacity. Also marks stale executions, activities, and Redis slots as failed. Runs every 5 minutes with an immediate startup sweep.
 
 ## User Story
 As a platform operator, I want stuck executions and activities to be automatically recovered so that the system does not accumulate phantom "running" states that block capacity and mislead dashboards.
@@ -19,22 +19,28 @@ No dedicated frontend UI. The cleanup service is a headless backend service. Sta
 ### Service: CleanupService
 **File**: `src/backend/services/cleanup_service.py`
 
-#### Configuration Constants (lines 23-26)
+#### Configuration Constants
 ```python
 CLEANUP_INTERVAL_SECONDS = 300        # 5 minutes
 EXECUTION_STALE_TIMEOUT_MINUTES = 120  # SCHED-ASYNC-001: increased from 30 to support long-running tasks
 ACTIVITY_STALE_TIMEOUT_MINUTES = 120   # SCHED-ASYNC-001: increased from 30 to support long-running tasks
 NO_SESSION_TIMEOUT_SECONDS = 60       # Issue #106: fast-fail executions without Claude session
+WATCHDOG_HTTP_TIMEOUT = 5.0           # Issue #129: timeout for agent HTTP calls during reconciliation
 ```
 
-#### CleanupReport (lines 29-47)
+#### WebSocket Manager Injection (Issue #129)
+Module-level `_ws_manager` set via `set_cleanup_ws_manager(manager)` from `main.py`. Used by watchdog to broadcast recovery events. No-op with debug log if not set.
+
+#### CleanupReport
 Dataclass holding results from a single cleanup cycle:
+- `orphaned_executions: int` - Executions recovered by watchdog (not found on agent) — Issue #129
+- `auto_terminated: int` - Executions terminated by watchdog (exceeded timeout) — Issue #129
 - `stale_executions: int` - Executions marked failed (stale timeout)
 - `no_session_executions: int` - Executions failed due to no Claude session (Issue #106)
 - `orphaned_skipped: int` - Skipped executions finalized (Issue #106)
 - `stale_activities: int` - Activities marked failed
 - `stale_slots: int` - Redis slots cleaned
-- `total` property: Sum of all five fields
+- `total` property: Sum of all seven fields
 - `to_dict()` method: Serializes for API responses
 
 #### CleanupService class (line 48)
@@ -53,17 +59,23 @@ Singleton pattern via global `cleanup_service` instance (line 141).
 - `run_cleanup()` (line 74): Single cleanup cycle (called by loop and manual trigger)
 - `_cleanup_loop()` (line 114): Main loop - runs initial sweep, then sleeps `poll_interval` between cycles
 
-### Cleanup Cycle (`run_cleanup`, lines 74-130)
+### Cleanup Cycle (`run_cleanup`)
 
-Five sequential operations, each wrapped in individual try/except:
+Seven sequential operations, each wrapped in individual try/except. Watchdog runs FIRST to release resources before passive cleanup:
 
-1. **Mark stale executions as failed** (lines 80-87)
+0. **Watchdog: reconcile DB vs agent process registries** (Issue #129)
+   ```python
+   orphaned, terminated = await self._reconcile_orphaned_executions()
+   ```
+   Runs first so it can release capacity slots and queue state before the stale cleanup marks executions failed without resource cleanup. See [Watchdog Reconciliation](#watchdog-reconciliation-issue-129) below.
+
+1. **Mark stale executions as failed** (safety net for agent-unreachable cases)
    ```python
    count = db.mark_stale_executions_failed(EXECUTION_STALE_TIMEOUT_MINUTES)
    ```
    Calls `DatabaseManager.mark_stale_executions_failed()` which delegates to `ScheduleOperations.mark_stale_executions_failed()`.
 
-2. **Fast-fail no-session executions** (lines 89-96, Issue #106)
+2. **Fast-fail no-session executions** (Issue #106)
    ```python
    count = db.mark_no_session_executions_failed(NO_SESSION_TIMEOUT_SECONDS)
    ```
@@ -88,7 +100,38 @@ Five sequential operations, each wrapped in individual try/except:
    ```
    Calls `SlotService.cleanup_stale_slots()` which scans all `agent:slots:*` keys and removes entries older than 30 minutes.
 
-### Startup Loop (`_cleanup_loop`, lines 114-137)
+### Watchdog Reconciliation (Issue #129)
+
+Active reconciliation of DB execution state against agent process registries. Replaces the passive "detect-and-report" model with active remediation.
+
+#### `_reconcile_orphaned_executions()` → `tuple[int, int]`
+1. Query `db.get_running_executions_with_agent_info()` — LEFT JOINs `schedule_executions` with `agent_schedules` and `agent_ownership` for timeout resolution: `COALESCE(schedule.timeout, agent.timeout, 900)`
+2. Group executions by `agent_name`
+3. Parallel fan-out: `asyncio.gather` queries all agents concurrently via shared `httpx.AsyncClient`
+4. Each agent queried via `GET http://agent-{name}:8000/api/executions/running` → set of execution IDs
+5. Decision matrix per execution:
+
+| Agent reachable? | In agent's list? | Age > timeout? | Action |
+|---|---|---|---|
+| No (ConnectError) | — | — | **SKIP** (retry next cycle) |
+| Yes | No | — | **ORPHAN RECOVERY** |
+| Yes | Yes | No | **NO ACTION** |
+| Yes | Yes | Yes | **AUTO-TERMINATE** |
+
+6. **Per-execution error isolation**: each recovery in its own try/except
+7. **Systemic failure detection**: warns if >50% of recovery attempts fail in a cycle
+
+#### `_recover_execution(execution_id, agent_name, error_msg, action)` → `bool`
+Shared DRY helper for both orphan recovery and auto-terminate:
+1. `db.mark_execution_failed_by_watchdog()` — conditional UPDATE with `WHERE status='running'` race guard. Returns False if execution already completed (no-op).
+2. `slot_service.release_slot()` — idempotent Redis ZREM
+3. `queue.force_release()` — only if this execution holds the queue running slot (prevents corrupting another execution's queue state)
+4. `_broadcast_watchdog_event()` — WebSocket JSON event: `{"type": "watchdog_recovery", "agent_name", "execution_id", "action", "reason", "timestamp"}`
+
+#### `_terminate_on_agent(client, agent_name, execution_id)`
+Best-effort `POST http://agent-{name}:8000/api/executions/{id}/terminate`. If it fails, DB and capacity are still cleaned up (the process may linger as a zombie until the 120-min stale cleanup).
+
+### Startup Loop (`_cleanup_loop`)
 
 ```
 1. Run immediate startup sweep (run_cleanup)
@@ -103,9 +146,9 @@ Five sequential operations, each wrapped in individual try/except:
 
 **File**: `src/backend/main.py`
 
-**Import** (line 86):
+**Import**:
 ```python
-from services.cleanup_service import cleanup_service
+from services.cleanup_service import cleanup_service, set_cleanup_ws_manager
 ```
 
 **Start** (lines 265-269):
@@ -137,8 +180,10 @@ except Exception as e:
   {
     "running": true,
     "interval_seconds": 300,
-    "last_run_at": "2026-03-11T10:00:00Z",
+    "last_run_at": "2026-03-25T10:00:00Z",
     "last_report": {
+      "orphaned_executions": 0,
+      "auto_terminated": 0,
       "stale_executions": 0,
       "no_session_executions": 0,
       "orphaned_skipped": 0,
@@ -157,12 +202,14 @@ except Exception as e:
   {
     "status": "completed",
     "report": {
+      "orphaned_executions": 1,
+      "auto_terminated": 0,
       "stale_executions": 2,
       "no_session_executions": 1,
       "orphaned_skipped": 0,
       "stale_activities": 1,
       "stale_slots": 0,
-      "total": 4
+      "total": 5
     }
   }
   ```
@@ -282,13 +329,20 @@ WHERE id = ?
 ## Side Effects
 - **Logging**: Each cleanup cycle logs results at INFO level when resources are cleaned
 - **Error Logging**: Individual operation failures logged at ERROR level without stopping other operations
-- **No WebSocket Broadcasts**: Cleanup runs silently; no real-time notifications to frontend
+- **WebSocket Broadcasts** (Issue #129): Watchdog recovery events broadcast as `watchdog_recovery` type via `ConnectionManager.broadcast()`
+- **Capacity Release** (Issue #129): Watchdog releases Redis capacity slots and execution queue state for recovered executions
+- **Agent HTTP Calls** (Issue #129): Watchdog queries agent process registries and may POST terminate commands
 - **No Activity Records**: Cleanup itself does not create activity entries (avoids recursion)
 
 ## Error Handling
 
 | Error Case | Handling | Impact |
 |------------|----------|--------|
+| Watchdog agent unreachable | Skipped, retry next cycle | No false positives |
+| Watchdog single recovery fails | Per-execution try/except, continues | Other recoveries unaffected |
+| Watchdog >50% recoveries fail | WARNING log (systemic failure) | Operator alerted |
+| Watchdog terminate fails on agent | Logged, DB/capacity still cleaned | Zombie process may linger |
+| Watchdog DB race (already completed) | Returns False, no side effects | Correct behavior |
 | Stale execution marking fails | Logged, continues to activities/slots | Partial cleanup |
 | Stale activity marking fails | Logged, continues to slots | Partial cleanup |
 | Redis slot cleanup fails | Logged, cycle ends | Partial cleanup |
@@ -304,7 +358,8 @@ WHERE id = ?
 ## Architecture Notes
 
 ### Resilience Design
-- Each of the three cleanup steps is independently wrapped in try/except
+- Each of the seven cleanup steps is independently wrapped in try/except
+- Watchdog reconciliation has per-execution error isolation within its step
 - One step failing does not prevent the others from running
 - The background loop survives individual cycle failures
 - Backend startup is not blocked if the cleanup service fails to start
@@ -363,14 +418,14 @@ This is a purely backend service. The only "UI" is the two admin API endpoints u
 
 | File | Role |
 |------|------|
-| `src/backend/services/cleanup_service.py` | Service class and global instance |
-| `src/backend/db/schedules.py:971-1013` | `mark_stale_executions_failed()` |
-| `src/backend/db/schedules.py:570-590` | `mark_execution_dispatched()` — sets sentinel before agent call |
-| `src/backend/db/schedules.py:1036-1076` | `mark_no_session_executions_failed()` (Issue #106) |
-| `src/backend/db/schedules.py:1078-1100` | `finalize_orphaned_skipped_executions()` (Issue #106) |
-| `src/backend/db/activities.py:187-225` | `mark_stale_activities_failed()` |
-| `src/backend/database.py:682-688` | Delegation methods on DatabaseManager |
-| `src/backend/services/slot_service.py:247-271` | `cleanup_stale_slots()` Redis cleanup |
-| `src/backend/main.py:86,265-269,300-305` | Import, start in lifespan, stop on shutdown |
-| `src/backend/routers/monitoring.py:455-491` | `/cleanup-status` and `/cleanup-trigger` endpoints |
+| `src/backend/services/cleanup_service.py` | Service class, watchdog reconciliation, and global instance |
+| `src/backend/db/schedules.py` | `get_running_executions_with_agent_info()` (Issue #129), `mark_execution_failed_by_watchdog()` (Issue #129), `mark_stale_executions_failed()`, `mark_execution_dispatched()`, `mark_no_session_executions_failed()` (Issue #106), `finalize_orphaned_skipped_executions()` (Issue #106) |
+| `src/backend/db/activities.py` | `mark_stale_activities_failed()` |
+| `src/backend/database.py` | Delegation methods on DatabaseManager |
+| `src/backend/services/slot_service.py` | `cleanup_stale_slots()` Redis cleanup, `release_slot()` used by watchdog |
+| `src/backend/services/execution_queue.py` | `force_release()` used by watchdog for queue state cleanup |
+| `src/backend/main.py` | Import, start in lifespan, stop on shutdown, wire WS manager |
+| `src/backend/routers/monitoring.py` | `/cleanup-status` and `/cleanup-trigger` endpoints |
 | `tests/test_cleanup_service.py` | API integration tests for cleanup (Issue #106) |
+| `tests/test_watchdog.py` | API integration tests for watchdog fields (Issue #129) |
+| `tests/test_watchdog_unit.py` | Unit tests for watchdog reconciliation logic (Issue #129) |
