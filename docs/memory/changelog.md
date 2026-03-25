@@ -1,3 +1,15 @@
+### 2026-03-25
+
+**docs: Update stale feature flow documentation for execution layer (#100)**
+
+Fixed contradictions between feature flow documents and actual code after the 2026-03-09 EXEC-024 consolidation:
+
+- **scheduling.md**: Fixed execution flow diagram — scheduler dispatches to `POST /api/internal/execute-task` (not direct agent calls). Updated architecture diagram and file references.
+- **execution-queue.md**: Added prominent status enum disambiguation table clarifying `QueueItemStatus` (Redis) vs `TaskExecutionStatus` (DB) vs `ExecutionStatus` (process engine).
+- **parallel-headless-execution.md**: Clarified that async mode on `/api/task` uses inline code, while async mode on `/api/internal/execute-task` (scheduler) uses `TaskExecutionService`.
+- **task-execution-service.md**: Replaced "all paths" claim with execution path coverage matrix showing which callers use the service and which bypass it (notably `/api/chat` and async `/api/task`).
+- **scheduler-service.md**: Fixed architecture diagram to show scheduler → backend → agent flow (not scheduler → agent directly).
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
