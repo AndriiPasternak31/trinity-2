@@ -1,3 +1,15 @@
+### 2026-03-25 02:00:55
+
+🔧 **fix: Startup recovery for regular task executions (#128)**
+
+On backend restart, `schedule_executions` stuck in `running` status are now checked against agent containers and process registries. Orphaned executions (container down or not found in agent's process registry) are immediately marked `failed` with capacity slots released — instead of waiting 2 hours for the cleanup service timeout.
+
+- `src/backend/db/schedules.py` — Added `get_running_executions()` query
+- `src/backend/database.py` — Exposed `get_running_executions()` on `DatabaseManager`
+- `src/backend/services/cleanup_service.py` — Added `recover_orphaned_executions()` with container + HTTP registry checks
+- `src/backend/main.py` — Call recovery in lifespan handler after cleanup service start
+- `tests/unit/test_orphaned_execution_recovery.py` — 6 unit tests covering all recovery scenarios
+
 ### 2026-03-25
 
 **feat: MCP Execution Query Tools — agents can poll for async results (MCP-007) (#19)**
