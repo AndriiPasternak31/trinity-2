@@ -1,6 +1,6 @@
-### 2026-03-25
+### 2026-03-25 02:00:55
 
-**fix: Startup recovery for regular task executions (#128)**
+🔧 **fix: Startup recovery for regular task executions (#128)**
 
 On backend restart, `schedule_executions` stuck in `running` status are now checked against agent containers and process registries. Orphaned executions (container down or not found in agent's process registry) are immediately marked `failed` with capacity slots released — instead of waiting 2 hours for the cleanup service timeout.
 
