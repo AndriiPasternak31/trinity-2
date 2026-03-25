@@ -8,11 +8,20 @@ and error isolation — all with mocked agent HTTP responses.
 
 import asyncio
 import json
+import os
 import sqlite3
+import sys
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
+
+# Add backend to path for direct imports in unit tests
+_backend_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "src", "backend")
+)
+if _backend_path not in sys.path:
+    sys.path.insert(0, _backend_path)
 
 
 # ---------------------------------------------------------------------------
@@ -39,13 +48,6 @@ class TestCleanupReport:
 
     def test_report_includes_watchdog_fields(self):
         """CleanupReport has orphaned_executions and auto_terminated fields."""
-        # Import here to avoid needing full backend on path for collection
-        import sys
-        import os
-        backend_path = os.path.join(os.path.dirname(__file__), "..", "src", "backend")
-        if backend_path not in sys.path:
-            sys.path.insert(0, os.path.abspath(backend_path))
-
         from services.cleanup_service import CleanupReport
 
         report = CleanupReport()
@@ -292,22 +294,28 @@ class TestReconcileOrphanedExecutions:
 
     def _make_service(self):
         """Create a CleanupService with mocked dependencies."""
-        import sys
-        import os
-        backend_path = os.path.join(os.path.dirname(__file__), "..", "src", "backend")
-        if backend_path not in sys.path:
-            sys.path.insert(0, os.path.abspath(backend_path))
-
         from services.cleanup_service import CleanupService
         return CleanupService()
 
+    def _mock_httpx_client(self):
+        """Create a mock httpx.AsyncClient context manager."""
+        mock_client = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        return mock_cm, mock_client
+
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_agent_unreachable_skips(self, mock_queue_fn, mock_slot_fn, mock_db):
+    def test_agent_unreachable_skips(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
         """When agent is unreachable, skip its executions entirely."""
+        mock_cm, mock_client = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-1", "agent_name": "agent-down", "started_at": _past_iso(60), "timeout_seconds": 900, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-1", "agent_name": "agent-down", "started_at": _past_iso(60), "timeout_seconds": 900, "schedule_id": "s1"},
         ]
 
         service = self._make_service()
@@ -323,13 +331,17 @@ class TestReconcileOrphanedExecutions:
         assert terminated == 0
         mock_db.mark_execution_failed_by_watchdog.assert_not_called()
 
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_orphan_not_found_on_agent(self, mock_queue_fn, mock_slot_fn, mock_db):
-        """Execution not found on agent → orphan recovery."""
+    def test_orphan_not_found_on_agent(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
+        """Execution not found on agent -> orphan recovery."""
+        mock_cm, _ = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1"},
         ]
         mock_db.mark_execution_failed_by_watchdog.return_value = True
 
@@ -339,7 +351,7 @@ class TestReconcileOrphanedExecutions:
         mock_queue_fn.return_value = mock_q
 
         service = self._make_service()
-        service._get_agent_running_ids = AsyncMock(return_value=set())  # Empty = not found
+        service._get_agent_running_ids = AsyncMock(return_value=set())
         service._broadcast_watchdog_event = AsyncMock()
 
         orphaned, terminated = asyncio.get_event_loop().run_until_complete(
@@ -352,13 +364,17 @@ class TestReconcileOrphanedExecutions:
         mock_slot.release_slot.assert_called_once_with("agent-a", "exec-1")
         mock_q.force_release.assert_called_once_with("agent-a")
 
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_running_under_timeout_no_action(self, mock_queue_fn, mock_slot_fn, mock_db):
-        """Execution running on agent under timeout → no action."""
+    def test_running_under_timeout_no_action(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
+        """Execution running on agent under timeout -> no action."""
+        mock_cm, _ = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(5), "timeout_seconds": 900, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(5), "timeout_seconds": 900, "schedule_id": "s1"},
         ]
 
         service = self._make_service()
@@ -372,13 +388,17 @@ class TestReconcileOrphanedExecutions:
         assert terminated == 0
         mock_db.mark_execution_failed_by_watchdog.assert_not_called()
 
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_running_over_timeout_auto_terminates(self, mock_queue_fn, mock_slot_fn, mock_db):
-        """Execution running on agent over timeout → auto-terminate."""
+    def test_running_over_timeout_auto_terminates(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
+        """Execution running on agent over timeout -> auto-terminate."""
+        mock_cm, _ = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(20), "timeout_seconds": 600, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(20), "timeout_seconds": 600, "schedule_id": "s1"},
         ]
         mock_db.mark_execution_failed_by_watchdog.return_value = True
 
@@ -398,16 +418,20 @@ class TestReconcileOrphanedExecutions:
 
         assert orphaned == 0
         assert terminated == 1
-        service._terminate_on_agent.assert_called_once_with("agent-a", "exec-1")
+        service._terminate_on_agent.assert_called_once_with(ANY, "agent-a", "exec-1")
         mock_db.mark_execution_failed_by_watchdog.assert_called_once()
 
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_terminate_fails_still_marks_failed(self, mock_queue_fn, mock_slot_fn, mock_db):
-        """If POST terminate fails, still mark failed in DB."""
+    def test_terminate_fails_still_recovers(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
+        """If POST terminate fails, per-execution isolation catches the error."""
+        mock_cm, _ = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(20), "timeout_seconds": 600, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(20), "timeout_seconds": 600, "schedule_id": "s1"},
         ]
         mock_db.mark_execution_failed_by_watchdog.return_value = True
 
@@ -422,24 +446,23 @@ class TestReconcileOrphanedExecutions:
         service._broadcast_watchdog_event = AsyncMock()
 
         # Should not raise — per-execution isolation catches the error
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        asyncio.get_event_loop().run_until_complete(
             service._reconcile_orphaned_executions()
         )
 
-        # The terminate failure is caught, but the recovery still proceeds
-        # because _terminate_on_agent handles its own errors internally.
-        # In the real code, _terminate_on_agent catches exceptions.
-        # Here we're testing that the outer per-execution try/except also catches.
-
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_race_condition_db_update_noop(self, mock_queue_fn, mock_slot_fn, mock_db):
+    def test_race_condition_db_update_noop(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
         """When DB update returns False (race), skip slot/queue release."""
+        mock_cm, _ = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-1", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1"},
         ]
-        mock_db.mark_execution_failed_by_watchdog.return_value = False  # Race: already completed
+        mock_db.mark_execution_failed_by_watchdog.return_value = False
 
         mock_slot = AsyncMock()
         mock_slot_fn.return_value = mock_slot
@@ -447,28 +470,31 @@ class TestReconcileOrphanedExecutions:
         mock_queue_fn.return_value = mock_q
 
         service = self._make_service()
-        service._get_agent_running_ids = AsyncMock(return_value=set())  # Not found
+        service._get_agent_running_ids = AsyncMock(return_value=set())
         service._broadcast_watchdog_event = AsyncMock()
 
         orphaned, terminated = asyncio.get_event_loop().run_until_complete(
             service._reconcile_orphaned_executions()
         )
 
-        assert orphaned == 0  # Race condition — not counted
+        assert orphaned == 0
         mock_slot.release_slot.assert_not_called()
         mock_q.force_release.assert_not_called()
 
+    @patch("services.cleanup_service.httpx.AsyncClient")
     @patch("services.cleanup_service.db")
     @patch("services.cleanup_service.get_slot_service")
     @patch("services.cleanup_service.get_execution_queue")
-    def test_per_execution_error_isolation(self, mock_queue_fn, mock_slot_fn, mock_db):
+    def test_per_execution_error_isolation(self, mock_queue_fn, mock_slot_fn, mock_db, mock_httpx):
         """One execution's failure doesn't block recovery of others."""
+        mock_cm, _ = self._mock_httpx_client()
+        mock_httpx.return_value = mock_cm
+
         mock_db.get_running_executions_with_agent_info.return_value = [
-            {"id": "exec-BAD", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1", "message": "test"},
-            {"id": "exec-GOOD", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1", "message": "test"},
+            {"id": "exec-BAD", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1"},
+            {"id": "exec-GOOD", "agent_name": "agent-a", "started_at": _past_iso(10), "timeout_seconds": 900, "schedule_id": "s1"},
         ]
 
-        # First call raises, second succeeds
         mock_db.mark_execution_failed_by_watchdog.side_effect = [
             Exception("DB error on first"),
             True,
@@ -480,14 +506,13 @@ class TestReconcileOrphanedExecutions:
         mock_queue_fn.return_value = mock_q
 
         service = self._make_service()
-        service._get_agent_running_ids = AsyncMock(return_value=set())  # Neither found
+        service._get_agent_running_ids = AsyncMock(return_value=set())
         service._broadcast_watchdog_event = AsyncMock()
 
         orphaned, terminated = asyncio.get_event_loop().run_until_complete(
             service._reconcile_orphaned_executions()
         )
 
-        # Second execution should still be recovered despite first failing
         assert orphaned == 1
         assert mock_db.mark_execution_failed_by_watchdog.call_count == 2
 
@@ -503,12 +528,6 @@ class TestBroadcastWatchdogEvent:
 
     def test_noop_when_ws_manager_none(self):
         """No error when WebSocket manager is not set."""
-        import sys
-        import os
-        backend_path = os.path.join(os.path.dirname(__file__), "..", "src", "backend")
-        if backend_path not in sys.path:
-            sys.path.insert(0, os.path.abspath(backend_path))
-
         from services.cleanup_service import CleanupService
         import services.cleanup_service as cs_module
 
@@ -525,12 +544,6 @@ class TestBroadcastWatchdogEvent:
 
     def test_broadcasts_correct_event_format(self):
         """WebSocket event has correct JSON structure."""
-        import sys
-        import os
-        backend_path = os.path.join(os.path.dirname(__file__), "..", "src", "backend")
-        if backend_path not in sys.path:
-            sys.path.insert(0, os.path.abspath(backend_path))
-
         from services.cleanup_service import CleanupService
         import services.cleanup_service as cs_module
 

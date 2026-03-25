@@ -16,7 +16,7 @@ import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Dict, List
 
 import httpx
@@ -24,6 +24,7 @@ import httpx
 from database import db
 from services.slot_service import get_slot_service
 from services.execution_queue import get_execution_queue
+from utils.helpers import utc_now_iso, parse_iso_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +103,6 @@ class CleanupService:
 
     async def run_cleanup(self) -> CleanupReport:
         """Run a single cleanup cycle. Called by loop and on startup."""
-        from utils.helpers import utc_now_iso
-
         report = CleanupReport()
 
         # 0. Watchdog: reconcile DB vs agent process registries (Issue #129)
@@ -172,7 +171,7 @@ class CleanupService:
 
         return report
 
-    async def _reconcile_orphaned_executions(self) -> tuple:
+    async def _reconcile_orphaned_executions(self) -> tuple[int, int]:
         """Reconcile DB execution state against agent process registries.
 
         For each execution marked 'running' in the DB:
@@ -192,63 +191,78 @@ class CleanupService:
         for ex in running_executions:
             agents[ex["agent_name"]].append(ex)
 
-        orphaned_count = 0
-        terminated_count = 0
-        recovery_attempts = 0
-        recovery_failures = 0
+        # Parallel fan-out: query all agents concurrently with a shared client
+        async with httpx.AsyncClient(timeout=WATCHDOG_HTTP_TIMEOUT) as client:
+            agent_names = list(agents.keys())
+            results = await asyncio.gather(
+                *(self._get_agent_running_ids(client, name) for name in agent_names),
+                return_exceptions=True,
+            )
+            agent_running: Dict[str, Optional[set]] = {}
+            for name, result in zip(agent_names, results):
+                if isinstance(result, Exception):
+                    logger.warning(f"[Watchdog] Error querying agent '{name}': {result}")
+                    agent_running[name] = None
+                else:
+                    agent_running[name] = result
 
-        for agent_name, executions in agents.items():
-            # Batch check: get all running execution IDs from the agent
-            agent_running_ids = await self._get_agent_running_ids(agent_name)
-            if agent_running_ids is None:
-                # Agent unreachable — skip entirely, retry next cycle
-                continue
+            orphaned_count = 0
+            terminated_count = 0
+            recovery_attempts = 0
+            recovery_failures = 0
 
-            for ex in executions:
-                recovery_attempts += 1
-                try:
-                    execution_id = ex["id"]
-                    is_on_agent = execution_id in agent_running_ids
+            for agent_name, executions in agents.items():
+                agent_running_ids = agent_running.get(agent_name)
+                if agent_running_ids is None:
+                    # Agent unreachable — skip entirely, retry next cycle
+                    continue
 
-                    if not is_on_agent:
-                        # Orphan: execution not found on agent
-                        error_msg = (
-                            "Execution completed on agent but status not reported "
-                            "— recovered by watchdog"
-                        )
-                        recovered = await self._recover_execution(
-                            execution_id, agent_name, error_msg, "orphan_recovered"
-                        )
-                        if recovered:
-                            orphaned_count += 1
-                    else:
-                        # Execution is on agent — check timeout
-                        started_at = datetime.fromisoformat(
-                            ex["started_at"].replace("Z", "+00:00")
-                        ).replace(tzinfo=None)
-                        age_seconds = (datetime.utcnow() - started_at).total_seconds()
-                        timeout_seconds = ex["timeout_seconds"]
+                for ex in executions:
+                    recovery_attempts += 1
+                    try:
+                        execution_id = ex["id"]
+                        is_on_agent = execution_id in agent_running_ids
 
-                        if age_seconds > timeout_seconds:
-                            # Auto-terminate: exceeded schedule timeout
-                            age_minutes = int(age_seconds / 60)
-                            await self._terminate_on_agent(agent_name, execution_id)
+                        if not is_on_agent:
+                            # Orphan: execution not found on agent
                             error_msg = (
-                                f"Execution auto-terminated after {age_minutes} minutes "
-                                f"by watchdog (exceeded timeout of {timeout_seconds}s)"
+                                "Execution completed on agent but status not reported "
+                                "— recovered by watchdog"
                             )
                             recovered = await self._recover_execution(
-                                execution_id, agent_name, error_msg, "auto_terminated"
+                                execution_id, agent_name, error_msg, "orphan_recovered"
                             )
                             if recovered:
-                                terminated_count += 1
+                                orphaned_count += 1
+                        else:
+                            # Execution is on agent — check timeout
+                            started_at = parse_iso_timestamp(ex["started_at"])
+                            now = parse_iso_timestamp(utc_now_iso())
+                            age_seconds = (now - started_at).total_seconds()
+                            timeout_seconds = ex["timeout_seconds"]
 
-                except Exception as e:
-                    recovery_failures += 1
-                    logger.error(
-                        f"[Watchdog] Error recovering execution {ex.get('id', '?')} "
-                        f"on agent '{agent_name}': {e}"
-                    )
+                            if age_seconds > timeout_seconds:
+                                # Auto-terminate: exceeded schedule timeout
+                                age_minutes = int(age_seconds / 60)
+                                await self._terminate_on_agent(
+                                    client, agent_name, execution_id
+                                )
+                                error_msg = (
+                                    f"Execution auto-terminated after {age_minutes} minutes "
+                                    f"by watchdog (exceeded timeout of {timeout_seconds}s)"
+                                )
+                                recovered = await self._recover_execution(
+                                    execution_id, agent_name, error_msg, "auto_terminated"
+                                )
+                                if recovered:
+                                    terminated_count += 1
+
+                    except Exception as e:
+                        recovery_failures += 1
+                        logger.error(
+                            f"[Watchdog] Error recovering execution {ex.get('id', '?')} "
+                            f"on agent '{agent_name}': {e}"
+                        )
 
         # Systemic failure detection: warn if majority of recoveries failed
         if recovery_attempts > 0 and recovery_failures > recovery_attempts / 2:
@@ -259,30 +273,32 @@ class CleanupService:
 
         return (orphaned_count, terminated_count)
 
-    async def _get_agent_running_ids(self, agent_name: str) -> Optional[set]:
+    async def _get_agent_running_ids(
+        self, client: httpx.AsyncClient, agent_name: str
+    ) -> Optional[set]:
         """Get the set of execution IDs currently running on an agent.
 
         Args:
+            client: Shared httpx client for the reconciliation cycle.
             agent_name: The agent to query.
 
         Returns:
             Set of execution IDs, or None if agent is unreachable.
         """
         try:
-            async with httpx.AsyncClient(timeout=WATCHDOG_HTTP_TIMEOUT) as client:
-                response = await client.get(
-                    f"http://agent-{agent_name}:8000/api/executions/running"
+            response = await client.get(
+                f"http://agent-{agent_name}:8000/api/executions/running"
+            )
+            if response.status_code == 200:
+                data = response.json()
+                executions = data.get("executions", [])
+                return {ex.get("execution_id", "") for ex in executions}
+            else:
+                logger.warning(
+                    f"[Watchdog] Agent '{agent_name}' returned {response.status_code} "
+                    f"from /api/executions/running"
                 )
-                if response.status_code == 200:
-                    data = response.json()
-                    executions = data.get("executions", [])
-                    return {ex.get("execution_id", "") for ex in executions}
-                else:
-                    logger.warning(
-                        f"[Watchdog] Agent '{agent_name}' returned {response.status_code} "
-                        f"from /api/executions/running"
-                    )
-                    return None
+                return None
         except (httpx.ConnectError, httpx.ConnectTimeout):
             logger.debug(f"[Watchdog] Agent '{agent_name}' unreachable, skipping")
             return None
@@ -337,17 +353,18 @@ class CleanupService:
         )
         return True
 
-    async def _terminate_on_agent(self, agent_name: str, execution_id: str) -> None:
+    async def _terminate_on_agent(
+        self, client: httpx.AsyncClient, agent_name: str, execution_id: str
+    ) -> None:
         """Best-effort terminate an execution on an agent.
 
         Calls POST /api/executions/{id}/terminate on the agent.
         If it fails, recovery still proceeds (DB and capacity are cleaned up).
         """
         try:
-            async with httpx.AsyncClient(timeout=WATCHDOG_HTTP_TIMEOUT) as client:
-                await client.post(
-                    f"http://agent-{agent_name}:8000/api/executions/{execution_id}/terminate"
-                )
+            await client.post(
+                f"http://agent-{agent_name}:8000/api/executions/{execution_id}/terminate"
+            )
         except Exception as e:
             logger.warning(
                 f"[Watchdog] Failed to terminate execution {execution_id} "
@@ -365,7 +382,6 @@ class CleanupService:
         if _ws_manager is None:
             return
 
-        from utils.helpers import utc_now_iso
         event = json.dumps({
             "type": "watchdog_recovery",
             "agent_name": agent_name,

@@ -1110,12 +1110,12 @@ class ScheduleOperations:
 
         Returns:
             List of dicts with id, schedule_id, agent_name, started_at,
-            message, and timeout_seconds.
+            and timeout_seconds.
         """
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT e.id, e.schedule_id, e.agent_name, e.started_at, e.message,
+                SELECT e.id, e.schedule_id, e.agent_name, e.started_at,
                        COALESCE(s.timeout_seconds, 900) as timeout_seconds
                 FROM schedule_executions e
                 LEFT JOIN agent_schedules s ON e.schedule_id = s.id
