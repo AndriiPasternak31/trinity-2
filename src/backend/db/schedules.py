@@ -1103,10 +1103,13 @@ class ScheduleOperations:
             return cursor.rowcount
 
     def get_running_executions_with_agent_info(self) -> List[Dict]:
-        """Get all running executions with their schedule's timeout_seconds.
+        """Get all running executions with effective timeout for watchdog.
 
-        Returns executions joined with schedule data for watchdog reconciliation.
-        Manual executions (schedule_id='__manual__') get a default 900s timeout.
+        Returns executions joined with schedule and agent ownership data.
+        Timeout resolution order:
+        1. Schedule's timeout_seconds (for scheduled executions)
+        2. Agent's execution_timeout_seconds (for manual/MCP executions)
+        3. Fallback default of 900s
 
         Returns:
             List of dicts with id, schedule_id, agent_name, started_at,
@@ -1116,9 +1119,10 @@ class ScheduleOperations:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT e.id, e.schedule_id, e.agent_name, e.started_at,
-                       COALESCE(s.timeout_seconds, 900) as timeout_seconds
+                       COALESCE(s.timeout_seconds, ao.execution_timeout_seconds, 900) as timeout_seconds
                 FROM schedule_executions e
                 LEFT JOIN agent_schedules s ON e.schedule_id = s.id
+                LEFT JOIN agent_ownership ao ON e.agent_name = ao.agent_name
                 WHERE e.status = ?
             """, (TaskExecutionStatus.RUNNING,))
             rows = cursor.fetchall()

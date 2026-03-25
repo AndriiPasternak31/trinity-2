@@ -16,7 +16,6 @@ import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Optional, Dict, List
 
 import httpx
@@ -338,10 +337,14 @@ class CleanupService:
         except Exception as e:
             logger.warning(f"[Watchdog] Error releasing slot for {execution_id}: {e}")
 
-        # Release execution queue (idempotent)
+        # Release execution queue only if THIS execution holds the running slot.
+        # force_release clears the entire agent's running state — calling it when
+        # a different execution is running would corrupt queue state.
         try:
             queue = get_execution_queue()
-            await queue.force_release(agent_name)
+            status = await queue.get_status(agent_name)
+            if status.current_execution and status.current_execution.id == execution_id:
+                await queue.force_release(agent_name)
         except Exception as e:
             logger.warning(f"[Watchdog] Error releasing queue for agent '{agent_name}': {e}")
 
