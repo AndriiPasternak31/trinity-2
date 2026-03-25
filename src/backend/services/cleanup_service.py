@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict
 
 from database import db
+from models import TaskExecutionStatus
 from services.slot_service import get_slot_service
 
 logger = logging.getLogger(__name__)
@@ -163,3 +164,93 @@ class CleanupService:
 
 # Global service instance
 cleanup_service = CleanupService()
+
+
+async def recover_orphaned_executions() -> Dict:
+    """Recover orphaned task executions on backend startup.
+
+    Checks each 'running' schedule execution against the agent's container
+    and process registry. Executions not found on the agent are marked failed
+    and their capacity slots released.
+
+    Returns:
+        Dict with recovered, still_running, and errors counts.
+    """
+    from collections import defaultdict
+
+    import httpx
+
+    from services.docker_service import get_agent_container
+
+    running = db.get_running_executions()
+    if not running:
+        return {"recovered": 0, "still_running": 0, "errors": 0}
+
+    slot_service = get_slot_service()
+
+    # Group by agent to minimize container/HTTP checks
+    by_agent: Dict[str, list] = defaultdict(list)
+    for execution in running:
+        by_agent[execution["agent_name"]].append(execution)
+
+    recovered = 0
+    still_running = 0
+    errors = 0
+
+    for agent_name, executions in by_agent.items():
+        # Check if container is running
+        container = get_agent_container(agent_name)
+        if not container or container.status != "running":
+            # Container down — all executions for this agent are orphaned
+            for execution in executions:
+                try:
+                    _mark_execution_orphaned(execution)
+                    await slot_service.release_slot(agent_name, execution["id"])
+                    recovered += 1
+                except Exception as e:
+                    logger.error(f"[Recovery] Error recovering execution {execution['id']}: {e}")
+                    errors += 1
+            continue
+
+        # Container is up — check agent's process registry
+        registry_ids: set = set()
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"http://agent-{agent_name}:8000/api/executions/running"
+                )
+                if resp.status_code == 200:
+                    registry_ids = {
+                        e["execution_id"] for e in resp.json().get("executions", [])
+                    }
+                # Non-200 means registry unreachable — treat all as orphaned
+        except Exception:
+            # Timeout or connection error — treat all as orphaned
+            pass
+
+        for execution in executions:
+            if execution["id"] in registry_ids:
+                still_running += 1
+            else:
+                try:
+                    _mark_execution_orphaned(execution)
+                    await slot_service.release_slot(agent_name, execution["id"])
+                    recovered += 1
+                except Exception as e:
+                    logger.error(f"[Recovery] Error recovering execution {execution['id']}: {e}")
+                    errors += 1
+
+    logger.info(
+        f"[Recovery] Task execution recovery complete: "
+        f"recovered={recovered}, still_running={still_running}, errors={errors}"
+    )
+    return {"recovered": recovered, "still_running": still_running, "errors": errors}
+
+
+def _mark_execution_orphaned(execution: Dict) -> None:
+    """Mark a single execution as failed due to orphan recovery."""
+    db.update_execution_status(
+        execution_id=execution["id"],
+        status=TaskExecutionStatus.FAILED,
+        error="Execution orphaned — recovered on backend restart",
+    )
