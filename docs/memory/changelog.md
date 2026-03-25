@@ -1,6 +1,6 @@
 ### 2026-03-25
 
-**feat: Auto-assign subscription to new agents via round-robin (#74)**
+✨ **Auto-assign subscription to new agents via round-robin (#74)**
 
 When creating a new agent, Trinity now automatically assigns a subscription using round-robin distribution (fewest agents first, alphabetical tie-break). Removes the manual step of assigning subscriptions after agent creation. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents are unaffected (separate creation path).
 
