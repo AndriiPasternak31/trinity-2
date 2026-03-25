@@ -542,10 +542,11 @@ class SubscriptionOperations:
         Get subscription with fewest assigned agents (round-robin).
 
         Tie-break: alphabetical by name.
+        Skips subscriptions that are currently rate-limited.
         Used for auto-assignment on agent creation (#74).
 
         Returns:
-            SubscriptionCredential with fewest agents, or None if no subscriptions exist
+            SubscriptionCredential with fewest agents, or None if no viable subscription
         """
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -555,10 +556,12 @@ class SubscriptionOperations:
                 FROM subscription_credentials s
                 JOIN users u ON s.owner_id = u.id
                 ORDER BY agent_count ASC, s.name ASC
-                LIMIT 1
             """)
-            row = cursor.fetchone()
-            return self._row_to_subscription(row) if row else None
+            for row in cursor.fetchall():
+                sub = self._row_to_subscription(row)
+                if not self.is_subscription_rate_limited(sub.id):
+                    return sub
+            return None
 
     def select_best_alternative_subscription(
         self,
