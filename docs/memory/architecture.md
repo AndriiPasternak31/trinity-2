@@ -146,7 +146,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `public.py` - Public chat endpoints
 - `paid.py` - x402 payment-gated chat (NVM-001)
 - `nevermined.py` - Nevermined payment config management
-- `slack.py` - Slack integration (OAuth, events, DM handling) (SLACK-001)
+- `slack.py` - Slack integration (OAuth, events, multi-agent channel routing) (SLACK-001/002)
 
 *Subscriptions & Skills:*
 - `subscriptions.py` - Subscription management (SUB-002)
@@ -202,6 +202,20 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 *Integrations:*
 - `slack_service.py` - Slack API client (OAuth, messaging, verification) (SLACK-001)
 - `nevermined_payment_service.py` - x402 payment verification and settlement (NVM-001)
+
+**Channel Adapters (`adapters/`)** — Pluggable external messaging (SLACK-002):
+
+*Core:*
+- `base.py` - `ChannelAdapter` ABC, `NormalizedMessage`, `ChannelResponse` models
+- `message_router.py` - `ChannelMessageRouter`: rate limiting, agent resolution, execution pipeline
+
+*Slack:*
+- `slack_adapter.py` - Slack adapter: DMs, @mentions, thread replies, agent identity via `chat:write.customize`
+- `transports/slack_socket.py` - Socket Mode transport (WebSocket, auto-reconnect, default)
+- `transports/slack_webhook.py` - HTTP webhook transport (fallback for production)
+
+*Database:*
+- `db/slack_channels.py` - Workspace connections (encrypted bot tokens), channel-agent bindings, active threads
 
 *Content & Media:*
 - `image_generation_service.py` - Platform image generation via Gemini (prompt refinement + image gen) (IMG-001)
@@ -276,13 +290,14 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - Tools access auth context via `context.session` parameter
 - Agent-to-agent collaboration uses agent-scoped keys for access control
 
-**59 Tools** across 12 tool modules (`src/tools/`):
+**62 Tools** across 13 tool modules (`src/tools/`):
 
 | Module | Tools | Description |
 |--------|-------|-------------|
 | `agents.ts` (17) | `list_agents`, `get_agent`, `get_agent_info`, `create_agent`, `rename_agent`, `delete_agent`, `start_agent`, `stop_agent`, `list_templates`, `get_credential_status`, `inject_credentials`, `export_credentials`, `import_credentials`, `get_credential_encryption_key`, `get_agent_ssh_access`, `deploy_local_agent`, `initialize_github_sync` | Agent lifecycle, credentials, SSH, local deploy, GitHub sync |
 | `chat.ts` (3) | `chat_with_agent`, `get_chat_history`, `get_agent_logs` | Chat (enforces sharing rules), history, logs |
 | `schedules.ts` (8) | `list_agent_schedules`, `create_agent_schedule`, `get_agent_schedule`, `update_agent_schedule`, `delete_agent_schedule`, `toggle_agent_schedule`, `trigger_agent_schedule`, `get_schedule_executions` | Schedule CRUD and execution history |
+| `executions.ts` (3) | `list_recent_executions`, `get_execution_result`, `get_agent_activity_summary` | Execution queries, async result polling, activity monitoring (MCP-007) |
 | `skills.ts` (7) | `list_skills`, `get_skill`, `get_skills_library_status`, `assign_skill_to_agent`, `set_agent_skills`, `sync_agent_skills`, `get_agent_skills` | Skill management and assignment |
 | `tags.ts` (5) | `list_tags`, `get_agent_tags`, `tag_agent`, `untag_agent`, `set_agent_tags` | Agent tagging |
 | `systems.ts` (4) | `deploy_system`, `list_systems`, `restart_system`, `get_system_manifest` | System manifest deployment |
@@ -892,6 +907,46 @@ CREATE INDEX idx_shared_folders_consume ON agent_shared_folder_config(consume_en
 - Permission-gated: only agents with permissions (via `agent_permissions`) can mount
 - Container recreation on restart when mount config changes
 - Volume ownership automatically fixed to UID 1000
+
+**slack_workspaces:** (SLACK-002 - Channel Adapters)
+```sql
+CREATE TABLE slack_workspaces (
+    id TEXT PRIMARY KEY,
+    team_id TEXT UNIQUE NOT NULL,          -- Slack workspace team ID
+    team_name TEXT,                        -- Workspace display name
+    bot_token TEXT NOT NULL,               -- Bot OAuth token
+    connected_by TEXT,                     -- User who connected
+    connected_at TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1
+);
+```
+
+**slack_channel_agents:** (SLACK-002 - Channel Adapters)
+```sql
+CREATE TABLE slack_channel_agents (
+    id TEXT PRIMARY KEY,
+    team_id TEXT NOT NULL,                 -- FK to slack_workspaces.team_id
+    slack_channel_id TEXT NOT NULL,        -- Slack channel/DM ID
+    slack_channel_name TEXT,               -- Channel display name
+    agent_name TEXT NOT NULL,              -- Trinity agent name
+    is_dm_default INTEGER DEFAULT 0,      -- 1 = default agent for DMs
+    created_by TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(team_id, slack_channel_id)
+);
+```
+
+**slack_active_threads:** (SLACK-002 - Channel Adapters)
+```sql
+CREATE TABLE slack_active_threads (
+    team_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    thread_ts TEXT NOT NULL,               -- Slack thread timestamp
+    agent_name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(team_id, channel_id, thread_ts)
+);
+```
 
 **process_definitions:** (Phase 14 - Process Engine, NEW: 2026-01-16)
 ```sql

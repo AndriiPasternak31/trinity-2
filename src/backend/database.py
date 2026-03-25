@@ -123,6 +123,7 @@ from db.subscriptions import SubscriptionOperations
 from db.monitoring import MonitoringOperations
 from db.dashboard_history import DashboardHistoryOperations
 from db.slack import SlackOperations
+from db.slack_channels import SlackChannelOperations
 from db.nevermined import NeverminedOperations
 from db.operator_queue import OperatorQueueOperations
 
@@ -250,6 +251,7 @@ class DatabaseManager:
         self._monitoring_ops = MonitoringOperations()
         self._dashboard_history_ops = DashboardHistoryOperations()
         self._slack_ops = SlackOperations()
+        self._slack_channel_ops = SlackChannelOperations()
         self._nevermined_ops = NeverminedOperations()
         self._operator_queue_ops = OperatorQueueOperations()
 
@@ -690,6 +692,10 @@ class DatabaseManager:
     # Cleanup Operations (for CleanupService)
     # =========================================================================
 
+    def get_running_executions(self):
+        """Get all schedule executions currently in 'running' status."""
+        return self._schedule_ops.get_running_executions()
+
     def mark_stale_executions_failed(self, timeout_minutes: int = 30):
         """Mark executions stuck in 'running' past threshold as failed."""
         return self._schedule_ops.mark_stale_executions_failed(timeout_minutes)
@@ -1077,6 +1083,9 @@ class DatabaseManager:
     def get_agent_subscription_id(self, agent_name: str):
         return self._subscription_ops.get_agent_subscription_id(agent_name)
 
+    def get_least_used_subscription(self):
+        return self._subscription_ops.get_least_used_subscription()
+
     # --- SUB-003: Rate-Limit Tracking ---
 
     def record_rate_limit_event(self, agent_name: str, subscription_id: str, error_message: str = ""):
@@ -1226,6 +1235,52 @@ class DatabaseManager:
 
     def cleanup_expired_slack_pending_verifications(self):
         return self._slack_ops.cleanup_expired_pending_verifications()
+
+    # =========================================================================
+    # Slack Multi-Agent Channels (delegated to db/slack_channels.py)
+    # =========================================================================
+
+    def create_slack_workspace(self, team_id, team_name, bot_token, connected_by=None):
+        return self._slack_channel_ops.create_workspace(team_id, team_name, bot_token, connected_by)
+
+    def get_slack_workspace(self, team_id):
+        return self._slack_channel_ops.get_workspace_by_team(team_id)
+
+    def get_slack_workspace_bot_token(self, team_id):
+        return self._slack_channel_ops.get_workspace_bot_token(team_id)
+
+    def delete_slack_workspace(self, team_id):
+        return self._slack_channel_ops.delete_workspace(team_id)
+
+    def bind_slack_channel_to_agent(self, team_id, slack_channel_id, slack_channel_name,
+                                     agent_name, created_by=None, is_dm_default=False):
+        return self._slack_channel_ops.bind_channel_to_agent(
+            team_id, slack_channel_id, slack_channel_name, agent_name, created_by, is_dm_default
+        )
+
+    def get_slack_channel_agent(self, team_id, slack_channel_id):
+        return self._slack_channel_ops.get_channel_agent(team_id, slack_channel_id)
+
+    def get_slack_agent_name_for_channel(self, team_id, slack_channel_id):
+        return self._slack_channel_ops.get_agent_name_for_channel(team_id, slack_channel_id)
+
+    def get_slack_dm_default_agent(self, team_id):
+        return self._slack_channel_ops.get_dm_default_agent(team_id)
+
+    def get_slack_agents_for_workspace(self, team_id):
+        return self._slack_channel_ops.get_agents_for_workspace(team_id)
+
+    def get_slack_channel_for_agent(self, team_id, agent_name):
+        return self._slack_channel_ops.get_channel_for_agent(team_id, agent_name)
+
+    def unbind_slack_agent(self, team_id, agent_name):
+        return self._slack_channel_ops.unbind_agent(team_id, agent_name)
+
+    def register_slack_active_thread(self, team_id, channel_id, thread_ts, agent_name):
+        return self._slack_channel_ops.register_active_thread(team_id, channel_id, thread_ts, agent_name)
+
+    def is_slack_active_thread(self, team_id, channel_id, thread_ts):
+        return self._slack_channel_ops.is_active_thread(team_id, channel_id, thread_ts)
 
     # =========================================================================
     # Nevermined Payment Integration (delegated to db/nevermined.py) - NVM-001

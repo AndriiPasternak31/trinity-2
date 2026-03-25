@@ -202,12 +202,20 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 ### 7.1 Trinity MCP Server
 - **Status**: ✅ Implemented
 - **Description**: Agent orchestration via Model Context Protocol
-- **Key Features**: FastMCP with Streamable HTTP, 55 tools, API key authentication
+- **Key Features**: FastMCP with Streamable HTTP, 62 tools, API key authentication
 - **Flow**: `docs/memory/feature-flows/mcp-orchestration.md`
 
 ### 7.2 Per-User API Keys
 - **Status**: ✅ Implemented
 - **Description**: Generate, revoke, and track usage per key
+
+### 7.3 MCP Execution Query Tools (MCP-007)
+- **Status**: ✅ Implemented (2026-03-25)
+- **Requirement ID**: MCP-007
+- **GitHub Issue**: #19
+- **Description**: MCP tools for querying execution history, polling async results, and monitoring agent activity
+- **Key Features**: `list_recent_executions`, `get_execution_result`, `get_agent_activity_summary`; enables async polling pattern for agent-to-agent collaboration beyond 60s MCP timeout
+- **Spec**: `docs/requirements/MCP_EXECUTION_QUERY_TOOLS.md`
 
 ---
 
@@ -585,6 +593,30 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 - **Spec**: `docs/requirements/SLACK_INTEGRATION.md`
 - **Flow**: `docs/memory/feature-flows/slack-integration.md`
 
+### 15.1b-ii Channel Adapters + Multi-Agent Slack (SLACK-002)
+- **Status**: ✅ Implemented (2026-03-23)
+- **Requirement ID**: SLACK-002
+- **Priority**: P1
+- **Description**: Pluggable channel adapter abstraction for external messaging platforms. Extends SLACK-001 with multi-agent routing (multiple agents per workspace), @mention support in channels, thread continuity (reply-without-mention), and configurable operational limits.
+- **Key Features**:
+  - Channel-agnostic adapter pattern (`ChannelAdapter` base class) supporting Slack, future Telegram/Discord
+  - `ChannelMessageRouter` — unified message pipeline: resolve agent → rate limit → verify → execute → respond
+  - Multi-agent workspace: bind different agents to different Slack channels
+  - @mention routing in channels + DM default agent
+  - Thread tracking: bot auto-responds to thread replies without requiring @mention
+  - Configurable rate limits, execution timeout, and allowed tools via `settings_service`
+  - Periodic pruning of rate-limit buckets to prevent memory leaks
+- **Database Tables**:
+  - `slack_workspaces` — Workspace connections (team_id, bot_token)
+  - `slack_channel_agents` — Channel-to-agent bindings (multi-agent routing)
+  - `slack_active_threads` — Active thread tracking (reply-without-mention)
+- **Configurable Settings** (via Settings UI or DB):
+  - `channel_rate_limit_max` — Messages per window (default: 30)
+  - `channel_rate_limit_window` — Window in seconds (default: 60)
+  - `channel_timeout_seconds` — Execution timeout (default: 120)
+  - `channel_allowed_tools` — Comma-separated tool list (default: WebSearch,WebFetch)
+- **Flow**: `docs/memory/feature-flows/slack-channel-routing.md`
+
 ### 15.1c Telegram Bot Integration (TGRAM-001)
 - **Status**: ⏳ Not Started
 - **Requirement ID**: TGRAM-001
@@ -951,6 +983,17 @@ The Process Engine supports six step types:
   - `src/backend/routers/subscriptions.py` - REST API
   - `src/backend/services/subscription_service.py` - Auth mode detection
   - `src/mcp-server/src/tools/subscriptions.ts` - MCP tools
+
+### 20.3a Subscription Auto-Assign on Agent Creation (#74)
+- **Status**: ✅ Implemented (2026-03-25)
+- **GitHub Issue**: #74
+- **Extends**: SUB-002
+- **Description**: When a new agent is created, automatically assign the subscription with fewest assigned agents (round-robin). Tie-break: alphabetical by name. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents (`trinity-system`) are unaffected (separate creation path).
+- **Key Features**:
+  - `get_least_used_subscription()` DB method (SQL: COUNT + ORDER BY)
+  - Auto-assign logic in `create_agent_internal()` — token injected before container creation, DB assignment after `register_agent_owner()`
+  - Graceful fallback: no subs → API key, decrypt fail → API key, exception → API key
+- **Files**: `db/subscriptions.py`, `database.py`, `services/agent_service/crud.py`
 
 ### 20.4 Subscription Auto-Switch on Rate Limit (SUB-003)
 - **Status**: ✅ Implemented (2026-03-21)
