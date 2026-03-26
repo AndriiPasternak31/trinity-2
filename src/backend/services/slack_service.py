@@ -460,7 +460,10 @@ class SlackService:
         source: str = "agent"
     ) -> str:
         """Get the redirect URL after OAuth completion."""
-        base_url = FRONTEND_URL or "http://localhost"
+        base_url = FRONTEND_URL
+        if not base_url:
+            logger.error("FRONTEND_URL not configured — OAuth redirect will fail. Set FRONTEND_URL in .env")
+            base_url = "http://localhost"
         if source == "platform":
             if success:
                 return f"{base_url}/settings?slack=installed"
