@@ -130,7 +130,6 @@ export interface SshAccessResponse {
   agent: string;
   auth_method: "key" | "password";
   connection: SshConnectionInfo;
-  private_key?: string;  // Only for key auth
   expires_at: string;
   expires_in_hours: number;
   instructions: string[];

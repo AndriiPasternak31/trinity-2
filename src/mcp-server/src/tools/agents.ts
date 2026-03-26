@@ -514,10 +514,10 @@ export function createAgentTools(
       name: "get_agent_ssh_access",
       description:
         "Generate ephemeral SSH credentials for direct terminal access to an agent container. " +
-        "Supports two auth methods: 'key' (save private key locally) or 'password' (one-liner with sshpass). " +
+        "Supports two auth methods: 'key' (provide your public key) or 'password' (one-liner with sshpass). " +
         "Credentials expire automatically (default: 4 hours). Agent must be running. " +
-        "Ideal for Tailscale/VPN environments where you need direct SSH access. " +
-        "IMPORTANT: For key auth, save the private key immediately - it cannot be retrieved again.",
+        "For key auth: generate a keypair locally (ssh-keygen -t ed25519) and provide the PUBLIC key. " +
+        "The server never generates or handles private keys. Only agent owner or admin can use this.",
       parameters: z.object({
         agent_name: z.string().describe("Name of the agent to access"),
         ttl_hours: z
@@ -529,10 +529,14 @@ export function createAgentTools(
           .enum(["key", "password"])
           .optional()
           .default("key")
-          .describe("Authentication method: 'key' for SSH key pair (more secure, requires saving key file), 'password' for one-liner with sshpass (convenient, requires sshpass installed)"),
+          .describe("Authentication method: 'key' for SSH public key injection (more secure), 'password' for one-liner with sshpass (convenient, requires sshpass installed)"),
+        public_key: z
+          .string()
+          .optional()
+          .describe("Your SSH public key (required for 'key' auth method). Generate with: ssh-keygen -t ed25519. Provide the contents of ~/.ssh/id_ed25519.pub"),
       }),
       execute: async (
-        { agent_name, ttl_hours = 4, auth_method = "key" }: { agent_name: string; ttl_hours?: number; auth_method?: "key" | "password" },
+        { agent_name, ttl_hours = 4, auth_method = "key", public_key }: { agent_name: string; ttl_hours?: number; auth_method?: "key" | "password"; public_key?: string },
         context?: { session?: McpAuthContext }
       ) => {
         const authContext = context?.session;
@@ -540,9 +544,8 @@ export function createAgentTools(
 
         console.log(`[get_agent_ssh_access] Generating SSH access for agent '${agent_name}' (TTL: ${ttl_hours}h, method: ${auth_method})`);
 
-        const response = await apiClient.createSshAccess(agent_name, ttl_hours, auth_method);
+        const response = await apiClient.createSshAccess(agent_name, ttl_hours, auth_method, public_key);
 
-        // Return the response directly - it already has the right structure
         return JSON.stringify(response, null, 2);
       },
     },

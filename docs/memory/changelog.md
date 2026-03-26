@@ -1,5 +1,16 @@
 ### 2026-03-26
 
+🔒 **fix(security): SSH private key no longer transmitted in API response (#175)**
+
+Eliminated server-side SSH keypair generation. The `POST /api/agents/{name}/ssh-access` endpoint for key-based auth now requires clients to supply their own `public_key` — private keys never leave the client machine.
+
+- `src/backend/routers/agent_ssh.py` — Added `public_key` field to `SshAccessRequest` (required for key auth); removed `private_key` from response; enforced owner-only access (`can_user_delete_agent` instead of `can_user_access_agent`) since SSH grants shell access to credentials
+- `src/backend/services/ssh_service.py` — Removed `generate_ssh_keypair()` method and `cryptography` import; server no longer generates or handles private keys
+- `src/mcp-server/src/tools/agents.ts` — Added `public_key` parameter to `get_agent_ssh_access` tool
+- `src/mcp-server/src/client.ts` — Added `publicKey` parameter to `createSshAccess()`
+- `src/mcp-server/src/types.ts` — Removed `private_key` from `SshAccessResponse`
+- `tests/unit/test_ssh_service.py` — Removed keypair generation tests, simplified mocks (no cryptography dependency)
+
 🔒 **fix(security): OTP rate limiting for email verification — prevent brute-force (#176)**
 
 `POST /api/auth/email/verify` now enforces two layers of rate limiting. Previously, a 6-digit OTP (~20 bits of entropy) could be brute-forced in ~8 minutes at 2k req/s — within the 10-minute validity window — yielding a valid 7-day JWT.
