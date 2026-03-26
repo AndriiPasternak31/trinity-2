@@ -839,6 +839,9 @@ class DatabaseManager:
     def count_recent_messages_by_ip(self, ip_address: str, minutes: int = 1):
         return self._public_link_ops.count_recent_messages_by_ip(ip_address, minutes)
 
+    def count_recent_messages_by_token(self, link_id: str, minutes: int = 1):
+        return self._public_link_ops.count_recent_messages_by_token(link_id, minutes)
+
     # =========================================================================
     # Email Authentication (delegated to db/email_auth.py) - Phase 12.4
     # =========================================================================

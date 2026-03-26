@@ -1,3 +1,23 @@
+### 2026-03-26
+
+**fix: Rate limiting bypass via X-Forwarded-For header spoofing (#181)**
+
+Pentest finding (CVSS 5.1): The `_get_client_ip()` function in `routers/public.py` trusted the client-supplied `X-Forwarded-For` header without proxy validation. An attacker could bypass all IP-based rate limits on public chat endpoints by rotating the spoofed header value on each request.
+
+**Three-layer fix:**
+1. Configured uvicorn with `--proxy-headers --forwarded-allow-ips "*"` so `request.client.host` is correctly populated from trusted proxy headers only
+2. Simplified `_get_client_ip()` to use `request.client.host` directly (no manual header parsing)
+3. Added per-token rate limit (`MAX_CHAT_MESSAGES_PER_TOKEN = 60/min`) as defense-in-depth against distributed attacks on a single public link
+
+- `docker/backend/Dockerfile` — Added `--proxy-headers --forwarded-allow-ips "*"` to uvicorn CMD
+- `docker-compose.prod.yml` — Added `--proxy-headers --forwarded-allow-ips "*"` to uvicorn command
+- `src/backend/main.py` — Added `proxy_headers=True, forwarded_allow_ips="*"` to `uvicorn.run()`
+- `src/backend/routers/public.py` — Simplified `_get_client_ip()`, added `MAX_CHAT_MESSAGES_PER_TOKEN` constant and per-token rate limit check
+- `src/backend/db/public_links.py` — Added `count_recent_messages_by_token()` method
+- `src/backend/database.py` — Added delegation method for per-token message counting
+
+---
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**

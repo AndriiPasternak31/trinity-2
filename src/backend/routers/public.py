@@ -52,14 +52,15 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 # Rate limiting constants
 MAX_VERIFICATION_REQUESTS_PER_EMAIL = 3  # per 10 minutes
 MAX_CHAT_MESSAGES_PER_IP = 30  # per minute
+MAX_CHAT_MESSAGES_PER_TOKEN = 60  # per minute per public link token
 
 
 def _get_client_ip(request: Request) -> str:
-    """Get client IP address from request."""
-    # Check for forwarded headers (behind proxy)
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    """Get client IP address from request.
+
+    Uses request.client.host which is set correctly by uvicorn's
+    ProxyHeadersMiddleware when behind a trusted proxy (SEC #181).
+    """
     return request.client.host if request.client else "unknown"
 
 
@@ -314,6 +315,14 @@ async def public_chat(
         raise HTTPException(
             status_code=429,
             detail="Too many requests. Please wait a moment."
+        )
+
+    # Rate limiting by token (prevents distributed attacks against a single link)
+    recent_token_messages = db.count_recent_messages_by_token(link["id"], minutes=1)
+    if recent_token_messages >= MAX_CHAT_MESSAGES_PER_TOKEN:
+        raise HTTPException(
+            status_code=429,
+            detail="This agent is receiving too many requests. Please wait a moment."
         )
 
     # Check agent is available
