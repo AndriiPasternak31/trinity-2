@@ -398,3 +398,98 @@ class TestRegularUserCanAccessOwnResources:
         """Notifications listing works but returns only accessible agents' notifications."""
         response = regular_user_client.get("/api/notifications")
         assert_status(response, 200)
+
+
+# =============================================================================
+# Test: Unauthenticated access denied on approvals endpoints (Issue #173)
+# =============================================================================
+
+
+class TestApprovalsRequireAuth:
+    """Verify unauthenticated users get 401 on all approval endpoints."""
+
+    def test_list_approvals_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get("/api/approvals", auth=False)
+        assert_status(response, 401)
+
+    def test_get_approval_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get("/api/approvals/fake-id", auth=False)
+        assert_status(response, 401)
+
+    def test_get_approval_by_step_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get(
+            "/api/approvals/execution/fake-exec/step/fake-step", auth=False
+        )
+        assert_status(response, 401)
+
+    def test_approve_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.post(
+            "/api/approvals/fake-id/approve",
+            json={"comment": "malicious approval"},
+            auth=False,
+        )
+        assert_status(response, 401)
+
+    def test_reject_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.post(
+            "/api/approvals/fake-id/reject",
+            json={"comment": "malicious rejection"},
+            auth=False,
+        )
+        assert_status(response, 401)
+
+
+# =============================================================================
+# Test: Unauthenticated access denied on trigger endpoints (Issue #173)
+# =============================================================================
+
+
+class TestTriggersRequireAuth:
+    """Verify unauthenticated users get 401 on trigger management endpoints."""
+
+    def test_list_triggers_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get("/api/triggers", auth=False)
+        assert_status(response, 401)
+
+    def test_get_trigger_info_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get(
+            "/api/triggers/webhook/fake-id/info", auth=False
+        )
+        assert_status(response, 401)
+
+    def test_list_schedule_triggers_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get("/api/triggers/schedules", auth=False)
+        assert_status(response, 401)
+
+    def test_get_schedule_trigger_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get(
+            "/api/triggers/schedules/fake-id", auth=False
+        )
+        assert_status(response, 401)
+
+    def test_list_process_schedules_requires_auth(self, unauthenticated_client):
+        response = unauthenticated_client.get(
+            "/api/triggers/process/fake-id/schedules", auth=False
+        )
+        assert_status(response, 401)
+
+
+# =============================================================================
+# Test: Authenticated users CAN access approvals and triggers (Issue #173)
+# =============================================================================
+
+
+class TestAuthenticatedUsersCanAccessApprovalsAndTriggers:
+    """Verify authenticated users get 200 (not 401) on these endpoints."""
+
+    def test_authenticated_can_list_approvals(self, admin_client):
+        response = admin_client.get("/api/approvals")
+        assert_status(response, 200)
+
+    def test_authenticated_can_list_triggers(self, admin_client):
+        response = admin_client.get("/api/triggers")
+        assert_status(response, 200)
+
+    def test_authenticated_can_list_schedule_triggers(self, admin_client):
+        response = admin_client.get("/api/triggers/schedules")
+        assert_status(response, 200)
