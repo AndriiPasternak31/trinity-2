@@ -1,3 +1,30 @@
+### 2026-03-26
+
+**feat: Slack connection management UI + per-agent channel binding (SLACK-002, #64)**
+
+Socket Mode management and per-agent Slack channel binding, decoupled from the public links OAuth flow.
+
+**Bug fixes:**
+- Fix encrypted bot token bug — `routers/slack.py` read raw SQL bypassing `_decrypt_token()`, causing `Illegal header value` errors when calling Slack API
+- Add missing `mark_execution_dispatched` delegation to `DatabaseManager`
+
+**Settings UI — Transport management:**
+- `GET /api/settings/slack/status` — connection state, workspaces, bound agents
+- `POST /api/settings/slack/connect` — save app token, start Socket Mode transport
+- `POST /api/settings/slack/disconnect` — stop transport
+- `POST /api/settings/slack/install` — platform-level OAuth (stores workspace + bot token without agent context)
+- `src/frontend/src/views/Settings.vue` — unified Slack section: OAuth credentials, transport mode, connect/disconnect, Install to Workspace, workspace list with agent badges
+
+**Per-agent channel binding:**
+- `GET /api/agents/{name}/slack/channel` — check channel binding status
+- `POST /api/agents/{name}/slack/channel` — create Slack channel + bind to agent
+- `DELETE /api/agents/{name}/slack/channel` — unbind agent from channel
+- `src/frontend/src/components/SlackChannelPanel.vue` — bound/unbound/access-denied states in Sharing tab
+
+**Tests:** 15 new integration tests (7 transport management + 8 channel binding)
+
+---
+
 ### 2026-03-25
 
 **fix: Subscription registration fails silently when CREDENTIAL_ENCRYPTION_KEY is not set (#148)**

@@ -18,26 +18,45 @@ As a **platform admin**, I want Slack messages to go through the same execution 
 
 ## Entry Points
 
-- **UI**: `src/frontend/src/components/PublicLinksPanel.vue:540` — "Connect Slack" button
-- **API**: `POST /api/agents/{name}/public-links/{link_id}/slack/connect` — initiates OAuth or binds agent to channel
+- **Settings UI**: `src/frontend/src/views/Settings.vue` — Slack Integration section (transport + workspace install)
+- **Agent UI**: `src/frontend/src/components/SlackChannelPanel.vue` — per-agent channel binding in Sharing tab
+- **Legacy UI**: `src/frontend/src/components/PublicLinksPanel.vue:540` — "Connect Slack" button (per public link)
+- **API**: `POST /api/settings/slack/connect` — start Socket Mode transport
+- **API**: `POST /api/settings/slack/install` — platform-level OAuth (workspace install)
+- **API**: `POST /api/agents/{name}/slack/channel` — create channel + bind agent
 - **Transport**: `src/backend/adapters/transports/slack_socket.py` — Socket Mode receives events
-- **Transport**: `src/backend/adapters/transports/slack_webhook.py` — HTTP webhook receives events (fallback)
 
 ## Frontend Layer
 
-### Components
+### Settings Page (Platform-Level)
+- `Settings.vue` — Unified Slack section with:
+  - OAuth credentials (Client ID, Client Secret, Signing Secret) + Save
+  - Transport connection: Socket Mode status badge, App Token input, Connect button
+  - "Install to Workspace" button → triggers platform OAuth → redirects to Slack → callback stores bot token → redirects to Settings with success notification
+  - Connected workspaces list with bound agent badges
+
+### Agent Detail — Sharing Tab (Per-Agent)
+- `SlackChannelPanel.vue` — Three states:
+  - **Bound**: Shows `#channel-name`, workspace name, DM default badge, "Unbind" button
+  - **Unbound**: "Create Slack Channel" button → creates channel in Slack + binds to agent
+  - **Access denied**: Informational message for non-owner shared users
+- `SharingPanel.vue` — Renders `SlackChannelPanel` between Team Sharing and Public Links sections
+
+### Legacy: PublicLinksPanel (Per Public Link)
 - `PublicLinksPanel.vue:540-556` — `connectSlack()` method handles two response types:
   - `status: "connected"` — workspace already linked, channel created → show success notification
   - `status: "oauth_required"` — redirect to Slack OAuth URL
 
-### State Management
-- `slackConnections` ref — tracks connection status per link
-- `slackLoading` ref — loading state per link
+### API Calls (Settings)
+- `GET /api/settings/slack/status` → `{connected, transport_mode, app_token_configured, workspaces}`
+- `POST /api/settings/slack/connect` → `{connected, transport_mode}`
+- `POST /api/settings/slack/disconnect` → `{disconnected, was_connected}`
+- `POST /api/settings/slack/install` → `{oauth_url}` (browser redirect)
 
-### API Calls
-- `POST /api/agents/{name}/public-links/{link_id}/slack/connect` → `{status, channel_id, channel_name}` or `{status, oauth_url}`
-- `GET /api/agents/{name}/public-links/{link_id}/slack` → connection status
-- `DELETE /api/agents/{name}/public-links/{link_id}/slack` → disconnect
+### API Calls (Per-Agent Channel)
+- `GET /api/agents/{name}/slack/channel` → `{bound, channel_name, channel_id, workspace_name}`
+- `POST /api/agents/{name}/slack/channel` → `{status, channel_name, channel_id, workspace_name}`
+- `DELETE /api/agents/{name}/slack/channel` → `{unbound, workspace_name}`
 
 ## Backend Layer
 
