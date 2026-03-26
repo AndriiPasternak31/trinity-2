@@ -8,7 +8,9 @@ As a platform administrator deploying Trinity for the first time, I want to be g
 
 ## Requirements Reference
 - **Requirement 11.4** - First-Time Setup Wizard (Phase 12.3)
-- Password: bcrypt-hashed, minimum 8 characters
+- **#189** - Password complexity requirements (OWASP ASVS 2.1)
+- Password: bcrypt-hashed, OWASP ASVS 2.1 complexity (12+ chars, uppercase, lowercase, digit, special, not common)
+- Validation: `src/backend/utils/password_validation.py` — reusable module with `validate_password_strength()`
 - API key: Stored in `system_settings` table, validated against Anthropic API
 
 ---
