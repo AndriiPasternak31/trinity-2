@@ -209,15 +209,69 @@ Priority in `SlackAdapter.get_agent_name()`:
 **Action**: Send 31 messages in under 60 seconds
 **Expected**: 31st message gets "sending too quickly" response
 
+#### 7. Settings — Connect Socket Mode
+**Action**: Settings → Slack Integration → enter App Token → click Connect
+**Expected**: Status badge turns green "Socket Mode", backend logs show `Slack Socket Mode transport connected`
+**Verify**:
+- [ ] `GET /api/settings/slack/status` returns `{connected: true, transport_mode: "socket"}`
+- [ ] Backend log: `Slack Socket Mode transport connected`
+
+#### 8. Settings — Disconnect and Reconnect
+**Action**: Click Disconnect (via API) → verify status → click Connect again
+**Expected**: Status goes red → green, Socket Mode re-established
+**Verify**:
+- [ ] Status shows `connected: false` after disconnect
+- [ ] Status shows `connected: true` after reconnect
+- [ ] No stale socket sessions in logs
+
+#### 9. Settings — Install to Workspace (OAuth)
+**Action**: Settings → Slack Integration → click "Install to Workspace"
+**Expected**: Browser redirects to Slack OAuth → authorize → redirects back to Settings with "Workspace installed" notification
+**Verify**:
+- [ ] `slack_workspaces` table has new entry with encrypted `bot_token`
+- [ ] `GET /api/settings/slack/status` shows workspace in `workspaces` list
+- [ ] Redirect URL uses `PUBLIC_CHAT_URL` (must be configured for callback to work)
+
+#### 10. Agent Sharing — Create Slack Channel
+**Action**: Agent Detail → Sharing tab → click "Create Slack Channel"
+**Expected**: Channel `#agent-name` created in Slack workspace, panel shows bound state with channel name
+**Verify**:
+- [ ] `GET /api/agents/{name}/slack/channel` returns `{bound: true, channel_name: "agent-name"}`
+- [ ] Channel visible in Slack workspace
+- [ ] `slack_channel_agents` table has binding entry
+
+#### 11. Agent Sharing — Already Bound
+**Action**: Click "Create Slack Channel" on an agent that already has a binding
+**Expected**: Success message "Already bound to #agent-name in workspace-name"
+**Verify**:
+- [ ] No duplicate channel created
+- [ ] `POST /api/agents/{name}/slack/channel` returns `{status: "already_bound"}`
+
+#### 12. Agent Sharing — Unbind Channel
+**Action**: Click "Unbind" on a bound agent
+**Expected**: Panel switches to unbound state showing "Create Slack Channel" button
+**Verify**:
+- [ ] `GET /api/agents/{name}/slack/channel` returns `{bound: false}`
+- [ ] `slack_channel_agents` table entry removed
+- [ ] Slack channel still exists (not deleted) but agent no longer responds to @mentions in it
+
+#### 13. Agent Sharing — No Workspace Connected
+**Action**: Click "Create Slack Channel" when no workspace is installed
+**Expected**: Error message "No Slack workspace connected. Install a workspace from Settings first."
+**Verify**:
+- [ ] `POST /api/agents/{name}/slack/channel` returns 400
+
 ### Edge Cases
 - [ ] Bot invited to #general (non-agent channel) → only responds to @mentions
 - [ ] Thread started by another user (not via @mention) → bot ignores replies
 - [ ] Agent stopped while message in flight → "not available" response
 - [ ] Two users in same channel → separate sessions (per-user isolation)
+- [ ] Non-owner views Sharing tab → SlackChannelPanel shows "Only the agent owner can manage Slack channel bindings"
+- [ ] `CREDENTIAL_ENCRYPTION_KEY` mismatch → bot token decryption fails → Slack API calls fail (logged, no crash)
 
-**Last Tested**: 2026-03-23
-**Tested By**: claude + human (manual)
-**Status**: ✅ Core flow working (Socket Mode + channel routing + thread replies)
+**Last Tested**: 2026-03-26
+**Tested By**: claude + human (manual + 15 integration tests)
+**Status**: ✅ Core flow + transport management + per-agent channel binding working
 **Issues**: MCP tools bypass `--allowedTools` restriction (documented in security findings)
 
 ## Related Flows
