@@ -1,34 +1,14 @@
 # Feature: Agent Lifecycle
 
-> **Updated**: 2026-03-15 - **Issue #136: Runtime platform prompt injection**: Removed `inject_trinity_meta_prompt()` from startup sequence. Platform instructions are now injected at runtime via `--append-system-prompt` on every chat/task request (see `system-wide-trinity-prompt.md`). Startup injection order reduced to: Credentials → Skills → Read-Only Hooks.
+> **Updated**: 2026-03-26 - **Line number refresh and Trinity injection cleanup**: Updated all line numbers to match current code. Removed all references to `inject_trinity_meta_prompt()` (deleted in Issue #136). Added bulk endpoints (context-stats, execution-stats, autonomy-status, slots), queue endpoints, and activity stream endpoints. Updated delete flow for EVT-001 event subscriptions and AVATAR-002 emotion images.
 >
-> **Previous (2026-03-13)**: **Name handling fixes**: (1) `docker_service.py` lines 36, 130: Changed `.replace("agent-", "")` to `.removeprefix("agent-")` to fix agents with "agent" in their name. (2) `crud.py` line 87-88: Duplicate check now queries both Docker AND database (`db.get_agent_owner()`). HTTP status changed from 400 to 409 for duplicate names.
->
-> **Previous (2026-03-07)**: **AVATAR-001: Avatar lifecycle integration**: Delete agent now cleans up cached avatar file (`/data/avatars/{name}.png`). Rename agent now renames avatar file. Get agent response now includes `avatar_url` field from avatar identity data.
->
-> **Previous (2026-03-03)**: **SUB-002: Env-var-based subscription tokens**: Subscription tokens now injected as `CLAUDE_CODE_OAUTH_TOKEN` env var at container creation/recreation, replacing the old SUB-001 post-start `.credentials.json` file injection. Removed `inject_subscription_on_start()` call from `start_agent_internal()`. `check_api_key_env_matches()` now performs three-way env var check (subscription token, API key, or neither). `recreate_container_with_updated_config()` manages `CLAUDE_CODE_OAUTH_TOKEN` env var directly.
->
-> **Previous (2026-03-02)**: **Subscription credential priority fix (Issue #57)**: `check_api_key_env_matches()` now detects subscription + API key conflict. Container recreation removes `ANTHROPIC_API_KEY` when subscription assigned. Authentication Model corrected: API key takes precedence over OAuth in Claude Code.
->
-> **Previous (2026-03-01)**: **Agent Rename (RENAME-001)**: Added ability to rename agents via UI (pencil icon in AgentHeader) or MCP (`rename_agent` tool). Renames container, updates all 17 database tables atomically, broadcasts WebSocket event. System agents protected.
->
-> **Previous (2026-02-24)**: **Async Docker Operations (DOCKER-001)**: All blocking Docker SDK calls now wrapped with `services/docker_utils.py` async wrappers. Prevents event loop freezing during container start/stop/delete. See [async-docker-operations.md](async-docker-operations.md) for full details.
->
-> **Previous (2026-01-26)**: **UX: Unified Start/Stop Toggle**: Replaced separate Start/Stop buttons with `RunningStateToggle.vue` component across all pages (AgentHeader.vue, Agents.vue, AgentNode.vue). Added `toggleAgentRunning()` to agents.js and network.js stores.
->
-> **Previous (2026-01-14)** - **Security Fixes**:
-> - **Auth on Lifecycle Endpoints (HIGH)**: `start_agent_endpoint`, `stop_agent_endpoint`, `get_agent_logs_endpoint` now use `AuthorizedAgentByName` dependency instead of plain `get_current_user` - prevents unauthorized users from starting/stopping agents they don't own
-> - **Container Security Consistency (HIGH)**: All container creation paths now ALWAYS apply baseline security (`cap_drop=['ALL']`, AppArmor, noexec tmpfs). Added `RESTRICTED_CAPABILITIES` and `FULL_CAPABILITIES` constants in `lifecycle.py` for consistent security settings.
->
-> **Previous (2026-01-12)**: Database Batch Queries (N+1 Fix): `get_accessible_agents()` now uses `db.get_all_agent_metadata()` batch query - reduced from 8-10 queries per agent to 2 total queries. Combined with Docker stats optimization for <50ms response time.
->
-> **Previous (2025-12-31)**: Updated for settings service and AgentClient refactoring. API key retrieval now uses `services/settings_service.py`. Trinity injection uses centralized `AgentClient` with built-in retry logic.
+> **Previous (2026-03-15)**: **Issue #136: Runtime platform prompt injection**: Removed `inject_trinity_meta_prompt()` from startup sequence. Platform instructions are now injected at runtime via `--append-system-prompt` on every chat/task request (see `system-wide-trinity-prompt.md`). Startup injection order reduced to: Credentials → Skills → Read-Only Hooks.
 
 ## Overview
-Complete lifecycle management for Trinity agents: create, start, stop, and delete Docker containers with credential injection (CRED-002), skill injection, network isolation, Trinity meta-prompt injection, and WebSocket broadcasts.
+Complete lifecycle management for Trinity agents: create, start, stop, and delete Docker containers with credential injection (CRED-002), skill injection, read-only hooks, network isolation, and WebSocket broadcasts. Includes bulk stats/status endpoints, queue management, and activity streams.
 
 ## User Story
-As a Trinity platform user, I want to create, start, stop, and delete agents so that I can manage isolated Claude Code execution environments with custom configurations, credentials, and Trinity planning capabilities.
+As a Trinity platform user, I want to create, start, stop, and delete agents so that I can manage isolated Claude Code execution environments with custom configurations, credentials, and skills.
 
 ---
 
@@ -180,7 +160,7 @@ The agent router uses a **thin router + service layer** architecture:
 
 | Layer | File | Purpose |
 |-------|------|---------|
-| Router | `src/backend/routers/agents.py` (642 lines) | Core CRUD, lifecycle, stats, queue, activities, terminal |
+| Router | `src/backend/routers/agents.py` (647 lines) | Core CRUD, lifecycle, stats, queue, activities, terminal |
 | Router | `src/backend/routers/agent_config.py` | Per-agent settings (autonomy, read-only, resources, capabilities, capacity, timeout, api-key) |
 | Router | `src/backend/routers/agent_files.py` | Files, info, playbooks, permissions, metrics, folders |
 | Router | `src/backend/routers/agent_rename.py` | Rename endpoint |
@@ -191,17 +171,17 @@ The agent router uses a **thin router + service layer** architecture:
 
 | Module | Lines | Key Functions |
 |--------|-------|---------------|
-| `helpers.py` | ~404 | `get_accessible_agents()` (uses batch query), `get_next_version_name()`, `check_shared_folder_mounts_match()`, `check_api_key_env_matches()` (SUB-002: three-way check for `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN` / neither) |
-| `lifecycle.py` | ~435 | `inject_trinity_meta_prompt()`, `start_agent_internal()`, `recreate_container_with_updated_config()` (SUB-002: manages `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` env vars) |
-| `crud.py` | 507 | `create_agent_internal()` |
-| `terminal.py` | 342 | `TerminalSessionManager` class |
+| `helpers.py` | 467 | `validate_base_image()` (:35), `get_accessible_agents()` (:131, uses batch query), `get_next_version_name()` (:264), `check_shared_folder_mounts_match()` (:324), `check_api_key_env_matches()` (:367, SUB-002 three-way check), `check_resource_limits_match()` (:408), `check_full_capabilities_match()` (:441) |
+| `lifecycle.py` | 403 | `inject_assigned_credentials()` (:68), `inject_assigned_skills()` (:127), `start_agent_internal()` (:168), `recreate_container_with_updated_config()` (:243, SUB-002: manages `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` env vars) |
+| `crud.py` | 552 | `get_platform_version()` (:40), `create_agent_internal()` (:52) |
+| `terminal.py` | 320 | `TerminalSessionManager` class |
 
 **Shared Services:**
 
 | Module | Lines | Key Functions |
 |--------|-------|---------------|
 | `services/settings_service.py` | 124 | `get_anthropic_api_key()`, `get_github_pat()`, `get_ops_setting()` |
-| `services/agent_client.py` | 379 | `AgentClient.inject_trinity_prompt()`, `AgentClient.chat()`, `AgentClient.get_session()` |
+| `services/agent_client.py` | 379 | `AgentClient.chat()`, `AgentClient.get_session()` |
 
 ### Pydantic Models (`src/backend/models.py:10-40`)
 
@@ -230,7 +210,7 @@ class AgentStatus(BaseModel):
     template: Optional[str] = None
 ```
 
-**Response Enrichment** (`src/backend/routers/agents.py:309-314` - AVATAR-001):
+**Response Enrichment** (`src/backend/routers/agents.py:291-296` - AVATAR-001):
 The `GET /api/agents/{agent_name}` response dict is enriched with `avatar_url`:
 ```python
 # Avatar URL (AVATAR-001)
@@ -243,7 +223,7 @@ else:
 
 ### Endpoints
 
-#### Create Agent (`src/backend/routers/agents.py:189-192`)
+#### Create Agent (`src/backend/routers/agents.py:307-310`)
 ```python
 @router.post("")
 async def create_agent_endpoint(config: AgentConfig, request: Request, current_user: User = Depends(get_current_user)):
@@ -251,7 +231,7 @@ async def create_agent_endpoint(config: AgentConfig, request: Request, current_u
     return await create_agent_internal(config, current_user, request, skip_name_sanitization=False)
 ```
 
-**Service Function** (`src/backend/services/agent_service/crud.py:35-507`):
+**Service Function** (`src/backend/services/agent_service/crud.py:52-552`):
 
 **Imports** (lines 1-32):
 ```python
@@ -285,37 +265,39 @@ from services.settings_service import get_anthropic_api_key  # Line 29 - central
 >
 > **Bug Fix (2026-02-05)**: Removed orphaned credential injection loop (lines 312-332 in crud.py) that referenced undefined `agent_credentials` variable. This dead code was left behind during the CRED-002 refactor but never executed since the variable was already removed.
 
-#### Delete Agent (`src/backend/routers/agents.py:211-313`)
+#### Delete Agent (`src/backend/routers/agents.py:328-435`)
 ```python
 @router.delete("/{agent_name}")
 async def delete_agent_endpoint(agent_name: str, request: Request, current_user: User = Depends(get_current_user)):
-    # System agent protection check (line 214-229)
+    # System agent protection check (line 332-336)
     if db.is_system_agent(agent_name):
         raise HTTPException(403, "System agents cannot be deleted")
 
-    # Authorization check: owner or admin (line 231-241)
+    # Authorization check: owner or admin (line 338-339)
     if not db.can_user_delete_agent(current_user.username, agent_name):
         raise HTTPException(403, "Permission denied")
 
     container = get_agent_container(agent_name)
-    container.stop()
-    container.remove()
+    await container_stop(container)
+    await container_remove(container)
 
-    # Delete persistent volume (line 253-261)
-    volume = docker_client.volumes.get(f"agent-{agent_name}-workspace")
-    volume.remove()
+    # Delete persistent volume (line 351-359)
+    volume = await volume_get(f"agent-{agent_name}-workspace")
+    await volume_remove(volume)
 
-    # Delete schedules (line 263-267)
-    # Delete git config (line 269-270)
-    # Delete MCP API key (line 272-276)
-    # Delete agent permissions (line 278-282)
-    # Delete shared folder config (line 284-294)
-    # Delete agent tags (line 416-420)
-    # Delete cached avatar file (AVATAR-001, line 422-428):
-    #   avatar_path = Path("/data/avatars") / f"{agent_name}.png"
-    #   if avatar_path.exists(): avatar_path.unlink()
-    # Delete ownership (line 430) - cascades to shares
-    # Broadcast WebSocket (line 432-436), return response (line 438)
+    # Delete schedules (line 363)
+    # Delete git config (line 366)
+    # Delete MCP API key (line 369-372)
+    # Delete agent permissions (line 375-378)
+    # Delete agent event subscriptions - EVT-001 (line 381-384)
+    # Delete agent skills (line 387-390)
+    # Delete shared folder config + shared volume (line 393-402)
+    # Delete agent tags - ORG-001 (line 405-408)
+    # Delete cached avatar, reference, and emotion images - AVATAR-001/002 (line 410-425):
+    #   Deletes {name}.webp, {name}.png, {name}_ref.png,
+    #   and {name}_emotion_{emotion}.webp/.png for all AVATAR_EMOTIONS
+    # Delete ownership (line 427) - cascades to shares
+    # Broadcast WebSocket (line 429-433), return response (line 435)
 ```
 
 #### Rename Agent (RENAME-001) (`src/backend/routers/agent_rename.py`)
@@ -330,14 +312,14 @@ async def rename_agent_endpoint(agent_name: str, body: RenameAgentRequest, ...):
     3. Stop container if running
     4. Rename Docker container (container.rename())
     5. Update all 17 database tables atomically (db.rename_agent())
-    6. Rename cached avatar file (AVATAR-001, line 1511-1518):
-       /data/avatars/{old_name}.png -> /data/avatars/{new_name}.png
+    6. Rename cached avatar, reference, and emotion files (AVATAR-001/002, agent_rename.py:138-157):
+       Renames {name}.webp, {name}.png, {name}_ref.png, and emotion variants
     7. Broadcast WebSocket 'agent_renamed' event
     8. Return {message, old_name, new_name, was_running}
     """
 ```
 
-**Database Method** (`src/backend/db/agents.py:620-780`):
+**Database Method** (`src/backend/db/agent_settings/metadata.py:58`):
 ```python
 def rename_agent(self, old_name: str, new_name: str) -> bool:
     """
@@ -373,7 +355,7 @@ renameAgent: {
 - Emits `rename` event handled by `AgentDetail.vue:renameAgent()`
 - On success, navigates to new URL `/agents/{new_name}`
 
-#### Start Agent (`src/backend/routers/agents.py:315-339`)
+#### Start Agent (`src/backend/routers/agents.py:442-470`)
 ```python
 @router.post("/{agent_name}/start")
 async def start_agent_endpoint(agent_name: AuthorizedAgentByName, request: Request, current_user: CurrentUser):
@@ -385,20 +367,20 @@ async def start_agent_endpoint(agent_name: AuthorizedAgentByName, request: Reque
     agents they don't own.
     """
     result = await start_agent_internal(agent_name)
-    trinity_status = result.get("trinity_injection", "unknown")
+    credentials_status = result.get("credentials_injection", "unknown")
 
-    # Broadcast WebSocket with injection status
-    # Return start result with Trinity injection status
+    # Broadcast WebSocket (both main + filtered/Trinity Connect)
+    # Return start result with credentials injection status
 ```
 
-**Service Function** (`src/backend/services/agent_service/lifecycle.py:198-279`):
+**Service Function** (`src/backend/services/agent_service/lifecycle.py:168-240`):
 
 **Imports** (lines 1-25):
 ```python
-from services.settings_service import get_anthropic_api_key, get_agent_full_capabilities  # Line 21
-from services.agent_client import get_agent_client           # Line 22 - centralized HTTP client
+from services.settings_service import get_anthropic_api_key, get_agent_full_capabilities  # Line 22
 from services.skill_service import skill_service             # Line 23 - skill injection
 from .helpers import check_shared_folder_mounts_match, check_api_key_env_matches, check_resource_limits_match, check_full_capabilities_match  # Line 24
+from .read_only import inject_read_only_hooks                # Line 25 - read-only mode
 ```
 
 ```python
@@ -428,35 +410,40 @@ async def start_agent_internal(agent_name: str) -> dict:
 
     await container_start(container)
 
-    # 1. Inject Trinity meta-prompt via AgentClient
-    trinity_result = await inject_trinity_meta_prompt(agent_name)
+    # NOTE: Trinity platform instructions are now injected at runtime via
+    # --append-system-prompt on every chat/task request (Issue #136).
+    # No file-based injection needed on startup.
 
-    # 2. Import credentials from encrypted .credentials.enc file (CRED-002)
+    # 1. Import credentials from encrypted .credentials.enc file (CRED-002)
     credentials_result = await inject_assigned_credentials(agent_name)
 
-    # 3. Inject assigned skills from the Skills page
+    # 2. Inject assigned skills from the Skills page
     skills_result = await inject_assigned_skills(agent_name)
 
-    # NOTE: Subscription tokens are NO LONGER injected post-start (SUB-002).
-    # They are set as CLAUDE_CODE_OAUTH_TOKEN env var at container creation/recreation time.
+    # 3. Inject read-only hooks if enabled
+    read_only_result = {"status": "skipped", "reason": "not_enabled"}
+    read_only_data = db.get_read_only_mode(agent_name)
+    if read_only_data.get("enabled"):
+        read_only_result = await inject_read_only_hooks(agent_name, read_only_data.get("config"))
 
     return {
         "message": f"Agent {agent_name} started",
-        "trinity_injection": trinity_result.get("status", "unknown"),
-        "trinity_result": trinity_result,
         "credentials_injection": credentials_result.get("status", "unknown"),
         "credentials_result": credentials_result,
         "skills_injection": skills_result.get("status", "unknown"),
-        "skills_result": skills_result
+        "skills_result": skills_result,
+        "read_only_injection": read_only_result.get("status", "unknown"),
+        "read_only_result": read_only_result
     }
 ```
 
 **Startup Injection Order** (After container.start()):
-1. **Trinity Meta-Prompt** (`inject_trinity_meta_prompt`) - Planning commands and `.trinity/` directory
-2. **Credentials** (`inject_assigned_credentials`) - CRED-002: Decrypt `.credentials.enc` and write files
-3. **Skills** (`inject_assigned_skills`) - Write skill files to `~/.claude/skills/{name}/SKILL.md`
-4. **Read-Only Hooks** (`inject_read_only_hooks`) - If read-only mode enabled
+1. **Credentials** (`inject_assigned_credentials`, :68) - CRED-002: Decrypt `.credentials.enc` and write files
+2. **Skills** (`inject_assigned_skills`, :127) - Write skill files to `~/.claude/skills/{name}/SKILL.md`
+3. **Read-Only Hooks** (`inject_read_only_hooks`, :218-230) - If read-only mode enabled
 
+> **Issue #136 Note**: Trinity platform instructions (`inject_trinity_meta_prompt`) were removed from the startup sequence. They are now injected at runtime via `--append-system-prompt` on every chat/task request. See `system-wide-trinity-prompt.md`.
+>
 > **SUB-002 Note**: Subscription tokens are no longer injected post-start. They are set as `CLAUDE_CODE_OAUTH_TOKEN` env var at container creation/recreation time, before the container starts.
 
 **Container Recreation Triggers:**
@@ -464,7 +451,7 @@ async def start_agent_internal(agent_name: str) -> dict:
 - **Auth env var changes** (SUB-002): `ANTHROPIC_API_KEY` and/or `CLAUDE_CODE_OAUTH_TOKEN` added/removed based on `use_platform_api_key` AND subscription assignment. Three-way check ensures mutual exclusion.
 - **Resource limit changes**: Memory/CPU limits updated in database
 - **Capabilities changes**: System-wide full_capabilities setting changed
-- API key retrieval uses `get_anthropic_api_key()` from `services/settings_service.py` (line 118)
+- API key retrieval uses `get_anthropic_api_key()` from `services/settings_service.py`
 
 **Authentication Model** (Updated 2026-03-03 for SUB-002):
 
@@ -476,69 +463,20 @@ Claude Code checks credentials in **priority order** (highest first):
 
 **Critical**: Because `ANTHROPIC_API_KEY` takes precedence, the env var must be **absent** from the container when a subscription is assigned. The two auth env vars are mutually exclusive. This is enforced by:
 
-- `check_api_key_env_matches()` (`helpers.py:313-351`): Three-way check on every agent start. If subscription assigned: must have `CLAUDE_CODE_OAUTH_TOKEN` with correct value, must NOT have `ANTHROPIC_API_KEY`. If platform key: must have `ANTHROPIC_API_KEY`, must NOT have `CLAUDE_CODE_OAUTH_TOKEN`. If neither: both must be absent. Returns `False` to trigger container recreation on any mismatch.
-- `recreate_container_with_updated_config()` (`lifecycle.py:275-434`): When rebuilding the container, checks `db.get_agent_subscription_id()`. If a subscription exists, sets `CLAUDE_CODE_OAUTH_TOKEN` from `db.get_subscription_token()` and removes `ANTHROPIC_API_KEY`. If no subscription but platform key enabled, sets `ANTHROPIC_API_KEY` and removes `CLAUDE_CODE_OAUTH_TOKEN`. Otherwise removes both.
+- `check_api_key_env_matches()` (`helpers.py:367-405`): Three-way check on every agent start. If subscription assigned: must have `CLAUDE_CODE_OAUTH_TOKEN` with correct value, must NOT have `ANTHROPIC_API_KEY`. If platform key: must have `ANTHROPIC_API_KEY`, must NOT have `CLAUDE_CODE_OAUTH_TOKEN`. If neither: both must be absent. Returns `False` to trigger container recreation on any mismatch.
+- `recreate_container_with_updated_config()` (`lifecycle.py:243-403`): When rebuilding the container, checks `db.get_agent_subscription_id()`. If a subscription exists, sets `CLAUDE_CODE_OAUTH_TOKEN` from `db.get_subscription_token()` and removes `ANTHROPIC_API_KEY`. If no subscription but platform key enabled, sets `ANTHROPIC_API_KEY` and removes `CLAUDE_CODE_OAUTH_TOKEN`. Otherwise removes both.
 - `assign_subscription_to_agent` endpoint (`subscriptions.py:184-259`): Assigning a subscription to a **running** agent triggers a restart (stop + start) so the container is recreated with `CLAUDE_CODE_OAUTH_TOKEN` env var.
 - `clear_agent_subscription` endpoint (`subscriptions.py:262-311`): Clearing a subscription from a **running** agent triggers a restart to remove the token and restore the API key.
 
 The mandatory `ANTHROPIC_API_KEY` check was removed from Claude Code execution functions, allowing headless calls (scheduled tasks, MCP triggers, parallel tasks) to work with subscription authentication.
 
-**Trinity Meta-Prompt Injection** (`src/backend/services/agent_service/lifecycle.py:23-51`)
-
-Now uses centralized `AgentClient` service instead of raw httpx calls:
-
-```python
-async def inject_trinity_meta_prompt(agent_name: str, max_retries: int = 5, retry_delay: float = 2.0) -> dict:
-    """
-    Inject Trinity meta-prompt into an agent via its internal API.
-    Uses AgentClient for centralized HTTP communication with retry logic.
-    """
-    # Fetch system-wide custom prompt setting
-    custom_prompt = db.get_setting_value("trinity_prompt", default=None)
-
-    # Use AgentClient for injection (handles retries internally)
-    client = get_agent_client(agent_name)  # Line 44
-    return await client.inject_trinity_prompt(
-        custom_prompt=custom_prompt,
-        force=False,
-        max_retries=max_retries,
-        retry_delay=retry_delay
-    )  # Lines 45-50
-```
-
-**AgentClient.inject_trinity_prompt()** (`src/backend/services/agent_client.py:278-344`):
-- **Built-in retry logic**: Configurable `max_retries` (default 3) and `retry_delay` (default 2.0s)
-- **Agent URL construction**: Automatically builds `http://agent-{name}:8000`
-- **Error handling**: Returns `{"status": "error", "error": "..."}` on failure
-- **Timeout**: Default 10 seconds (`INJECT_TIMEOUT`)
-
-```python
-async def inject_trinity_prompt(
-    self,
-    custom_prompt: Optional[str] = None,
-    force: bool = False,
-    timeout: float = None,
-    max_retries: int = 3,
-    retry_delay: float = 2.0
-) -> Dict[str, Any]:
-    """Inject Trinity meta-prompt with retry logic."""
-    for attempt in range(max_retries):
-        try:
-            response = await self.post("/api/trinity/inject", json=payload, timeout=timeout)
-            if response.status_code == 200:
-                return response.json()
-        except AgentNotReachableError:
-            if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay)
-```
-
-**Container Recreation** (`src/backend/services/agent_service/lifecycle.py:275-434`):
+**Container Recreation** (`src/backend/services/agent_service/lifecycle.py:243-403`):
 Handles recreating containers with updated volume mounts and environment variables. Subscription-aware (SUB-002): checks `db.get_agent_subscription_id()` to manage auth env vars. Three cases:
 - **Subscription assigned**: Sets `CLAUDE_CODE_OAUTH_TOKEN` from `db.get_subscription_token()`, removes `ANTHROPIC_API_KEY`
 - **Platform key enabled (no subscription)**: Sets `ANTHROPIC_API_KEY` from `get_anthropic_api_key()`, removes `CLAUDE_CODE_OAUTH_TOKEN`
 - **Neither**: Removes both `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`
 
-#### Stop Agent (`src/backend/routers/agents.py:342-360`)
+#### Stop Agent (`src/backend/routers/agents.py:473-497`)
 ```python
 @router.post("/{agent_name}/stop")
 async def stop_agent_endpoint(agent_name: AuthorizedAgentByName, request: Request, current_user: CurrentUser):
@@ -551,12 +489,12 @@ async def stop_agent_endpoint(agent_name: AuthorizedAgentByName, request: Reques
     if not container:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    container.stop()
+    await container_stop(container)
 
-    # Broadcast WebSocket, return stop result
+    # Broadcast WebSocket (both main + filtered/Trinity Connect), return stop result
 ```
 
-#### Get Agent Logs (`src/backend/routers/agents.py:367-383`)
+#### Get Agent Logs (`src/backend/routers/agents.py:504-520`)
 ```python
 @router.get("/{agent_name}/logs")
 async def get_agent_logs_endpoint(agent_name: AuthorizedAgentByName, request: Request, tail: int = 100):
@@ -567,6 +505,30 @@ async def get_agent_logs_endpoint(agent_name: AuthorizedAgentByName, request: Re
     for agents they have access to.
     """
 ```
+
+#### Bulk Endpoints (Dashboard)
+
+| Endpoint | Line | Description |
+|----------|------|-------------|
+| `GET /api/agents/context-stats` | :157-160 | Context window stats and activity state for all accessible agents |
+| `GET /api/agents/execution-stats` | :163-229 | Task counts, success rates, costs, schedule counts. Params: `hours` (default 24), `include_7d` (boolean for 7-day dual stats) |
+| `GET /api/agents/autonomy-status` | :232-237 | Autonomy status for all accessible agents |
+| `GET /api/agents/slots` | :240-265 | Slot state (`max`/`active`) for all agents. Returns `BulkSlotState` model with timestamp |
+
+#### Queue Management Endpoints
+
+| Endpoint | Line | Description |
+|----------|------|-------------|
+| `GET /api/agents/{agent_name}/queue` | :537-543 | Get execution queue status for an agent |
+| `POST /api/agents/{agent_name}/queue/clear` | :546-552 | Clear all queued executions |
+| `POST /api/agents/{agent_name}/queue/release` | :555-561 | Force release agent from running state |
+
+#### Activity Stream Endpoints
+
+| Endpoint | Line | Description |
+|----------|------|-------------|
+| `GET /api/agents/{agent_name}/activities` | :568-591 | Agent activity history. Params: `activity_type`, `activity_state`, `limit` |
+| `GET /api/agents/activities/timeline` | :594-626 | Cross-agent activity timeline. Params: `start_time`, `end_time`, `activity_types` (CSV), `limit`. Filters by user access |
 
 ### Docker Service (`src/backend/services/docker_service.py`)
 
@@ -713,7 +675,7 @@ CREATE TABLE agent_mcp_api_keys (
 | `trinity.created` | Creation timestamp (ISO format) |
 | `trinity.template` | Template used (empty string if none) |
 
-### Container Security Constants (`src/backend/services/agent_service/lifecycle.py:31-59`)
+### Container Security Constants (`src/backend/services/agent_service/lifecycle.py:30-65`)
 
 **2026-01-14 Security Fix**: All container creation paths now use centralized capability constants for consistent security.
 
@@ -758,9 +720,9 @@ tmpfs={'/tmp': 'noexec,nosuid,size=100m'}
 **Files Using These Constants**:
 | File | Line | Usage |
 |------|------|-------|
-| `services/agent_service/crud.py` | 464 | Agent creation |
-| `services/agent_service/lifecycle.py` | 361 | Container recreation |
-| `services/system_agent_service.py` | 260 | System agent creation |
+| `services/agent_service/crud.py` | 477 | Agent creation |
+| `services/agent_service/lifecycle.py` | 393 | Container recreation |
+| `services/system_agent_service.py` | 250 | System agent creation (FULL_CAPABILITIES only) |
 
 ### Network Isolation (line 645)
 - Network: `trinity-agent-network` (Docker network)
@@ -799,16 +761,16 @@ if container_meta_prompt_path.exists():
 ### WebSocket Broadcasts
 | Event | Payload | Trigger |
 |-------|---------|---------|
-| `agent_created` | `{name, type, status, port, created, resources, container_id}` | After container.run() (line 652-664) |
-| `agent_started` | `{name, trinity_injection}` | After container.start() + Trinity injection (line 986-990) |
-| `agent_stopped` | `{name}` | After container.stop() (line 1029-1033) |
-| `agent_deleted` | `{name}` | After container.remove() (line 803-807) |
+| `agent_created` | `{name, type, status, port, created, resources, container_id}` | After container.run() in crud.py |
+| `agent_started` | `{name, credentials_injection}` | After container.start() + injections (agents.py:450-460) |
+| `agent_stopped` | `{name}` | After container.stop() (agents.py:483-493) |
+| `agent_deleted` | `{name}` | After container.remove() (agents.py:429-433) |
 
 ### Trinity Connect Filtered Broadcasts (Added 2026-02-05)
 
 Agent start/stop events are now broadcast to both the main WebSocket and the filtered Trinity Connect WebSocket endpoint.
 
-**Location**: `src/backend/routers/agents.py:324-340, 356-368`
+**Location**: `src/backend/routers/agents.py:456-460, 489-493`
 
 ```python
 # Broadcast agent_started to main UI WebSocket
@@ -847,11 +809,13 @@ await log_audit_event(
 3. **Git Config**: GitHub sync configuration deleted
 4. **MCP API Key**: Agent's Trinity MCP access key revoked
 5. **Permissions**: Agent-to-agent permissions deleted (source and target)
-6. **Shared Folders**: Shared folder config and shared volume deleted
-7. **Tags**: Agent tags deleted (ORG-001)
-8. **Avatar File**: Cached avatar image `/data/avatars/{name}.png` deleted (AVATAR-001)
-9. **Ownership**: Ownership record deleted
-10. **Shares**: All shares cascade deleted via foreign key constraint
+6. **Event Subscriptions**: Agent event subscriptions deleted (EVT-001)
+7. **Skills**: Agent skill assignments deleted
+8. **Shared Folders**: Shared folder config and shared volume deleted
+9. **Tags**: Agent tags deleted (ORG-001)
+10. **Avatar Files**: Cached avatar (`.webp`/`.png`), reference image (`_ref.png`), and all emotion variants deleted (AVATAR-001, AVATAR-002)
+11. **Ownership**: Ownership record deleted
+12. **Shares**: All shares cascade deleted via foreign key constraint
 
 ---
 
@@ -921,16 +885,14 @@ await log_audit_event(
 - Button shows loading spinner
 - Status changes to "running"
 - Toast notification appears
-- WebSocket broadcast received with `trinity_injection` status
-- Trinity meta-prompt injected into agent
+- WebSocket broadcast received with `credentials_injection` status
+- Credentials, skills, and read-only hooks injected
 
 **Verify**:
 - [ ] UI shows "running" badge
 - [ ] Docker: `docker inspect agent-test-lifecycle | grep '"Running": true'`
 - [ ] Container accessible on internal network
-- [ ] Audit log has `agent_management:start` event with `trinity_injection` in details
-- [ ] Trinity injection: Agent has `/home/developer/.trinity/` directory structure
-- [ ] Trinity injection: Agent has planning commands available (check via chat)
+- [ ] Audit log has `agent_management:start` event with `credentials_injection` in details
 
 ### 3. Stop Agent
 **Action**: Click "Stop" button
@@ -962,7 +924,7 @@ await log_audit_event(
 - [ ] Sharing records cascade deleted
 - [ ] Schedules deleted
 - [ ] MCP API key deleted
-- [ ] Avatar file deleted (if existed): `/data/avatars/{name}.png` gone
+- [ ] Avatar files deleted (if existed): `/data/avatars/{name}.webp`, `.png`, `_ref.png`, emotion variants
 - [ ] Audit log has `agent_management:delete` event
 
 **Edge Cases**:
@@ -978,9 +940,9 @@ await log_audit_event(
 
 ---
 
-**Last Updated**: 2026-03-07
-**Status**: Working (all CRUD operations functional with Trinity injection)
-**Issues**: None - agent lifecycle fully operational with service layer architecture and Trinity meta-prompt injection
+**Last Updated**: 2026-03-26
+**Status**: Working (all CRUD operations functional)
+**Issues**: None - agent lifecycle fully operational with service layer architecture
 
 ---
 
@@ -988,7 +950,8 @@ await log_audit_event(
 
 | Date | Changes |
 |------|---------|
-| 2026-03-07 | **AVATAR-001: Avatar lifecycle integration**: Delete agent now cleans up `/data/avatars/{name}.png` (agents.py:422-428). Rename agent now renames avatar file from old to new name (agents.py:1511-1518). Get agent response enriched with `avatar_url` field from `db.get_avatar_identity()` (agents.py:309-314). Added avatar file to cascading deletes list. |
+| 2026-03-26 | **Line number refresh + Trinity injection removal**: Updated all line numbers across agents.py (647 lines), lifecycle.py (403 lines), crud.py (552 lines), helpers.py (467 lines), terminal.py (320 lines). Removed all `inject_trinity_meta_prompt()` references and AgentClient injection code (Issue #136). Updated startup injection order to: Credentials, Skills, Read-Only Hooks. Added documentation for bulk endpoints (context-stats :157, execution-stats :163, autonomy-status :232, slots :240), queue endpoints (queue :537, clear :546, release :555), and activity endpoints (activities :568, timeline :594). Updated delete flow for EVT-001 event subscriptions (:381) and AVATAR-002 emotion image cleanup (:410-425). |
+| 2026-03-07 | **AVATAR-001: Avatar lifecycle integration**: Delete agent now cleans up avatar files. Rename agent now renames avatar file from old to new name. Get agent response enriched with `avatar_url` field from `db.get_avatar_identity()`. Added avatar file to cascading deletes list. |
 | 2026-03-03 | **SUB-002: Env-var-based subscription tokens**: Subscription tokens now injected as `CLAUDE_CODE_OAUTH_TOKEN` env var at container creation/recreation, replacing the old SUB-001 post-start `.credentials.json` file injection. Removed `inject_subscription_on_start()` call and `subscription_result`/`subscription_status` from `start_agent_internal()` return dict. `check_api_key_env_matches()` now performs three-way check: subscription (must have token, no API key), platform key (must have key, no token), neither (both absent). `recreate_container_with_updated_config()` sets/removes `CLAUDE_CODE_OAUTH_TOKEN` alongside `ANTHROPIC_API_KEY`. |
 | 2026-03-02 | **Subscription credential priority fix (Issue #57)**: Updated Authentication Model to reflect correct Claude Code credential priority (API key > OAuth). `check_api_key_env_matches()` now subscription-aware -- detects subscription + API key conflict and triggers container recreation to remove `ANTHROPIC_API_KEY`. `recreate_container_with_updated_config()` omits API key when subscription assigned. Updated `start_agent_internal()` code block to match current implementation (includes subscription injection step). Updated container recreation line references. |
 | 2026-03-01 | **Agent Rename (RENAME-001)**: Added `PUT /api/agents/{name}/rename` endpoint (agents.py:1370-1510), `rename_agent` MCP tool (agents.ts:263-296), `renameAgent()` client method (client.ts:277-296), `db.rename_agent()` for atomic 17-table update (db/agents.py:624-780), `db.can_user_rename_agent()` permission check (db/agents.py:781-800), `container_rename()` async wrapper (docker_utils.py:82-90). Frontend: Pencil icon in AgentHeader.vue (lines 26-35), inline editing with Enter/Escape, `renameAgent()` handler in AgentDetail.vue (lines 460-494). System agents protected from rename. WebSocket `agent_renamed` event broadcast. |

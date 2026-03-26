@@ -13,7 +13,7 @@ As the platform, I want task execution paths (authenticated sync tasks, public l
 | Path | Entry Point | Uses TaskExecutionService? | Notes |
 |------|------------|---------------------------|-------|
 | Sync parallel task | `POST /api/agents/{name}/task` (sync) | **Yes** | EXEC-024 delegation |
-| Async parallel task | `POST /api/agents/{name}/task` (async) | **No** | Inline `_execute_task_background()` in `chat.py` |
+| Async parallel task | `POST /api/agents/{name}/task` (async) | **No** | Inline `_execute_task_background()` in `chat.py:438` |
 | Public link chat | `POST /api/public/chat/{token}` | **Yes** | Full lifecycle |
 | Scheduled execution | `POST /api/internal/execute-task` | **Yes** | Background coroutine wraps service call |
 | Interactive chat | `POST /api/agents/{name}/chat` | **No** | Direct agent HTTP call with inline retry in `chat.py` |
@@ -25,15 +25,15 @@ This is a **backend service** -- no direct UI entry point. Callers are:
 
 | Caller | File | Endpoint | `triggered_by` |
 |--------|------|----------|-----------------|
-| Authenticated sync task | `src/backend/routers/chat.py:714` | `POST /api/agents/{name}/task` | `"manual"` or `"agent"` |
-| Public link chat | `src/backend/routers/public.py:316` | `POST /api/public/chat/{token}` | `"public"` |
-| Dedicated Scheduler | `src/backend/routers/internal.py:186` | `POST /api/internal/execute-task` | `"schedule"` |
+| Authenticated sync task | `src/backend/routers/chat.py:811` | `POST /api/agents/{name}/task` | `"manual"` or `"agent"` |
+| Public link chat | `src/backend/routers/public.py:403` | `POST /api/public/chat/{token}` | `"public"` |
+| Dedicated Scheduler | `src/backend/routers/internal.py:188` | `POST /api/internal/execute-task` | `"schedule"` |
 
 ## Backend Layer
 
 ### Service File
 
-**`src/backend/services/task_execution_service.py`** (new, 391 lines)
+**`src/backend/services/task_execution_service.py`** (431 lines)
 
 #### TaskExecutionResult dataclass (line 42)
 
@@ -54,11 +54,11 @@ class TaskExecutionResult:
 
 Callers inspect `result.status` to decide HTTP response. Status values come from `TaskExecutionStatus` enum (`models.py`). The service never raises for agent-level errors.
 
-#### agent_post_with_retry() (line 60)
+#### agent_post_with_retry() (line 61)
 
 Moved from `routers/chat.py`. Module-level async function. Used by:
-- `TaskExecutionService.execute_task()` internally (line 218)
-- `routers/chat.py` for `/chat` endpoint (line 215) and `_execute_task_background` (line 404)
+- `TaskExecutionService.execute_task()` internally (line 249)
+- `routers/chat.py` for `/chat` endpoint (line 248) and `_execute_task_background` (line 477)
 
 ```python
 async def agent_post_with_retry(
@@ -73,23 +73,23 @@ async def agent_post_with_retry(
 
 Exponential backoff: delay = `retry_delay * (2 ** attempt)`. Handles `httpx.ConnectError` for agent servers still booting.
 
-#### TaskExecutionService.execute_task() (line 112)
+#### TaskExecutionService.execute_task() (line 113)
 
 Full execution lifecycle in one method:
 
 ```
 Step  Action                                    Line   Dependency
 ----  ----------------------------------------  -----  ----------------------------------
-1     Create execution record (if not provided)  148    db.create_task_execution()
-      [try block starts - #90 fix]              166    Ensures FAILED status on any exception
-2     Acquire capacity slot                      168    slot_service.acquire_slot()
-3     Track activity start (CHAT_START)          192    activity_service.track_activity()
-3b    Mark execution dispatched                  218    db.mark_execution_dispatched()
-4     POST to agent /api/task with retry         232    agent_post_with_retry()
-5     Sanitize response + execution log          250    sanitize_execution_log(), sanitize_response()
-6     Update execution record with result        265    db.update_execution_status()
-7     Complete activity                          279    activity_service.complete_activity()
-8     Release slot (if acquired, in finally)     386    slot_service.release_slot()
+1     Create execution record (if not provided)  158    db.create_task_execution()
+      [try block starts - #90 fix]              175    Ensures FAILED status on any exception
+2     Acquire capacity slot                      178    slot_service.acquire_slot()
+3     Track activity start (CHAT_START)          203    activity_service.track_activity()
+3b    Mark execution dispatched                  225    db.mark_execution_dispatched()
+4     POST to agent /api/task with retry         249    agent_post_with_retry()
+5     Sanitize response + execution log          267    sanitize_execution_log(), sanitize_response()
+6     Update execution record with result        283    db.update_execution_status()
+7     Complete activity                          297    activity_service.complete_activity()
+8     Release slot (if acquired, in finally)     412    slot_service.release_slot()
 ```
 
 > **Step 3b**: Sets `claude_session_id='dispatched'` before the agent HTTP call. This prevents the cleanup service's no-session check from falsely marking long-running executions as "Silent launch failure". Only executions that never reach dispatch (backend crash before step 3b) will be caught by the 60-second no-session cleanup.
@@ -121,27 +121,27 @@ async def execute_task(
 
 If `execution_id` is provided, the caller has already created the execution record (e.g. `chat.py` creates it early for async-mode support). Otherwise the service creates one.
 
-#### get_task_execution_service() (line 385)
+#### get_task_execution_service() (line 426)
 
 Global singleton accessor. Lazy-initializes on first call.
 
 ### Caller 1: Authenticated Sync Task
 
-**`src/backend/routers/chat.py:560-812`** -- `execute_parallel_task()`
+**`src/backend/routers/chat.py:653-917`** -- `execute_parallel_task()`
 
 The endpoint handles:
-1. Container validation (lines 586-591)
-2. Determine `triggered_by` from headers (lines 594-599)
-3. Create execution record early (lines 602-613) -- passed to service as `execution_id`
-4. Collaboration tracking for agent-to-agent (lines 618-640) -- stays in router
-5. **Async mode branch** (lines 643-711) -- spawns `_execute_task_background()`, does NOT use service
-6. **Sync mode branch** (lines 713-730) -- delegates to `task_execution_service.execute_task()`
-7. Collaboration activity completion (lines 733-742)
-8. Error translation to HTTP exceptions (lines 745-760)
-9. Chat session persistence if `save_to_session` (lines 766-807)
+1. Container validation (lines 678-683)
+2. Determine `triggered_by` from headers (lines 686-691)
+3. Create execution record early (lines 694-705) -- passed to service as `execution_id`
+4. Collaboration tracking for agent-to-agent (lines 710-732) -- stays in router
+5. **Async mode branch** (lines 735-808) -- spawns `_execute_task_background()`, does NOT use service
+6. **Sync mode branch** (lines 810-827) -- delegates to `task_execution_service.execute_task()`
+7. Collaboration activity completion (lines 830-839)
+8. Error translation to HTTP exceptions (lines 842-857)
+9. Chat session persistence if `save_to_session` (lines 863-912)
 
 ```python
-# Line 713-730
+# Line 810-827
 task_execution_service = get_task_execution_service()
 result = await task_execution_service.execute_task(
     agent_name=name,
@@ -157,29 +157,33 @@ result = await task_execution_service.execute_task(
 
 ### Caller 2: Public Link Chat
 
-**`src/backend/routers/public.py:215-362`** -- `public_chat()`
+**`src/backend/routers/public.py:262-460`** -- `public_chat()`
 
 The endpoint handles:
-1. Link token validation (lines 231-233)
-2. Session identity resolution: email or anonymous (lines 236-263)
-3. Rate limiting by IP (lines 266-271)
-4. Agent container check (lines 274-279)
-5. Public chat session management (lines 284-295)
-6. Store user message (lines 291-295)
-7. Build context prompt with conversation history (lines 305-309)
-8. **Delegate to service** (lines 311-322)
-9. Error translation to HTTP exceptions (lines 324-341)
-10. Store assistant response in public chat messages (lines 346-351)
+1. Link token validation (lines 277-279)
+2. Session identity resolution: email or anonymous (lines 282-309)
+3. Rate limiting by IP (lines 312-317)
+4. Agent container check (lines 320-325)
+5. Public chat session management (lines 330-334)
+6. Store user message (lines 337-341)
+7. Build context prompt with conversation history (lines 351-355)
+8. User memory injection for email sessions (lines 358-362)
+9. **Async mode branch** (lines 371-400) -- spawns `_execute_public_chat_background()`, returns immediately
+10. **Sync mode: delegate to service** (lines 403-410)
+11. Error translation to HTTP exceptions (lines 412-429)
+12. Store assistant response in public chat messages (lines 434-439)
+13. User memory summarization trigger (lines 442-449)
 
 ```python
-# Lines 311-322
+# Lines 403-410
 task_execution_service = get_task_execution_service()
 result = await task_execution_service.execute_task(
     agent_name=agent_name,
     message=context_prompt,
     triggered_by="public",
     source_user_email=source_email,    # verified_email or f"anonymous ({client_ip})"
-    timeout_seconds=120,
+    timeout_seconds=900,
+    system_prompt=memory_system_prompt,  # MEM-001: per-user memory
 )
 ```
 
@@ -191,10 +195,10 @@ Key behavioral change: public executions now get full tracking that was previous
 
 | Operation | Method | File | Line |
 |-----------|--------|------|------|
-| Create execution record | `db.create_task_execution()` | `src/backend/database.py:486` | Delegates to `_schedule_ops` |
-| Get max parallel tasks | `db.get_max_parallel_tasks()` | `src/backend/database.py:401` | Delegates to `_agent_ops` |
-| Update execution status | `db.update_execution_status()` | `src/backend/database.py:530` | Updates status, response, cost, context, logs |
-| Get execution (for cancel check) | `db.get_execution()` | `src/backend/database.py:549` | Checks if status is "cancelled" before overwriting |
+| Create execution record | `db.create_task_execution()` | `src/backend/database.py:530` | Delegates to `_schedule_ops` |
+| Get max parallel tasks | `db.get_max_parallel_tasks()` | `src/backend/database.py:416` | Delegates to `_agent_ops` |
+| Update execution status | `db.update_execution_status()` | `src/backend/database.py:574` | Updates status, response, cost, context, logs |
+| Get execution (for cancel check) | `db.get_execution()` | `src/backend/database.py:596` | Checks if status is "cancelled" before overwriting |
 
 ### Redis Operations
 
@@ -211,9 +215,9 @@ Slot TTL: Dynamic (agent timeout + 5 min buffer). See parallel-capacity.md for d
 
 | Event | Type | When |
 |-------|------|------|
-| Execution start | `ActivityType.CHAT_START` | After slot acquired (line 188) |
-| Execution success | `complete_activity(status="completed")` | After response persisted (line 265) |
-| Execution failure | `complete_activity(status="failed")` | On any exception (lines 300, 337, 359) |
+| Execution start | `ActivityType.CHAT_START` | After slot acquired (line 203) |
+| Execution success | `complete_activity(status="completed")` | After response persisted (line 297) |
+| Execution failure | `complete_activity(status="failed")` | On any exception (lines 332, 374, 398) |
 
 ### WebSocket Broadcasts
 
@@ -259,7 +263,7 @@ The service catches all errors and returns `TaskExecutionResult` with `status=Ta
 | Unexpected exception | `status=TaskExecutionStatus.FAILED, error=str(e)` | 503 | 502 |
 | Cancelled execution | Preserved -- does not overwrite `TaskExecutionStatus.CANCELLED` | N/A | N/A |
 
-Cancel protection (lines 293-294, 325-326, 350-351): Before writing failed status, checks `db.get_execution(execution_id)` -- if status is already `TaskExecutionStatus.CANCELLED` (from user termination), the service does not overwrite it.
+Cancel protection (lines 324-325, 366-367, 390-391): Before writing failed status, checks `db.get_execution(execution_id)` -- if status is already `TaskExecutionStatus.CANCELLED` (from user termination), the service does not overwrite it.
 
 > **Status Enums (#92)**: Execution statuses use `TaskExecutionStatus` (`running/success/failed/cancelled/skipped`). Activity statuses use `ActivityState` (`started/completed/failed`). Both are defined in `models.py`.
 
