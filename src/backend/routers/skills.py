@@ -15,7 +15,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 from models import User
-from dependencies import get_current_user, require_admin
+from dependencies import get_current_user, require_admin, get_authorized_agent_by_name, get_owned_agent_by_name
 from database import db
 from db_models import AgentSkill, SkillInfo, AgentSkillsUpdate
 from services.skill_service import skill_service
@@ -92,7 +92,7 @@ async def sync_library(admin_user: User = Depends(require_admin)):
 
 @router.get("/agents/{agent_name}/skills", response_model=List[AgentSkill])
 async def get_agent_skills(
-    agent_name: str,
+    agent_name: str = Depends(get_authorized_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -100,22 +100,20 @@ async def get_agent_skills(
 
     Returns list of AgentSkill objects with assignment metadata.
     """
-    # TODO: Add access control for shared agents
     return db.get_agent_skills(agent_name)
 
 
 @router.put("/agents/{agent_name}/skills")
 async def update_agent_skills(
-    agent_name: str,
     update: AgentSkillsUpdate,
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
     Bulk update skills assigned to an agent.
 
-    Replaces all existing skill assignments with the provided list.
+    Owner-only. Replaces all existing skill assignments with the provided list.
     """
-    # TODO: Add access control (owner only)
     count = db.set_agent_skills(
         agent_name=agent_name,
         skill_names=update.skills,
@@ -133,7 +131,7 @@ async def update_agent_skills(
 # to prevent FastAPI from matching "inject" as a skill_name parameter
 @router.post("/agents/{agent_name}/skills/inject")
 async def inject_skills(
-    agent_name: str,
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -152,8 +150,8 @@ async def inject_skills(
 
 @router.post("/agents/{agent_name}/skills/{skill_name}")
 async def assign_skill(
-    agent_name: str,
     skill_name: str,
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -184,8 +182,8 @@ async def assign_skill(
 
 @router.delete("/agents/{agent_name}/skills/{skill_name}")
 async def unassign_skill(
-    agent_name: str,
     skill_name: str,
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """

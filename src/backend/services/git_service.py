@@ -330,21 +330,58 @@ async def initialize_git_in_container(
             timeout=5
         )
 
-    # Step 3: Initialize git
-    commands = [
-        'git config --global user.email "trinity@agent.local"',
-        'git config --global user.name "Trinity Agent"',
-        'git config --global init.defaultBranch main',
-        'git init',
-        f'git remote get-url origin >/dev/null 2>&1 && '
-        f'git remote set-url origin https://oauth2:{github_pat}@github.com/{github_repo}.git || '
-        f'git remote add origin https://oauth2:{github_pat}@github.com/{github_repo}.git',
-        'git add .',
-        'git commit -m "Initial commit from Trinity Agent" || echo "Nothing to commit"',
-        'git push -u origin main --force'
+    # Step 3: Initialize git and try to preserve remote history
+    # Commands marked required=True will abort on failure;
+    # optional commands (like fetch) may fail for empty repos.
+    setup_commands: list[tuple[str, bool]] = [
+        ('git config --global user.email "trinity@agent.local"', True),
+        ('git config --global user.name "Trinity Agent"', True),
+        ('git config --global init.defaultBranch main', True),
+        ('git init', True),
+        (f'git remote get-url origin >/dev/null 2>&1 && '
+         f'git remote set-url origin https://oauth2:{github_pat}@github.com/{github_repo}.git || '
+         f'git remote add origin https://oauth2:{github_pat}@github.com/{github_repo}.git', True),
+        ('git fetch origin', False),  # Optional — remote may be empty
     ]
 
-    for cmd in commands:
+    for cmd, required in setup_commands:
+        result = await execute_command_in_container(
+            container_name=container_name,
+            command=f'bash -c "cd {git_dir} && {cmd}"',
+            timeout=60
+        )
+        if result.get("exit_code", 0) != 0 and required:
+            output = result.get("output", "")
+            return GitInitResult(
+                success=False,
+                git_dir=git_dir,
+                error=f"Git command failed: {cmd}\nOutput: {output}"
+            )
+
+    # Check if remote has commits on main (to preserve history)
+    check_main = await execute_command_in_container(
+        container_name=container_name,
+        command=f'bash -c "cd {git_dir} && git rev-parse --verify origin/main"',
+        timeout=10
+    )
+    remote_has_main = check_main.get("exit_code", 1) == 0
+
+    if remote_has_main:
+        # Preserve remote history: reset to origin/main, then commit local changes
+        commit_commands = [
+            'git reset origin/main',
+            'git add .',
+            'git commit -m "Initial commit from Trinity Agent" || echo "Nothing to commit"',
+        ]
+    else:
+        # Empty repo: fall back to force push (creates initial history)
+        commit_commands = [
+            'git add .',
+            'git commit -m "Initial commit from Trinity Agent" || echo "Nothing to commit"',
+            'git push -u origin main --force',
+        ]
+
+    for cmd in commit_commands:
         result = await execute_command_in_container(
             container_name=container_name,
             command=f'bash -c "cd {git_dir} && {cmd}"',

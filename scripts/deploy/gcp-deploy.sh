@@ -93,7 +93,7 @@ sync_files() {
     mkdir -p "${TEMP_DIR}/src/backend"
     cp "${PROJECT_ROOT}/src/backend/"*.py "${TEMP_DIR}/src/backend/" 2>/dev/null || true
     # Copy routers, services, utils, db modules
-    for module in routers services utils db; do
+    for module in routers services adapters utils db; do
         if [ -d "${PROJECT_ROOT}/src/backend/${module}" ]; then
             rsync -a --exclude '__pycache__' "${PROJECT_ROOT}/src/backend/${module}" "${TEMP_DIR}/src/backend/"
         fi

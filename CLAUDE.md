@@ -40,15 +40,7 @@ Before every commit:
 
 ## Project Overview
 
-**Trinity** is a **Deep Agent Orchestration Platform** — sovereign infrastructure for deploying, orchestrating, and governing autonomous AI systems that plan, reason, and execute independently.
-
-Unlike reactive chatbots ("System 1" AI), Deep Agents operate with deliberative reasoning ("System 2" AI): they decompose goals into task graphs, persist memory across sessions, delegate to specialized sub-agents, and recover from failures autonomously.
-
-Trinity implements the **Four Pillars of Deep Agency**:
-1. **Hierarchical Delegation** — Orchestrator-Worker pattern with context quarantine
-2. **Persistent Memory** — Virtual filesystems, vector databases, episodic memory
-3. **Extreme Context Engineering** — High-Order Prompts defining reasoning processes
-4. **Autonomous Operations** — Scheduling, monitoring, and self-healing capabilities
+**Trinity** is an **autonomous agent orchestration and infrastructure platform** — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
 Each agent runs as an isolated Docker container with standardized interfaces for credentials, tools, and MCP server integrations.
 
@@ -166,7 +158,7 @@ project_trinity/
 ├── src/
 │   ├── backend/          # FastAPI backend (main.py, database.py)
 │   ├── frontend/         # Vue.js 3 + Tailwind CSS
-│   └── mcp-server/       # Trinity MCP server (59 tools)
+│   └── mcp-server/       # Trinity MCP server (62 tools)
 ├── docker/
 │   ├── base-image/       # Universal agent base (agent-server.py)
 │   ├── backend/          # Backend Dockerfile
@@ -281,7 +273,7 @@ curl -X POST http://localhost:8000/api/agents \
 
 | Repository | Description |
 |------------|-------------|
-| [abilityai/trinity](https://github.com/abilityai/trinity) | This repository - Deep Agent Orchestration Platform |
+| [abilityai/trinity](https://github.com/abilityai/trinity) | This repository - Autonomous Agent Orchestration Platform |
 | [abilityai/abilities](https://github.com/abilityai/abilities) | **System of record for Trinity skills & plugins** - All onboarding, management, and workflow skills |
 
 ### Trinity Onboarding (abilities repo)
