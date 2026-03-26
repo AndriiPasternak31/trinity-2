@@ -1,3 +1,18 @@
+### 2026-03-26
+
+**fix: Enforce password complexity requirements on admin setup (#189)**
+
+Pentest finding (severity-info): Admin password setup only enforced 8-char minimum. Now requires OWASP ASVS 2.1 complexity: 12+ characters, uppercase, lowercase, digit, special character, and common password dictionary check. Frontend shows real-time requirements checklist. Backend returns generic error on unauthenticated endpoint (doesn't reveal which specific rules failed). Env-var `ADMIN_PASSWORD` logs specific warnings if weak.
+
+- `src/backend/utils/password_validation.py` — NEW: Reusable validation module with `validate_password_strength()`, common passwords frozenset (~100 entries), `PASSWORD_REQUIREMENTS_MESSAGE` constant
+- `src/backend/routers/setup.py` — Use `validate_password_strength()`, add `max_length=128` to Pydantic model (bcrypt DoS protection)
+- `src/backend/database.py` — Log specific failing rules when `ADMIN_PASSWORD` env var is weak
+- `src/frontend/src/views/SetupPassword.vue` — Requirements checklist UI, 12-char minimum, strength bar based on rules met
+- `tests/test_password_validation.py` — NEW: 25 unit tests covering all rules, edge cases, common passwords
+- `tests/test_setup.py` — Updated assertions for new error format
+
+---
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**

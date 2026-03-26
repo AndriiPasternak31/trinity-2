@@ -83,7 +83,7 @@ class TestSetupAdminPassword:
         assert "already completed" in data.get("detail", "").lower() or "setup" in data.get("detail", "").lower()
 
     def test_password_validation_short_password(self, unauthenticated_client: TrinityApiClient):
-        """POST /api/setup/admin-password rejects passwords shorter than 8 characters."""
+        """POST /api/setup/admin-password rejects passwords that don't meet complexity requirements."""
         # First check if setup is completed
         status_response = unauthenticated_client.get("/api/setup/status", auth=False)
         status_data = status_response.json()
@@ -104,7 +104,8 @@ class TestSetupAdminPassword:
         # Should reject with 400
         assert_status(response, 400)
         data = response.json()
-        assert "8 characters" in data.get("detail", "").lower() or "too short" in data.get("detail", "").lower()
+        detail = data.get("detail", "").lower()
+        assert "requirements" in detail or "12 characters" in detail or "complexity" in detail
 
     def test_password_validation_mismatch(self, unauthenticated_client: TrinityApiClient):
         """POST /api/setup/admin-password rejects mismatched passwords."""
@@ -115,12 +116,12 @@ class TestSetupAdminPassword:
         if status_data.get("setup_completed"):
             pytest.skip("Setup already completed - cannot test validation")
 
-        # Try to set mismatched passwords
+        # Try to set mismatched passwords (both meet complexity requirements)
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={
-                "password": "validpassword123",
-                "confirm_password": "differentpassword123"
+                "password": "V@lidP4ssword!",
+                "confirm_password": "V@lidP4ssword!Different"
             },
             auth=False
         )
