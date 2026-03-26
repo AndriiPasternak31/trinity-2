@@ -1,3 +1,27 @@
+### 2026-03-26
+
+**fix: Add missing security headers — CSP, Referrer-Policy, Permissions-Policy, cross-origin policies (#190)**
+
+Pentest finding 3.4.2: All HTTP responses were missing standard security headers. Added 8 security headers via nginx include file and FastAPI middleware. Stripped server identity headers from both nginx (`server_tokens off`) and Uvicorn (`--no-server-header`).
+
+**nginx (production):**
+- `src/frontend/security-headers.conf` — NEW: shared include with 8 headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-Policy, Cross-Origin-Resource-Policy, Content-Security-Policy)
+- `src/frontend/nginx.conf` — Replaced inline headers with `include`, added `server_tokens off`, added include to all location blocks with own `add_header` (fixes nginx inheritance bug where location-level `add_header` drops server-level headers)
+- `docker/frontend/Dockerfile.prod` — Copy security-headers.conf to `/etc/nginx/`
+
+**FastAPI (dev mode + proxied):**
+- `src/backend/main.py` — Security headers middleware (4 headers, no X-Frame-Options to avoid conflict with nginx SAMEORIGIN)
+
+**Uvicorn:**
+- `docker/backend/Dockerfile` — Added `--no-server-header` to CMD
+- `docker-compose.yml` — Added `--no-server-header` to backend command
+
+**Intentionally omitted:** HSTS (would break HTTP local dev — add at load balancer for production), COEP (would break cross-origin resources, no SharedArrayBuffer usage to justify).
+
+**Tests:** `tests/test_security_headers.py` — 3 tests for API security headers, server header stripping, CORS preflight compatibility.
+
+---
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
