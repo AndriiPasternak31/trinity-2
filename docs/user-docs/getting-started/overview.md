@@ -1,17 +1,10 @@
 # What is Trinity
 
-Trinity is a Deep Agent Orchestration Platform -- sovereign infrastructure for deploying, orchestrating, and governing autonomous AI systems that plan, reason, and execute independently.
+Trinity is an autonomous agent orchestration and infrastructure platform — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
 ## Concepts
 
-**Deep Agent** -- An AI system that operates with deliberative reasoning ("System 2" AI). Deep Agents decompose goals into task graphs, persist memory across sessions, delegate to specialized sub-agents, and recover from failures autonomously. Each agent runs as an isolated Docker container with pre-installed runtimes (Python 3.11, Node.js 20, Go 1.21, Claude Code).
-
-**Four Pillars of Deep Agency**:
-
-1. **Hierarchical Delegation** -- Orchestrator-Worker pattern with context quarantine via MCP. Parent agents delegate tasks to child agents without leaking context between them.
-2. **Persistent Memory** -- SQLite chat persistence, virtual filesystems, and a file browser give agents continuity across sessions.
-3. **Extreme Context Engineering** -- Templates ship a CLAUDE.md that defines the agent's reasoning processes, tools, and behavioral constraints.
-4. **Autonomous Operations** -- Scheduling, monitoring, and self-healing allow agents to run without human intervention.
+**Autonomous Agent** -- An AI system that plans and executes tasks independently. Each agent runs as an isolated Docker container with pre-installed runtimes (Python 3.11, Node.js 20, Go 1.21, Claude Code). Agents persist memory across sessions, delegate to other agents, and run on schedules without human intervention.
 
 **Agent Container** -- An isolated Docker container with standardized interfaces for credentials, tools, and MCP server integrations.
 

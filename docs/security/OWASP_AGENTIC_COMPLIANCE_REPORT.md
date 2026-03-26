@@ -2,7 +2,7 @@
 
 > **Report Date**: 2025-12-23
 > **Framework**: OWASP Top 10 for Agentic Applications 2026
-> **Platform**: Trinity Deep Agent Orchestration Platform
+> **Platform**: Trinity Autonomous Agent Platform
 > **Scope**: Platform-level security (agent templates are user responsibility)
 > **Deployment Model**: On-Premises / Intranet (not SaaS)
 

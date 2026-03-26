@@ -1,19 +1,10 @@
-# Trinity Deep Agent Orchestration Platform - Architecture
+# Trinity - Autonomous Agent Orchestration Platform - Architecture
 
 > **Purpose**: Documents the CURRENT system design. Update only when implementing changes.
 
 ## System Overview
 
-**Trinity** is a **Deep Agent Orchestration Platform** — sovereign infrastructure for deploying, orchestrating, and governing autonomous AI systems ("System 2" AI).
-
-### The Four Pillars of Deep Agency
-
-| Pillar | Trinity Implementation |
-|--------|----------------------|
-| **I. Explicit Planning** | Scheduling, activity timeline, runtime platform prompt injection (Task DAGs removed 2025-12-23) |
-| **II. Hierarchical Delegation** | Agent-to-Agent via MCP, access control, collaboration dashboard |
-| **III. Persistent Memory** | SQLite chat persistence, virtual filesystems, file browser |
-| **IV. Extreme Context Engineering** | Template system with CLAUDE.md, credential injection, Trinity commands |
+**Trinity** is an **autonomous agent orchestration and infrastructure platform** — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
 Each agent runs as an isolated Docker container with standardized interfaces for credentials, tools, and MCP server integrations.
 

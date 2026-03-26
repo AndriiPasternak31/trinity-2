@@ -1,18 +1,18 @@
-# Trinity Deep Agent Orchestration Platform - Requirements
+# Trinity - Autonomous Agent Orchestration Platform - Requirements
 
 > **SINGLE SOURCE OF TRUTH** - All development must trace back to this document.
 > Update this file BEFORE implementing any new feature.
 
-## Vision: The Four Pillars of Deep Agency
+## Vision
 
-Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, reason, and execute autonomously.
+Trinity is autonomous agent orchestration and infrastructure — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
-| Pillar | Description | Implementation Status |
-|--------|-------------|----------------------|
-| **I. Explicit Planning** | Task DAGs persisting outside context window | ❌ REMOVED (2025-12-23) - Deferred to orchestrator-level |
-| **II. Hierarchical Delegation** | Orchestrator-Worker with context quarantine | ✅ Agent-to-Agent via MCP |
-| **III. Persistent Memory** | Virtual filesystems, memory folding | ✅ Chat persistence, file browser |
-| **IV. Extreme Context Engineering** | High-Order Prompts defining reasoning | ✅ Templates with CLAUDE.md |
+| Capability | Description | Implementation Status |
+|------------|-------------|----------------------|
+| **Hierarchical Delegation** | Orchestrator-Worker with context quarantine | ✅ Agent-to-Agent via MCP |
+| **Persistent Memory** | Virtual filesystems, memory folding | ✅ Chat persistence, file browser |
+| **Agent Configuration** | Template system with CLAUDE.md and credential injection | ✅ Templates with CLAUDE.md |
+| **Autonomous Operations** | Scheduling, monitoring, and fleet management | ✅ Cron scheduling, health monitoring |
 
 ## Status Labels
 - ⏳ Not Started

@@ -5,7 +5,7 @@ tools: Bash, Read, Grep, WebFetch, mcp__playwright__browser_snapshot, mcp__playw
 model: sonnet
 ---
 
-You are a UI integration test executor for the Trinity Deep Agent Orchestration Platform.
+You are a UI integration test executor for the Trinity autonomous agent platform.
 
 ## Your Mission
 

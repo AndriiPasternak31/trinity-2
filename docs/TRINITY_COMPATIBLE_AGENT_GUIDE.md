@@ -9,25 +9,24 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [The Four Pillars of Deep Agency](#the-four-pillars-of-deep-agency)
-3. [Required Files](#required-files)
-4. [Directory Structure](#directory-structure)
-5. [template.yaml Schema](#templateyaml-schema)
-6. [CLAUDE.md Requirements](#claudemd-requirements)
-7. [Runtime Options](#runtime-options)
-8. [Credential Management](#credential-management)
-9. [Inter-Agent Collaboration](#inter-agent-collaboration)
-10. [Shared Folders](#shared-folders)
-11. [Platform Skills](#platform-skills)
-12. [Custom Metrics](#custom-metrics)
-13. [Agent Dashboard](#agent-dashboard)
-14. [Memory Management](#memory-management)
-15. [Content Folder Convention](#content-folder-convention)
-16. [Package Persistence](#package-persistence)
-17. [Compatibility Checklist](#compatibility-checklist)
-18. [Migration Guide](#migration-guide)
-19. [Best Practices](#best-practices)
-20. [Autonomous Agent Design](#autonomous-agent-design)
+2. [Required Files](#required-files)
+3. [Directory Structure](#directory-structure)
+4. [template.yaml Schema](#templateyaml-schema)
+5. [CLAUDE.md Requirements](#claudemd-requirements)
+6. [Runtime Options](#runtime-options)
+7. [Credential Management](#credential-management)
+8. [Inter-Agent Collaboration](#inter-agent-collaboration)
+9. [Shared Folders](#shared-folders)
+10. [Platform Skills](#platform-skills)
+11. [Custom Metrics](#custom-metrics)
+12. [Agent Dashboard](#agent-dashboard)
+13. [Memory Management](#memory-management)
+14. [Content Folder Convention](#content-folder-convention)
+15. [Package Persistence](#package-persistence)
+16. [Compatibility Checklist](#compatibility-checklist)
+17. [Migration Guide](#migration-guide)
+18. [Best Practices](#best-practices)
+19. [Autonomous Agent Design](#autonomous-agent-design)
 
 ---
 
@@ -41,21 +40,6 @@ Trinity deploys agents from GitHub repositories or local directories. The platfo
 - Uses placeholder syntax for credentials (`${VAR}` in `.mcp.json.template`)
 - Keeps domain-specific logic in agent, lets platform handle orchestration
 - Never commits secrets to the repository
-
----
-
-## The Four Pillars of Deep Agency
-
-Trinity implements infrastructure for **System 2 AI** — Deep Agents that plan, reason, and execute autonomously.
-
-| Pillar | Description | Agent Responsibility | Platform Responsibility |
-|--------|-------------|---------------------|------------------------|
-| **I. Explicit Planning** | Scheduling and activity tracking | Respond to scheduled triggers | Cron scheduling, activity timeline |
-| **II. Hierarchical Delegation** | Orchestrator-Worker with context quarantine | Call other agents via MCP | Route messages, enforce access control |
-| **III. Persistent Memory** | Virtual filesystems, memory management | Manage own memory files | GitHub sync, file browser, storage |
-| **IV. Extreme Context Engineering** | High-Order Prompts defining reasoning | Domain-specific CLAUDE.md | Credential injection, MCP config |
-
-**Key Insight**: Agents focus on **domain expertise**. Trinity handles **orchestration infrastructure**.
 
 ---
 
