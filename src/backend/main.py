@@ -48,7 +48,7 @@ from routers.system_agent import router as system_agent_router
 from routers.ops import router as ops_router
 from routers.public_links import router as public_links_router, set_websocket_manager as set_public_links_ws_manager
 from routers.public import router as public_router
-from routers.setup import router as setup_router
+from routers.setup import router as setup_router, get_setup_token as get_setup_setup_token
 from routers.telemetry import router as telemetry_router
 from routers.logs import router as logs_router
 from routers.agent_dashboard import router as agent_dashboard_router
@@ -229,6 +229,20 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Set up structured JSON logging (captured by Vector)
     setup_logging()
+
+    # Print setup token if first-time setup is not yet complete (SEC #177).
+    # Only someone with access to server logs can read this token and complete setup,
+    # preventing installation hijack by unauthenticated remote attackers.
+    from database import db as _db
+    if _db.get_setting_value('setup_completed', 'false') != 'true':
+        _setup_token = get_setup_setup_token()
+        print("=" * 60)
+        print("TRINITY FIRST-TIME SETUP REQUIRED")
+        print("=" * 60)
+        print(f"Setup token: {_setup_token}")
+        print("Visit the Trinity UI and enter this token to set the admin password.")
+        print("This token is only valid for this session.")
+        print("=" * 60)
 
     if docker_client:
         try:
