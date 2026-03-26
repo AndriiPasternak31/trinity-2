@@ -1,5 +1,17 @@
 ### 2026-03-26
 
+🔒 **fix(security): Base image allowlist — block arbitrary Docker image pull (#172)**
+
+Agent creation now validates `base_image` against a configurable allowlist before any Docker operations. Previously, any authenticated user could deploy a container with an arbitrary Docker image (e.g., `alpine:latest`), gaining network access to internal services (backend, MCP server, Redis).
+
+- `src/backend/services/agent_service/helpers.py` — Added `validate_base_image()` with fnmatch-based allowlist check
+- `src/backend/services/agent_service/crud.py` — Calls `validate_base_image()` before template processing in `create_agent_internal()`
+- `src/backend/services/agent_service/lifecycle.py` — Calls `validate_base_image()` in `recreate_container_with_updated_config()` (defense in depth); fixed default fallback from wrong image name `trinity-agent:latest` to `trinity-agent-base:latest`
+- **Default allowlist**: `["trinity-agent-base:*"]` — only local Trinity base images permitted
+- **Configurable**: Admins can set `base_image_allowlist` in system settings (JSON array of fnmatch patterns)
+- **Blocked requests**: Return HTTP 403 with informative error including rejected image and allowlist
+- **Tests**: 19 unit tests in `tests/unit/test_base_image_allowlist.py`
+
 ✨ **feat: Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines (#169)**
 
 Agents can now emit named events and subscribe to events from other agents. When a matching event fires, the subscribing agent receives an async task with the payload interpolated into a message template. Uses existing `agent_permissions` for access control.

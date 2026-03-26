@@ -31,6 +31,7 @@ from services.template_service import (
 from services import git_service
 from services.settings_service import get_anthropic_api_key, get_github_pat, get_agent_full_capabilities
 from utils.helpers import sanitize_agent_name
+from .helpers import validate_base_image
 from .lifecycle import RESTRICTED_CAPABILITIES, FULL_CAPABILITIES
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,9 @@ async def create_agent_internal(
 
     if get_agent_by_name(config.name) or db.get_agent_owner(config.name):
         raise HTTPException(status_code=409, detail="Agent already exists")
+
+    # SEC-172: Validate base image against allowlist before any Docker operations
+    validate_base_image(config.base_image)
 
     template_data = {}
     github_template_path = None

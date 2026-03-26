@@ -238,9 +238,10 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 - **Description**: Security event tracking via Vector log aggregation
 
 ### 8.5 Container Security
-- **Status**: ✅ Implemented
-- **Description**: Non-root execution, CAP_DROP ALL, isolated network
-- **Key Features**: Optional full capabilities mode for containers needing system access
+- **Status**: ✅ Implemented (Updated 2026-03-26)
+- **Description**: Non-root execution, CAP_DROP ALL, isolated network, base image allowlist
+- **Key Features**: Optional full capabilities mode for containers needing system access, base image allowlist validation (SEC-172)
+- **Base Image Allowlist** (SEC-172): Agent creation validates `base_image` against configurable allowlist (`base_image_allowlist` system setting, default `["trinity-agent-base:*"]`). Blocks arbitrary Docker image pulls that could access internal network services. Returns HTTP 403 for disallowed images.
 
 ### 8.6 GCP Production Deployment
 - **Status**: ✅ Implemented

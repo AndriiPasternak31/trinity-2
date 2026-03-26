@@ -261,7 +261,8 @@ from services.settings_service import get_anthropic_api_key  # Line 29 - central
 **Business Logic:**
 1. **Sanitize name** (line 78-82): Lowercase, replace special chars with hyphens via `sanitize_agent_name()`
 2. **Check existence** (line 87-88): Query Docker via `get_agent_by_name()` AND database via `db.get_agent_owner()`. Returns HTTP 409 if duplicate found.
-3. **Load template** (line 97-179): GitHub or local template processing, extract shared folder config
+3. **Validate base image** (line 91): `validate_base_image(config.base_image)` checks against allowlist (SEC-172). Returns HTTP 403 if image not allowed.
+4. **Load template** (line 97-179): GitHub or local template processing, extract shared folder config
 4. **Auto-assign port** (line 180-181): Find next available SSH port (2289+) via `get_next_available_port()`
 5. **Generate credential files** (line 188-200): Create empty template structure (CRED-002: no longer auto-injects credentials)
 6. **Create MCP API key** (line 260-271): Generate agent-scoped Trinity MCP access key
@@ -860,6 +861,7 @@ await log_audit_event(
 |------------|-------------|---------|
 | Invalid agent name | 400 | "Invalid agent name - must contain at least one alphanumeric character" |
 | Agent already exists | 409 | "Agent already exists" |
+| Disallowed base image | 403 | "Base image '{image}' is not in the allowed image list" (SEC-172) |
 | Agent not found | 404 | "Agent not found" |
 | Permission denied (delete) | 403 | "You don't have permission to delete this agent" |
 | Docker error | 500 | "Failed to create/start/stop agent: {error}" |
@@ -874,9 +876,10 @@ await log_audit_event(
    - Delete requires `can_user_delete_agent()` (owner or admin)
    - Access requires `can_user_access_agent()` (owner, shared user, or admin)
 3. **Container Security**: CAP_DROP ALL, no-new-privileges, AppArmor
-4. **Network Isolation**: Agent UI not exposed externally, accessed via backend proxy
-5. **Credential Protection**: Never logged, injected at runtime via environment variables
-6. **Agent-scoped MCP Keys**: Each agent gets unique API key for Trinity MCP access
+4. **Base Image Allowlist** (SEC-172, 2026-03-26): `validate_base_image()` in `helpers.py` checks `base_image` against a configurable allowlist before any Docker operations. Default: `["trinity-agent-base:*"]`. Admin-configurable via `base_image_allowlist` system setting (JSON array of fnmatch patterns). Returns HTTP 403 for disallowed images. Applied in both `create_agent_internal()` and `recreate_container_with_updated_config()`.
+5. **Network Isolation**: Agent UI not exposed externally, accessed via backend proxy
+6. **Credential Protection**: Never logged, injected at runtime via environment variables
+7. **Agent-scoped MCP Keys**: Each agent gets unique API key for Trinity MCP access
 
 ---
 
