@@ -61,6 +61,13 @@
       "added": "2026-03-26",
       "categories": ["backend", "security", "agents", "unit"],
       "description": "Tests for base image allowlist validation: default allowlist, custom settings, malformed settings fallback, error messages (19 tests)"
+    },
+    {
+      "file": "unit/test_otp_rate_limiting.py",
+      "feature": "Issue #176",
+      "added": "2026-03-26",
+      "categories": ["backend", "security", "auth", "unit"],
+      "description": "Tests for OTP verification rate limiting: per-email attempt counter, IP rate limit, brute-force lockout after 5 failures, counter reset on success"
     }
   ]
 }

@@ -62,9 +62,10 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 ## 2. Authentication & Authorization
 
 ### 2.1 Email-Based Authentication
-- **Status**: ✅ Implemented (2025-12-26)
+- **Status**: ✅ Implemented (2025-12-26, security-hardened 2026-03-26)
 - **Description**: Passwordless email login with 6-digit verification codes
-- **Key Features**: 2-step verification, admin-managed whitelist, auto-whitelist on agent sharing, rate limiting
+- **Key Features**: 2-step verification, admin-managed whitelist, auto-whitelist on agent sharing, rate limiting (IP-based + per-email OTP lockout after 5 failures)
+- **Security**: OTP brute-force prevented by dual rate limits — `login_attempts:{ip}` (shared with admin login) and `otp_attempts:{email}` (max 5 failures → 10-min lockout). Both `POST /api/auth/email/verify` and `POST /api/public/verify/confirm` are protected. (pentest 3.1.5 / #176)
 - **Flow**: `docs/memory/feature-flows/email-authentication.md`
 
 ### 2.2 Admin Password Login

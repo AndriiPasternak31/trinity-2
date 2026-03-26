@@ -1,5 +1,13 @@
 ### 2026-03-26
 
+🔒 **fix(security): OTP rate limiting for email verification — prevent brute-force (#176)**
+
+`POST /api/auth/email/verify` now enforces two layers of rate limiting. Previously, a 6-digit OTP (~20 bits of entropy) could be brute-forced in ~8 minutes at 2k req/s — within the 10-minute validity window — yielding a valid 7-day JWT.
+
+- `src/backend/routers/auth.py` — Added `check_otp_rate_limit(email)` and `record_otp_attempt(email, success)`: per-email Redis counter (`otp_attempts:{email}`) that locks out after 5 failed attempts for 10 minutes. Also applied existing `check_login_rate_limit(client_ip)` + `record_login_attempt()` to the verify endpoint (IP-based, was already on admin login).
+- `src/backend/routers/public.py` — Applied IP-based rate limiting to `POST /api/public/verify/confirm` (public link email verification).
+- `tests/unit/test_otp_rate_limiting.py` — 17 unit tests covering lockout at threshold, per-email key isolation, brute-force simulation, counter reset on success, Redis fail-open.
+
 🔒 **fix(security): Base image allowlist — block arbitrary Docker image pull (#172)**
 
 Agent creation now validates `base_image` against a configurable allowlist before any Docker operations. Previously, any authenticated user could deploy a container with an arbitrary Docker image (e.g., `alpine:latest`), gaining network access to internal services (backend, MCP server, Redis).
