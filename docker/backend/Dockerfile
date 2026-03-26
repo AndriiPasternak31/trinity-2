@@ -41,6 +41,7 @@ COPY ../../src/backend/logging_config.py /app/
 # Copy module directories
 COPY ../../src/backend/routers /app/routers/
 COPY ../../src/backend/services /app/services/
+COPY ../../src/backend/adapters /app/adapters/
 COPY ../../src/backend/utils /app/utils/
 COPY ../../src/backend/db /app/db/
 
@@ -50,8 +51,8 @@ COPY ../../config/process-templates /app/config/process-templates/
 
 # Ensure all files are readable
 RUN chmod -R 644 /app/*.py && \
-    chmod -R 755 /app/routers /app/services /app/utils /app/db && \
-    find /app/routers /app/services /app/utils /app/db -name "*.py" -exec chmod 644 {} \;
+    chmod -R 755 /app/routers /app/services /app/adapters /app/utils /app/db && \
+    find /app/routers /app/services /app/adapters /app/utils /app/db -name "*.py" -exec chmod 644 {} \;
 
 EXPOSE 8000
 
