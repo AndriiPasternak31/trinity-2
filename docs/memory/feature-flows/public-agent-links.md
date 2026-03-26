@@ -93,7 +93,7 @@ Public User -> GET /api/public/link/{token}
 
 Public User -> POST /api/public/chat/{token}  {async_mode: true}
             -> Backend validates token
-            -> Check rate limit (30/min per IP)
+            -> Check rate limit (30/min per IP, 60/min per token)
             -> Record usage
             -> Create execution record early (for SSE)
             -> Spawn _execute_public_chat_background()
@@ -269,7 +269,8 @@ import { getStatusFromStreamEvent, MIN_LABEL_DISPLAY_MS, HEARTBEAT_TIMEOUT_MS } 
 | `count_recent_verification_requests()` | `db/public_links.py:305` | Verification rate limit |
 | `record_usage()` | `db/public_links.py:324` | Record chat message usage |
 | `get_link_usage_stats()` | `db/public_links.py:363` | Get usage statistics |
-| `count_recent_messages_by_ip()` | `db/public_links.py:407` | Rate limit check |
+| `count_recent_messages_by_ip()` | `db/public_links.py:420` | IP rate limit check (30/min) |
+| `count_recent_messages_by_token()` | `db/public_links.py:434` | Per-token rate limit check (60/min, SEC #181) |
 
 ### Pydantic Models
 
