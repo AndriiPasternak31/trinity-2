@@ -1,5 +1,14 @@
 ### 2026-03-26
 
+🔒 **fix(security): Broken access control — user-level horizontal privilege escalation (#174)**
+
+Hardened 39 endpoints across 11 routers to enforce proper access control. Previously, any authenticated user could access admin-only operational data, modify other users' agents, and view cross-tenant resources. CVSS 8.5 (High).
+
+- **Admin-only enforcement** (22 endpoints): `routers/ops.py` (fleet status/health, schedules, costs, auth-report, alerts), `routers/observability.py` (metrics, status), `routers/system_agent.py` (status), `routers/alerts.py` (threshold set/delete)
+- **Owner-only enforcement** (10 endpoints): `routers/credentials.py` (inject/export/import — upgraded from `AuthorizedAgent` to `OwnedAgent`), `routers/chat.py` (DELETE history), `routers/agents.py` (queue/clear, queue/release), `routers/skills.py` (PUT skills, assign, unassign, inject)
+- **Access checks added** (7 endpoints): `routers/agents.py` (stats, queue GET — added `AuthorizedAgentByName`), `routers/skills.py` (GET skills — added `AuthorizedAgentByName`), `routers/notifications.py` (list/get/acknowledge/dismiss — filtered by accessible agents), `routers/processes.py` (archive, new-version — added RBAC), `routers/executions.py` (events, step output, costs, analytics — added `can_view_execution`)
+- **Tests**: `tests/test_access_control.py` — 30 tests verifying non-admin users get 403 on admin endpoints, non-owners get 403 on owner endpoints, and regular users retain access to their own resources
+
 🔒 **fix(security): SSH private key no longer transmitted in API response (#175)**
 
 Eliminated server-side SSH keypair generation. The `POST /api/agents/{name}/ssh-access` endpoint for key-based auth now requires clients to supply their own `public_key` — private keys never leave the client machine.

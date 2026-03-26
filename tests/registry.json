@@ -68,6 +68,13 @@
       "added": "2026-03-26",
       "categories": ["backend", "security", "auth", "unit"],
       "description": "Tests for OTP verification rate limiting: per-email attempt counter, IP rate limit, brute-force lockout after 5 failures, counter reset on success"
+    },
+    {
+      "file": "test_access_control.py",
+      "feature": "Issue #174",
+      "added": "2026-03-26",
+      "categories": ["backend", "security", "api", "access-control"],
+      "description": "Tests for broken access control fix: admin-only endpoints (ops, observability, system-agent, alerts), owner-only agent endpoints (credentials, chat history, queue, skills), agent access checks (stats, queue, skills, detail, logs)"
     }
   ]
 }
