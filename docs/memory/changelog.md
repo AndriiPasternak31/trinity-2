@@ -1,5 +1,14 @@
 ### 2026-03-27
 
+🔒 **fix(security): Subscription BOLA — restrict assign/clear to owner/admin only (#182)**
+
+`PUT /api/subscriptions/agents/{name}` and `DELETE /api/subscriptions/agents/{name}` used `can_user_access_agent` (owners + admins + shared users) instead of `can_user_share_agent` (owners + admins only). A shared user could hot-swap or clear an agent's Claude subscription, enabling credential abuse, unexpected billing, or DoS (pentest finding 3.2.5, CVSS 4.8).
+
+- `src/backend/routers/subscriptions.py` — Replaced `can_user_access_agent` with `can_user_share_agent` in both PUT and DELETE handlers; updated error message to clarify owner/admin requirement
+- `tests/unit/test_subscription_bola.py` — 7 unit tests verifying mutation endpoints use owner-only auth, read endpoint retains shared-user access, and no regression to permissive predicate
+
+---
+
 🔒 **fix(security): SSRF prevention — skills library URL validation (#179)**
 
 `PUT /api/settings/skills_library_url` accepted arbitrary URLs, allowing an admin to point the skills library at an internal address (e.g., `https://127.0.0.1:8000`). When `POST /api/skills/library/sync` was triggered, the backend would connect to itself or other internal services, exhausting worker threads and causing DoS (pentest finding 3.2.2, CVSS 6.7).
