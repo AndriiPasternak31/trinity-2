@@ -29,7 +29,7 @@ As a platform administrator, I want to log in with a password so that I can acce
 
 ### Components
 
-**Login.vue** (`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Login.vue`)
+**Login.vue** (`src/frontend/src/views/Login.vue`)
 
 The login page supports two authentication modes:
 1. **Email Authentication** (default) - 2-step email verification flow
@@ -98,7 +98,7 @@ const handleAdminLogin = async () => {
 
 ### State Management
 
-**auth.js** (`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/auth.js`)
+**auth.js** (`src/frontend/src/stores/auth.js`)
 
 Key state properties (lines 6-13):
 ```javascript
@@ -192,7 +192,7 @@ async initializeAuth() {
 
 ### Router Navigation Guard
 
-**router/index.js** (`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/router/index.js`)
+**router/index.js** (`src/frontend/src/router/index.js`)
 
 Setup status check (lines 170-188):
 ```javascript
@@ -230,7 +230,7 @@ router.beforeEach(async (to, from, next) => {
 
 ### Endpoints
 
-**routers/auth.py** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/auth.py`)
+**routers/auth.py** (`src/backend/routers/auth.py`)
 
 #### Rate Limiting Configuration (M-005)
 
@@ -372,7 +372,7 @@ async def get_auth_mode():
 
 ### Authentication Logic
 
-**dependencies.py** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/dependencies.py`)
+**dependencies.py** (`src/backend/dependencies.py`)
 
 Password verification (lines 24-34) - **Updated M-003 (2026-02-23)**:
 ```python
@@ -421,7 +421,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None, m
 
 ### Database Operations
 
-**db/users.py** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/db/users.py`)
+**db/users.py** (`src/backend/db/users.py`)
 
 User lookup (lines 49-51):
 ```python
@@ -448,7 +448,7 @@ def _row_to_user_dict(row) -> Dict:
 
 The admin password is set during first-time setup. Until setup is complete, login is blocked.
 
-**routers/setup.py** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/setup.py`)
+**routers/setup.py** (`src/backend/routers/setup.py`)
 
 Set admin password endpoint (lines 37-81):
 ```python
@@ -476,7 +476,7 @@ async def set_admin_password(data: SetAdminPasswordRequest):
     return {"success": True}
 ```
 
-**database.py** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/database.py`)
+**database.py** (`src/backend/database.py`)
 
 Admin user initialization on database startup (lines 661-718):
 ```python
@@ -500,7 +500,7 @@ def _ensure_admin_user(cursor, conn):
 
 ## Configuration
 
-**config.py** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/config.py`)
+**config.py** (`src/backend/config.py`)
 
 JWT settings (lines 12-26):
 ```python

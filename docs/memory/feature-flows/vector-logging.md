@@ -52,7 +52,7 @@ route_platform         route_agents
 
 ### 1. Log Capture
 
-**Source**: `/Users/eugene/Dropbox/trinity/trinity/config/vector.yaml:18-23`
+**Source**: `config/vector.yaml:18-23`
 
 ```yaml
 sources:
@@ -67,7 +67,7 @@ Vector connects to Docker socket and streams all container logs in real-time.
 
 ### 2. Enrichment Transform
 
-**Source**: `/Users/eugene/Dropbox/trinity/trinity/config/vector.yaml:26-56`
+**Source**: `config/vector.yaml:26-56`
 
 VRL (Vector Remap Language) transform enriches each log entry:
 
@@ -101,7 +101,7 @@ if exists(.parsed.level) {
 
 ### 3. Routing
 
-**Source**: `/Users/eugene/Dropbox/trinity/trinity/config/vector.yaml:58-74`
+**Source**: `config/vector.yaml:58-74`
 
 Two filter transforms route logs based on container naming:
 
@@ -116,7 +116,7 @@ Two filter transforms route logs based on container naming:
 
 ### 4. File Sinks (Daily Rotation)
 
-**Source**: `/Users/eugene/Dropbox/trinity/trinity/config/vector.yaml:76-96`
+**Source**: `config/vector.yaml:76-96`
 
 | Sink | Input | Path Pattern | Format |
 |------|-------|--------------|--------|
@@ -129,7 +129,7 @@ Files rotate automatically at midnight UTC using Vector's date interpolation.
 
 ### Structured Logging Configuration
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/logging_config.py`
+**File**: `src/backend/logging_config.py`
 
 The backend uses a custom JSON formatter for Vector-compatible output:
 
@@ -170,7 +170,7 @@ class JsonFormatter(logging.Formatter):
 
 ### Logging Setup
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/main.py:164`
+**File**: `src/backend/main.py:164`
 
 ```python
 @asynccontextmanager
@@ -182,7 +182,7 @@ async def lifespan(app: FastAPI):
 
 ### Logger Usage
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/logging_config.py:70-72`
+**File**: `src/backend/logging_config.py:70-72`
 
 ```python
 def get_logger(name: str) -> logging.Logger:
@@ -210,7 +210,7 @@ logger.info(
 
 ## Docker Compose Configuration
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml:184-205`
+**File**: `docker-compose.yml:184-205`
 
 ```yaml
 vector:
@@ -237,7 +237,7 @@ vector:
     start_period: 10s  # Give Vector time to start before health checks
 ```
 
-**Backend Dependencies**: `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml:55-56`
+**Backend Dependencies**: `docker-compose.yml:55-56`
 
 ```yaml
 depends_on:
@@ -245,7 +245,7 @@ depends_on:
     condition: service_healthy  # Ensure Vector is ready before backend starts agents
 ```
 
-**Volumes**: `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml:234-235`
+**Volumes**: `docker-compose.yml:234-235`
 
 ```yaml
 volumes:
@@ -253,7 +253,7 @@ volumes:
   trinity-archives:  # Compressed log archives
 ```
 
-**Backend Volume Mounts**: `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml:50-51`
+**Backend Volume Mounts**: `docker-compose.yml:50-51`
 
 ```yaml
 volumes:
@@ -302,7 +302,7 @@ When the backend logs structured JSON, Vector parses it:
 
 ## Query Interface
 
-Full documentation: `/Users/eugene/Dropbox/trinity/trinity/docs/QUERYING_LOGS.md`
+Full documentation: `docs/QUERYING_LOGS.md`
 
 ### Accessing Logs
 
@@ -384,7 +384,7 @@ Files rotate automatically at midnight UTC.
 
 ### Automated Archival
 
-**Service**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/log_archive_service.py`
+**Service**: `src/backend/services/log_archive_service.py`
 
 The backend runs a nightly job (default: 3 AM UTC) using APScheduler:
 
@@ -397,7 +397,7 @@ The backend runs a nightly job (default: 3 AM UTC) using APScheduler:
 
 ### Storage Backend
 
-**Service**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/archive_storage.py`
+**Service**: `src/backend/services/archive_storage.py`
 
 Abstract `ArchiveStorage` interface with `LocalArchiveStorage` implementation:
 
@@ -412,7 +412,7 @@ class LocalArchiveStorage(ArchiveStorage):
 
 ### API Endpoints
 
-**Router**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/logs.py`
+**Router**: `src/backend/routers/logs.py`
 
 Admin-only endpoints for log management:
 

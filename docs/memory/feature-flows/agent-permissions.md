@@ -581,7 +581,7 @@ Events logged to audit service:
 
 **Run tests**:
 ```bash
-cd /Users/eugene/Dropbox/trinity/trinity/tests
+cd tests
 source .venv/bin/activate
 python -m pytest test_agent_permissions.py -v
 ```

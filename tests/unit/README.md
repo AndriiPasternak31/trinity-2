@@ -38,7 +38,7 @@ Tests the backend-side credential sanitizer (defense-in-depth layer).
 
 ### Run All Unit Tests
 ```bash
-cd /Users/eugene/Dropbox/trinity/trinity/tests/unit
+cd tests/unit
 source ../.venv/bin/activate
 python -m pytest -v
 ```
@@ -133,6 +133,6 @@ When adding new credential patterns:
 
 ## Related Files
 
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/utils/credential_sanitizer.py` - Agent-side implementation
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/utils/credential_sanitizer.py` - Backend-side implementation
-- `/Users/eugene/Dropbox/trinity/trinity/tests/test_credentials.py` - Integration tests for credential system
+- `docker/base-image/agent_server/utils/credential_sanitizer.py` - Agent-side implementation
+- `src/backend/utils/credential_sanitizer.py` - Backend-side implementation
+- `tests/test_credentials.py` - Integration tests for credential system

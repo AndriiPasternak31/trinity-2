@@ -623,14 +623,14 @@ The `/api/agents` endpoint benefits from two optimizations:
 
 ### Files Modified
 
-1. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js`** (699 lines total):
+1. **`src/frontend/src/stores/agents.js`** (699 lines total):
    - Lines 14-16: Added `executionStats: {}` and `slotStats: {}` state
    - Lines 584-611: Added `fetchExecutionStats()` action
    - Lines 616-638: Added `fetchSlotStats()` action
    - Lines 641-667: Added `toggleAutonomy()` action
    - Lines 669-687: Updated `startContextPolling()` to include execution + slot stats
 
-2. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue`** (1083 lines total):
+2. **`src/frontend/src/views/Agents.vue`** (1083 lines total):
    - Line 688: Import `CapacityMeter` from `../components/CapacityMeter.vue`
    - Lines 248-426: Desktop layout with two-row content block + CapacityMeter flex sibling
    - Lines 252: Fixed grid: `grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto]`
@@ -638,7 +638,7 @@ The `/api/agents` endpoint benefits from two optimizations:
    - Lines 533-539: Tablet CapacityMeter (height=28, width=10, conditional on slot data)
    - Lines 908-910: `getSlotStats()` helper
 
-3. **`/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/CapacityMeter.vue`** (58 lines total):
+3. **`src/frontend/src/components/CapacityMeter.vue`** (58 lines total):
    - Vertical segmented bar with `flex-col-reverse gap-px`
    - Props: `active`, `max`, `height`, `width`
    - Color: green (<50%) / yellow (50-79%) / orange (80-99%) / red (100% with capacity-pulse animation)
@@ -673,7 +673,7 @@ The `/api/agents` endpoint benefits from two optimizations:
 ### Related Components
 
 - **AgentNode.vue**: Dashboard tiles use same visual design
-  - Path: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/AgentNode.vue`
+  - Path: `src/frontend/src/components/AgentNode.vue`
   - Lines 52-97: Autonomy toggle (identical implementation)
   - Lines 130-147: Execution stats row
   - Lines 115-128: Context progress bar
@@ -846,8 +846,8 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
 
 ### Files Changed
 
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue` -- template and scoped styles
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/CapacityMeter.vue` -- new component (added for capacity meter integration)
+- `src/frontend/src/views/Agents.vue` -- template and scoped styles
+- `src/frontend/src/components/CapacityMeter.vue` -- new component (added for capacity meter integration)
 
 ### Files NOT Changed (for initial row tile rewrite)
 
@@ -860,7 +860,7 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
 ## References
 
 > Line numbers verified 2026-03-07
-- **Agents.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Agents.vue` (1175 lines total)
+- **Agents.vue**: `src/frontend/src/views/Agents.vue` (1175 lines total)
   - Template: lines 1-675
   - Script: lines 677-1141
   - Scoped styles: lines 1143-1175
@@ -873,30 +873,30 @@ Complete template rewrite from 3-column card grid to full-width horizontal row t
   - Tablet CapacityMeter: lines 533-539 (height=28, width=10, conditional)
   - Desktop grid template: line 252 (`grid-cols-[auto_auto_1fr_56px_auto_180px_200px_auto]`)
   - `getSlotStats()` helper: lines 908-910
-- **AgentAvatar.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/AgentAvatar.vue` (89 lines)
+- **AgentAvatar.vue**: `src/frontend/src/components/AgentAvatar.vue` (89 lines)
   - Props: `name` (required), `avatarUrl` (optional), `size` (sm/md/lg/xl/2xl, default md)
   - Size "sm" = 24x24px (`w-6 h-6`), text `text-[10px]`
   - Shows uploaded avatar image, falls back to deterministic gradient with initials
   - Gradient derived from name hash; initials from first two parts split on space/hyphen
-- **CapacityMeter.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/CapacityMeter.vue` (58 lines)
+- **CapacityMeter.vue**: `src/frontend/src/components/CapacityMeter.vue` (58 lines)
   - Props: `active`, `max`, `height`, `width`
   - Color coding: green/yellow/orange/red by utilization, capacity-pulse animation at 100%
-- **agents.js store**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js` (699 lines total)
+- **agents.js store**: `src/frontend/src/stores/agents.js` (699 lines total)
   - `slotStats` state: line 16
   - `fetchExecutionStats()`: lines 584-611 (calls `/api/agents/execution-stats?include_7d=true`)
   - `fetchSlotStats()`: lines 616-638 (calls `/api/agents/slots`)
   - `startContextPolling()`: lines 669-687 (fetches context + execution + slot stats every 5s)
   - `success_desc` sort case: lines 64-70
-- **AgentNode.vue**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/AgentNode.vue` - Visual design reference
-- **Backend agents router**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py`
+- **AgentNode.vue**: `src/frontend/src/components/AgentNode.vue` - Visual design reference
+- **Backend agents router**: `src/backend/routers/agents.py`
   - Lines 175-177: GET /context-stats endpoint
   - Lines 180-246: GET /execution-stats endpoint (with `include_7d` param)
   - Lines 775-790: PUT /{name}/autonomy endpoint
-- **Backend dual stats query**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/schedules.py`
+- **Backend dual stats query**: `src/backend/db/schedules.py`
   - Lines 788-846: `get_all_agents_execution_stats_dual()` - single SQL with CASE WHEN for 24h + 7d
-- **Backend database facade**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/database.py`
+- **Backend database facade**: `src/backend/database.py`
   - Lines 556-558: `get_all_agents_execution_stats_dual()` facade method
-- **Backend helpers**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_service/helpers.py`
+- **Backend helpers**: `src/backend/services/agent_service/helpers.py`
   - Lines 83-153: `get_accessible_agents()` with batch query optimization
 
 ---

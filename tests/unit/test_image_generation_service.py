@@ -16,10 +16,12 @@ import importlib.util
 import json
 import pytest
 import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# Backend path for direct file imports
-BACKEND_PATH = '/Users/eugene/Dropbox/trinity/trinity/src/backend'
+# Backend path for direct file imports (relative to this file)
+_project_root = Path(__file__).resolve().parents[2]
+BACKEND_PATH = str(_project_root / 'src' / 'backend')
 if BACKEND_PATH not in sys.path:
     sys.path.insert(0, BACKEND_PATH)
 

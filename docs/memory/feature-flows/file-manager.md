@@ -32,7 +32,7 @@ As a Trinity user, I want to manage files across all my running agents from a si
 
 ### Router Configuration
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/router/index.js`
+**File**: `src/frontend/src/router/index.js`
 
 ```javascript
 // Lines 48-52
@@ -46,7 +46,7 @@ As a Trinity user, I want to manage files across all my running agents from a si
 
 ### Main Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/FileManager.vue` (639 lines)
+**File**: `src/frontend/src/views/FileManager.vue` (639 lines)
 
 #### Component Structure
 
@@ -183,7 +183,7 @@ When a delete-protected file is selected, the Delete button is disabled with too
 
 ### FileTreeNode Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/file-manager/FileTreeNode.vue` (220 lines)
+**File**: `src/frontend/src/components/file-manager/FileTreeNode.vue` (220 lines)
 
 #### Props (Lines 64-68)
 
@@ -218,7 +218,7 @@ Maps file extensions to icon components:
 
 ### FilePreview Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/file-manager/FilePreview.vue` (245 lines)
+**File**: `src/frontend/src/components/file-manager/FilePreview.vue` (245 lines)
 
 #### Props (Lines 146-155)
 
@@ -285,7 +285,7 @@ watch(() => props.previewData, async (data) => {
 
 ### Store Actions
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js`
+**File**: `src/frontend/src/stores/agents.js`
 
 #### listAgentFiles (Lines 452-459)
 
@@ -488,7 +488,7 @@ async def update_agent_file_logic(
 
 ## Agent Layer
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/files.py`
+**File**: `docker/base-image/agent_server/routers/files.py`
 
 ### GET /api/files/preview (Lines 262-311)
 

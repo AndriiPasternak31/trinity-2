@@ -33,7 +33,7 @@ The Trinity platform demonstrates strong security practices overall, with proper
 #### Findings
 
 **[HIGH] H-001: Internal API Endpoints Without Authentication**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/internal.py`
+- **Location:** `src/backend/routers/internal.py`
 - **Issue:** The `/api/internal/*` endpoints have no authentication and rely solely on network isolation
 - **Risk:** If the Docker network is compromised or misconfigured, attackers could:
   - Track fake activities via `/api/internal/activities/track`
@@ -41,13 +41,13 @@ The Trinity platform demonstrates strong security practices overall, with proper
 - **Recommendation:** Add internal API key or service mesh authentication
 
 **[MEDIUM] M-001: Public Link Rate Limiting May Be Insufficient**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/public.py`
+- **Location:** `src/backend/routers/public.py`
 - **Issue:** Rate limiting of 30 messages per IP per minute may be bypassable via distributed attacks
 - **Risk:** Resource exhaustion and cost amplification via public chat endpoints
 - **Recommendation:** Implement additional rate limiting at infrastructure level (nginx, WAF)
 
 **[LOW] L-001: Admin Role Check Based on String Comparison**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/dependencies.py:168`
+- **Location:** `src/backend/dependencies.py:168`
 - **Issue:** `if current_user.role != "admin"` - role stored as string
 - **Risk:** Minimal, but enum-based roles would be more robust
 - **Recommendation:** Consider using Python enums for role management
@@ -67,13 +67,13 @@ The Trinity platform demonstrates strong security practices overall, with proper
 #### Findings
 
 **[MEDIUM] M-002: Secret Key Generation Warning Only**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/config.py:16-23`
+- **Location:** `src/backend/config.py:16-23`
 - **Issue:** If SECRET_KEY not set, a random key is generated and only a warning is printed
 - **Risk:** Sessions won't survive backend restarts; tokens become invalid
 - **Recommendation:** Require SECRET_KEY in production mode; fail to start if not set
 
 **[MEDIUM] M-003: Legacy Plaintext Password Support**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/dependencies.py:24-37`
+- **Location:** `src/backend/dependencies.py:24-37`
 - **Issue:** `verify_password()` falls back to plaintext comparison for "legacy passwords"
 - **Risk:** If database is compromised, plaintext passwords could be extracted
 - **Recommendation:** Remove plaintext fallback; run migration to hash all existing passwords
@@ -91,7 +91,7 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
 ```
 
 **[LOW] L-002: Token Expiry Configuration**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/config.py:26`
+- **Location:** `src/backend/config.py:26`
 - **Issue:** `ACCESS_TOKEN_EXPIRE_MINUTES = 10080` (7 days) is quite long
 - **Risk:** Longer token validity increases window for token theft exploitation
 - **Recommendation:** Consider shorter token expiry with refresh token pattern
@@ -105,7 +105,7 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
 #### Strengths
 - SQLite queries use parameterized statements throughout (`cursor.execute(sql, (param,))`)
 - No evidence of SQL string concatenation
-- Credential sanitization in `/Users/eugene/Dropbox/trinity/trinity/src/backend/utils/credential_sanitizer.py`
+- Credential sanitization in `src/backend/utils/credential_sanitizer.py`
 - Path traversal protection in file handling endpoints
 
 #### Findings
@@ -140,7 +140,7 @@ if ".." in slug or slug.startswith("/"):
 #### Findings
 
 **[MEDIUM] M-004: SSH Password Exposure in API Response**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py:1216-1236`
+- **Location:** `src/backend/routers/agents.py:1216-1236`
 - **Issue:** SSH password is returned in the API response body
 - **Risk:** Password may be logged, cached, or intercepted
 - **Recommendation:** Consider returning password via secure channel or display once then discard
@@ -176,7 +176,7 @@ return {
 #### Findings
 
 **[HIGH] H-002: Redis Without Authentication in Development**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml:111-120`
+- **Location:** `docker-compose.yml:111-120`
 - **Issue:** Redis password is optional, defaults to no authentication
 - **Risk:** In production without password, Redis can be accessed by any container on the network
 - **Recommendation:** Require REDIS_PASSWORD in production; document as mandatory
@@ -194,14 +194,14 @@ command: >
 ```
 
 **[HIGH] H-003: Docker Socket Mounted to Backend**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml:43`
+- **Location:** `docker-compose.yml:43`
 - **Issue:** `/var/run/docker.sock:/var/run/docker.sock:ro` gives container control over host Docker
 - **Risk:** Container escape possible if backend is compromised
 - **Mitigation:** Read-only mount helps, but container creation/manipulation still possible
 - **Recommendation:** Consider Docker-in-Docker, socket proxy, or API-based container management
 
 **[LOW] L-004: Default Agent SSH Password**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/Dockerfile:52`
+- **Location:** `docker/base-image/Dockerfile:52`
 - **Issue:** `echo "developer:developer" | chpasswd` sets default password
 - **Risk:** Minimal - SSH is configured for key-only auth
 - **Recommendation:** Remove password entirely; rely only on SSH keys
@@ -222,13 +222,13 @@ command: >
 #### Findings
 
 **[MEDIUM] M-005: No Brute Force Protection on Admin Login**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/auth.py:49-82`
+- **Location:** `src/backend/routers/auth.py:49-82`
 - **Issue:** No rate limiting on `/token` (admin login) endpoint
 - **Risk:** Password brute force attacks possible
 - **Recommendation:** Add rate limiting similar to email verification (e.g., 5 attempts per 10 minutes)
 
 **[LOW] L-005: JWT Token Accepted from Query Parameter**
-- **Location:** `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/auth.py:111`
+- **Location:** `src/backend/routers/auth.py:111`
 - **Issue:** Token accepted via `?token=` query parameter
 - **Risk:** Tokens may appear in logs, browser history, referrer headers
 - **Recommendation:** Accept tokens only via Authorization header or HttpOnly cookies
@@ -260,7 +260,7 @@ The credential sanitizer properly redacts:
 
 ### Base Image Security
 
-**Location:** `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/Dockerfile`
+**Location:** `docker/base-image/Dockerfile`
 
 #### Strengths
 - Based on Ubuntu 22.04 LTS (supported)
@@ -279,7 +279,7 @@ The credential sanitizer properly redacts:
 
 ## Frontend Security Analysis
 
-**Location:** `/Users/eugene/Dropbox/trinity/trinity/src/frontend/`
+**Location:** `src/frontend/`
 
 #### Strengths
 - Token stored in localStorage (with appropriate httpOnly cookie for nginx)
@@ -333,24 +333,24 @@ The credential sanitizer properly redacts:
 
 ## Files Analyzed
 
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/auth.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/credentials.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/public.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/internal.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/docs.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/database.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/dependencies.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/config.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/connection.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/utils/credential_sanitizer.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_service/deploy.py`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/api.js`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/auth.js`
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/Dockerfile`
-- `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/nginx.conf`
+- `src/backend/routers/auth.py`
+- `src/backend/routers/credentials.py`
+- `src/backend/routers/agents.py`
+- `src/backend/routers/public.py`
+- `src/backend/routers/internal.py`
+- `src/backend/routers/chat.py`
+- `src/backend/routers/docs.py`
+- `src/backend/database.py`
+- `src/backend/dependencies.py`
+- `src/backend/config.py`
+- `src/backend/db/connection.py`
+- `src/backend/utils/credential_sanitizer.py`
+- `src/backend/services/agent_service/deploy.py`
+- `src/frontend/src/api.js`
+- `src/frontend/src/stores/auth.js`
+- `docker/base-image/Dockerfile`
+- `docker-compose.yml`
+- `src/frontend/nginx.conf`
 
 ---
 

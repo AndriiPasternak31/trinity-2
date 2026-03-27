@@ -5,7 +5,7 @@
 > **Author**: Claude + Eugene
 > **Created**: 2026-03-04
 > **Validated**: 2026-03-04 — Validated against installed `payments-py==1.2.1` SDK source and local testing
-> **Research**: `/Users/eugene/Dropbox/Agents/nevermined-agent/nevermined-integration-notes.md`
+> **Research**: Nevermined agent integration notes (external)
 
 ## Overview
 

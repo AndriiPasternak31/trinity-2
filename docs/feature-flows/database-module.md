@@ -431,6 +431,6 @@ Total code increased by ~600 lines, but:
 
 ## Related Documents
 
-- **Requirements**: `/Users/eugene/Dropbox/trinity/trinity/docs/requirements/DATABASE_REFACTORING_PLAN.md`
-- **Connection**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/connection.py`
-- **Models**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db_models.py`
+- **Requirements**: `docs/requirements/DATABASE_REFACTORING_PLAN.md`
+- **Connection**: `src/backend/db/connection.py`
+- **Models**: `src/backend/db_models.py`

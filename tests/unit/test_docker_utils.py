@@ -12,9 +12,11 @@ import pytest
 import asyncio
 from unittest.mock import Mock, MagicMock, patch
 import sys
+from pathlib import Path
 
-# Add backend path for imports
-backend_path = '/Users/eugene/Dropbox/trinity/trinity/src/backend'
+# Add backend path for imports (relative to this file)
+_project_root = Path(__file__).resolve().parents[2]
+backend_path = str(_project_root / 'src' / 'backend')
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 

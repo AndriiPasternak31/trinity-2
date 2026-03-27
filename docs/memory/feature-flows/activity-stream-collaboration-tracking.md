@@ -17,7 +17,7 @@ As a platform administrator, I want to track and visualize all agent collaborati
 ## Agent Layer
 
 ### MCP Client Implementation
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/client.ts`
+**File**: `src/mcp-server/src/client.ts`
 
 #### chat() Method (Lines 336-378)
 Accepts optional `sourceAgent` parameter for collaboration tracking:
@@ -47,7 +47,7 @@ async chat(name: string, message: string, sourceAgent?: string): Promise<ChatRes
 **Key Feature**: Passes `X-Source-Agent` HTTP header to backend when agent initiates chat.
 
 ### MCP Chat Tool
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/tools/chat.ts`
+**File**: `src/mcp-server/src/tools/chat.ts`
 
 #### chatWithAgent Tool (Lines 132-270)
 Extracts source agent from auth context and passes to client:
@@ -98,7 +98,7 @@ execute: async (
 ## Backend Layer
 
 ### Chat Router with Activity Tracking
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py`
+**File**: `src/backend/routers/chat.py`
 
 #### WebSocket Manager Injection (Lines 81-88)
 ```python
@@ -234,7 +234,7 @@ AGENT_COLLABORATION (source agent)
 ```
 
 ### Activity Service
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/activity_service.py`
+**File**: `src/backend/services/activity_service.py`
 
 #### track_activity() Method (Lines 46-107)
 Central service for creating activity records:
@@ -317,7 +317,7 @@ def _get_action_description(self, activity_type: ActivityType, details: Optional
 ```
 
 ### Activities API Router
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/activities.py`
+**File**: `src/backend/routers/activities.py`
 
 #### Timeline Endpoint (Lines 15-55)
 Cross-agent activity timeline with access control:
@@ -372,7 +372,7 @@ async def get_activity_timeline(
 ## Database Layer
 
 ### Activity Operations
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/activities.py`
+**File**: `src/backend/db/activities.py`
 
 #### create_activity() (Lines 40-72)
 ```python
@@ -420,7 +420,7 @@ def get_activities_in_range(self, start_time: Optional[str] = None,
 ```
 
 ### agent_activities Table Schema
-**Location**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/database.py` (Lines 475-497)
+**Location**: `src/backend/database.py` (Lines 475-497)
 
 ```sql
 CREATE TABLE agent_activities (
@@ -483,7 +483,7 @@ CREATE INDEX idx_activities_execution ON agent_activities(related_execution_id);
 ## Frontend Layer
 
 ### Network Store
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/network.js`
+**File**: `src/frontend/src/stores/network.js`
 
 #### State Variables (Lines 45-52)
 ```javascript
@@ -717,7 +717,7 @@ function startAgentRefresh() {
 ```
 
 ### Dashboard UI
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Dashboard.vue` (751 lines total)
+**File**: `src/frontend/src/views/Dashboard.vue` (751 lines total)
 
 #### Header Statistics (Lines 8-61)
 ```html
@@ -1068,14 +1068,14 @@ WHERE a1.activity_type = 'agent_collaboration'
 
 ### Code Files
 > Line numbers verified 2026-01-23
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py:106-416` - Chat endpoint with collaboration tracking
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/activities.py:15-55` - Timeline endpoint
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/activity_service.py:46-244` - Activity service
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/activities.py:40-185` - Activity database operations
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/network.js:1-1283` - Network store (1283 lines total)
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Dashboard.vue:1-751` - Dashboard (751 lines total)
-- `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/client.ts:336-378` - MCP client chat method
-- `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/tools/chat.ts:132-270` - MCP chat_with_agent tool
+- `src/backend/routers/chat.py:106-416` - Chat endpoint with collaboration tracking
+- `src/backend/routers/activities.py:15-55` - Timeline endpoint
+- `src/backend/services/activity_service.py:46-244` - Activity service
+- `src/backend/db/activities.py:40-185` - Activity database operations
+- `src/frontend/src/stores/network.js:1-1283` - Network store (1283 lines total)
+- `src/frontend/src/views/Dashboard.vue:1-751` - Dashboard (751 lines total)
+- `src/mcp-server/src/client.ts:336-378` - MCP client chat method
+- `src/mcp-server/src/tools/chat.ts:132-270` - MCP chat_with_agent tool
 
 ### Documentation
 - **Requirements**: `docs/memory/requirements.md` REQ-9.7 (Activity Stream)

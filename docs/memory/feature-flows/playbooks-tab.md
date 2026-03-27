@@ -24,7 +24,7 @@ As a **Trinity user**, I want to **browse and invoke my agent's skills directly 
 
 ### Component: PlaybooksPanel.vue
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/PlaybooksPanel.vue`
+**File**: `src/frontend/src/components/PlaybooksPanel.vue`
 
 **Props** (lines 173-182):
 ```javascript
@@ -115,7 +115,7 @@ function runWithInstructions(skill) {
 
 ### Integration: AgentDetail.vue
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/AgentDetail.vue`
+**File**: `src/frontend/src/views/AgentDetail.vue`
 
 **Tab Configuration** (line 527):
 ```javascript
@@ -162,7 +162,7 @@ const handlePlaybookRunWithInstructions = (prefillText) => {
 
 ### Endpoint: GET /api/agents/{name}/playbooks
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py`
+**File**: `src/backend/routers/agents.py`
 **Lines**: 510-552
 
 ```python
@@ -211,13 +211,13 @@ async def get_agent_playbooks_endpoint(
 
 ### Router Registration
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/__init__.py`
+**File**: `docker/base-image/agent_server/routers/__init__.py`
 **Line 12**:
 ```python
 from .skills import router as skills_router
 ```
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/main.py`
+**File**: `docker/base-image/agent_server/main.py`
 **Line 59**:
 ```python
 app.include_router(skills_router)  # Skills/playbooks listing endpoint
@@ -225,7 +225,7 @@ app.include_router(skills_router)  # Skills/playbooks listing endpoint
 
 ### Endpoint: GET /api/skills
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/skills.py`
+**File**: `docker/base-image/agent_server/routers/skills.py`
 
 **Response Model** (lines 20-36):
 ```python

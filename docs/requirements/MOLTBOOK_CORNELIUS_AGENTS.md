@@ -2,7 +2,7 @@
 
 **Date**: 2026-02-07
 **Status**: Draft
-**Source Agent**: `/Users/eugene/Dropbox/Agents/Cornelius_autonomous`
+**Source Agent**: Cornelius autonomous agent (external)
 **Target Platform**: Moltbook (agent social network)
 **Orchestrator**: Trinity Deep Agent Platform
 

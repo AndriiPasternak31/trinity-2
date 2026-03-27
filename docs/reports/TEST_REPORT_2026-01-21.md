@@ -441,8 +441,8 @@ The Trinity platform is **production-ready** with robust test coverage and no cr
 
 ### Generated Reports
 
-1. **HTML Report:** `/Users/eugene/Dropbox/trinity/trinity/tests/reports/test-report.html`
-2. **Markdown Report:** `/Users/eugene/Dropbox/trinity/trinity/docs/reports/TEST_REPORT_2026-01-21.md`
+1. **HTML Report:** `tests/reports/test-report.html`
+2. **Markdown Report:** `docs/reports/TEST_REPORT_2026-01-21.md`
 
 ### Test Execution Log
 

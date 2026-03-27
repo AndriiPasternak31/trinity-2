@@ -13,7 +13,7 @@ Execute ONE specific test phase (0-18) from the modular testing framework. You M
 
 ## Phase Files Location
 
-**All phase instructions are in**: `/Users/eugene/Dropbox/trinity/trinity/docs/testing/phases/`
+**All phase instructions are in**: `docs/testing/phases/` (relative to project root)
 
 | Phase | File Name | Purpose |
 |-------|-----------|---------|
@@ -46,7 +46,7 @@ When invoked with a phase number (e.g., "Run phase 3"):
 
 1. **Read the phase file FIRST**:
    ```
-   Read /Users/eugene/Dropbox/trinity/trinity/docs/testing/phases/PHASE_03_CONTEXT_VALIDATION.md
+   Read docs/testing/phases/PHASE_03_CONTEXT_VALIDATION.md
    ```
 
 2. **Verify prerequisites** listed in the phase file

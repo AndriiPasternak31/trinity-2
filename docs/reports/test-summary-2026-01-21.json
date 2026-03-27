@@ -190,9 +190,9 @@
     }
   ],
   "artifacts": {
-    "html_report": "/Users/eugene/Dropbox/trinity/trinity/tests/reports/test-report.html",
-    "markdown_report": "/Users/eugene/Dropbox/trinity/trinity/docs/reports/TEST_REPORT_2026-01-21.md",
-    "json_summary": "/Users/eugene/Dropbox/trinity/trinity/docs/reports/test-summary-2026-01-21.json",
+    "html_report": "tests/reports/test-report.html",
+    "markdown_report": "docs/reports/TEST_REPORT_2026-01-21.md",
+    "json_summary": "docs/reports/test-summary-2026-01-21.json",
     "raw_output": "/private/tmp/claude/-Users-eugene-Dropbox-trinity-trinity/tasks/bb2f70d.output"
   }
 }

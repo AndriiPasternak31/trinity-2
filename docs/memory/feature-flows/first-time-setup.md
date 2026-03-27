@@ -30,7 +30,7 @@ As a platform administrator deploying Trinity for the first time, I want to be g
 ### Frontend Layer
 
 #### Router Guard
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/router/index.js:165-220`
+**File**: `src/frontend/src/router/index.js:165-220`
 
 ```javascript
 // Cache for setup status check (avoid repeated API calls)
@@ -88,7 +88,7 @@ router.beforeEach(async (to, from, next) => {
 ```
 
 #### Setup Route
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/router/index.js:6-10`
+**File**: `src/frontend/src/router/index.js:6-10`
 
 ```javascript
 {
@@ -100,7 +100,7 @@ router.beforeEach(async (to, from, next) => {
 ```
 
 #### Clear Setup Cache Export
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/router/index.js:242-245`
+**File**: `src/frontend/src/router/index.js:242-245`
 
 ```javascript
 // Clear setup cache on successful setup
@@ -111,7 +111,7 @@ export function clearSetupCache() {
 ```
 
 #### SetupPassword Component
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/SetupPassword.vue`
+**File**: `src/frontend/src/views/SetupPassword.vue`
 
 **Key Features**:
 - **Setup Token field** — required, instructions point to `docker compose logs backend`
@@ -165,7 +165,7 @@ const isValid = computed(() => {
 ### Backend Layer
 
 #### Setup Router
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/setup.py`
+**File**: `src/backend/routers/setup.py`
 
 **Router Registration** in `main.py:46, 294`:
 ```python
@@ -265,7 +265,7 @@ async def set_admin_password(data: SetAdminPasswordRequest, request: Request):
 ```
 
 #### Password Hashing
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/dependencies.py:15-34`
+**File**: `src/backend/dependencies.py:15-34`
 
 ```python
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -295,7 +295,7 @@ def verify_password(plain_password: str, stored_password: str) -> bool:
 ### Database Layer
 
 #### User Password Update (Upsert Pattern)
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/users.py:129-162`
+**File**: `src/backend/db/users.py:129-162`
 
 ```python
 def update_user_password(self, username: str, hashed_password: str) -> bool:
@@ -340,7 +340,7 @@ def update_user_password(self, username: str, hashed_password: str) -> bool:
 4. This pattern ensures first-time setup works even on fresh deployments with no existing admin user
 
 #### Settings Storage
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/settings.py:60-83`
+**File**: `src/backend/db/settings.py:60-83`
 
 ```python
 def set_setting(self, key: str, value: str) -> SystemSetting:
@@ -384,7 +384,7 @@ def get_setting_value(self, key: str, default: str = None) -> Optional[str]:
 ```
 
 #### Database Table
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/database.py:522-527`
+**File**: `src/backend/database.py:522-527`
 
 ```sql
 CREATE TABLE IF NOT EXISTS system_settings (
@@ -402,7 +402,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 ### Login Block During Setup
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/auth.py`
+**File**: `src/backend/routers/auth.py`
 
 **Setup Check Function** (lines 20-22):
 ```python
@@ -479,7 +479,7 @@ async def get_auth_mode():
 ### Frontend Layer
 
 #### Settings Page
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Settings.vue`
+**File**: `src/frontend/src/views/Settings.vue`
 
 **API Key Section** (lines 23-127):
 - Input field with show/hide toggle
@@ -516,7 +516,7 @@ async function saveApiKey() {
 ### Backend Layer
 
 #### API Keys Endpoints
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/settings.py:361-588`
+**File**: `src/backend/routers/settings.py:361-588`
 
 **GET /api/settings/api-keys** (line 394-430):
 ```python
@@ -593,7 +593,7 @@ async def test_anthropic_key(body: ApiKeyTest, current_user: User = Depends(get_
 ```
 
 #### Key Retrieval Function
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/settings.py:379-384`
+**File**: `src/backend/routers/settings.py:379-384`
 
 ```python
 def get_anthropic_api_key() -> str:
@@ -609,7 +609,7 @@ def get_anthropic_api_key() -> str:
 ## Flow 3: Agent Uses Stored API Key
 
 ### Agent Creation
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py:508-512`
+**File**: `src/backend/routers/agents.py:508-512`
 
 ```python
 env_vars = {
@@ -621,7 +621,7 @@ env_vars = {
 ```
 
 ### System Agent Service
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/system_agent_service.py:24, 180`
+**File**: `src/backend/services/system_agent_service.py:24, 180`
 
 ```python
 from routers.settings import get_anthropic_api_key

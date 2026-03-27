@@ -132,7 +132,7 @@ Based on the gap analysis, test coverage improved from 41% to approximately 85%:
 ## Test Artifacts
 
 ### Screenshots
-All screenshots saved to: `/Users/eugene/Dropbox/trinity/trinity/.playwright-mcp/`
+All screenshots saved to: `.playwright-mcp/`
 
 ### Test Reports
 Phase-specific reports generated during testing with detailed step-by-step results.

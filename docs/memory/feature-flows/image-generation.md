@@ -19,7 +19,7 @@ As a platform user (or internal service), I want to generate high-quality images
 ## Backend Layer
 
 ### Router
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/image_generation.py`
+**File**: `src/backend/routers/image_generation.py`
 
 ```python
 router = APIRouter(prefix="/api/images", tags=["images"])
@@ -73,14 +73,14 @@ router = APIRouter(prefix="/api/images", tags=["images"])
   ```
 
 ### Router Registration
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/main.py`
+**File**: `src/backend/main.py`
 - **Line 68**: `from routers.image_generation import router as image_generation_router`
 - **Line 334**: `app.include_router(image_generation_router)  # Image Generation (IMG-001)`
 
 ---
 
 ### Service Layer
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/image_generation_service.py`
+**File**: `src/backend/services/image_generation_service.py`
 
 #### ImageGenerationService (line 52)
 Singleton service accessed via `get_image_generation_service()` (line 395).
@@ -199,7 +199,7 @@ class ImageGenerationResult:
 ---
 
 ### Prompt Engineering Layer
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/image_generation_prompts.py`
+**File**: `src/backend/services/image_generation_prompts.py`
 
 Four use-case-specific system prompts, each containing best practices for image generation:
 
@@ -243,10 +243,10 @@ Used by `avatar.py:_generate_emotions_background()` to build emotion-specific pr
 ---
 
 ### Configuration
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/config.py`
+**File**: `src/backend/config.py`
 - **Line 103**: `GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")`
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker-compose.yml`
+**File**: `docker-compose.yml`
 - **Line 20**: `GEMINI_API_KEY=${GEMINI_API_KEY:-}` -- Passed through from host `.env` to backend container
 
 ---

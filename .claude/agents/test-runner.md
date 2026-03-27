@@ -13,7 +13,7 @@ Run the Trinity API test suite, analyze results, and generate detailed testing r
 
 ## Test Suite Location
 
-The test suite is located at: `/Users/eugene/Dropbox/trinity/trinity/tests/`
+The test suite is located at `tests/` relative to the project root (the working directory).
 
 ## IMPORTANT: Test Tier Selection
 
@@ -22,8 +22,7 @@ Before running tests, determine which tier to use based on the user's request:
 ### Tier 1: SMOKE TESTS (~45 seconds)
 Use for: Quick validation, CI pipelines, development feedback
 ```bash
-cd /Users/eugene/Dropbox/trinity/trinity/tests
-source .venv/bin/activate
+cd tests && source .venv/bin/activate
 python -m pytest -m smoke -v --tb=short --ignore=process_engine 2>&1
 ```
 Tests: auth, templates, mcp_keys, setup, settings/api-keys, activities, metrics, folders, deploy-local (no agent creation)
@@ -31,8 +30,7 @@ Tests: auth, templates, mcp_keys, setup, settings/api-keys, activities, metrics,
 ### Tier 2: CORE TESTS (~15-20 minutes)
 Use for: Standard validation, pre-commit checks, feature verification
 ```bash
-cd /Users/eugene/Dropbox/trinity/trinity/tests
-source .venv/bin/activate
+cd tests && source .venv/bin/activate
 python -m pytest -m "not slow" -v --tb=short --ignore=process_engine 2>&1
 ```
 Tests: Everything except slow chat execution tests
@@ -40,8 +38,7 @@ Tests: Everything except slow chat execution tests
 ### Tier 3: FULL SUITE (~20-30 minutes)
 Use for: Release validation, comprehensive testing, post-deployment verification
 ```bash
-cd /Users/eugene/Dropbox/trinity/trinity/tests
-source .venv/bin/activate
+cd tests && source .venv/bin/activate
 python -m pytest -v --tb=short --ignore=process_engine 2>&1
 ```
 Tests: All tests including slow chat execution
@@ -57,8 +54,7 @@ When invoked, follow these steps:
 
 ### 1. Environment Setup
 ```bash
-cd /Users/eugene/Dropbox/trinity/trinity/tests
-source .venv/bin/activate
+cd tests && source .venv/bin/activate
 ```
 
 ### 2. Run Tests (select appropriate tier)
@@ -119,7 +115,7 @@ For each failure:
 
 ## Report Format
 
-Save reports to: `/Users/eugene/Dropbox/trinity/trinity/tests/reports/`
+Save reports to: `tests/reports/` (relative to project root)
 
 Create the following files:
 1. `test-report-{timestamp}.md` - Detailed markdown report

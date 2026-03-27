@@ -4696,12 +4696,12 @@ GitHub Repo → git clone/pull → /data/skills-library/ → copy → agent ~/.c
 - **Total**: 84 files, 1460+ tests
 
 **Key Implementation Files Verified**:
-- `/Users/eugene/Dropbox/trinity/trinity/tests/conftest.py` (368 lines)
-- `/Users/eugene/Dropbox/trinity/trinity/pyproject.toml` (lines 1-16 pytest config)
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/config.py` (165 lines)
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/templates.py` (220 lines)
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/template_service.py` (381 lines)
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/main.py` (88 lines)
+- `tests/conftest.py` (368 lines)
+- `pyproject.toml` (lines 1-16 pytest config)
+- `src/backend/config.py` (165 lines)
+- `src/backend/routers/templates.py` (220 lines)
+- `src/backend/services/template_service.py` (381 lines)
+- `docker/base-image/agent_server/main.py` (88 lines)
 
 ---
 
@@ -4728,13 +4728,13 @@ GitHub Repo → git clone/pull → /data/skills-library/ → copy → agent ~/.c
 - Minor UX inconsistency, no functional impact
 
 **Key Implementation Files**:
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/agents.py:367-393`
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_service/stats.py:123-184`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/LogsPanel.vue`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/AgentHeader.vue:172-235`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/composables/useAgentStats.js`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/composables/useAgentLogs.js`
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js:183-189,276-282`
+- `src/backend/routers/agents.py:367-393`
+- `src/backend/services/agent_service/stats.py:123-184`
+- `src/frontend/src/components/LogsPanel.vue`
+- `src/frontend/src/components/AgentHeader.vue:172-235`
+- `src/frontend/src/composables/useAgentStats.js`
+- `src/frontend/src/composables/useAgentLogs.js`
+- `src/frontend/src/stores/agents.js:183-189,276-282`
 
 ---
 
@@ -4763,10 +4763,10 @@ GitHub Repo → git clone/pull → /data/skills-library/ → copy → agent ~/.c
   - Updated timestamps to 2026-01-23
 
 **Key Implementation Files Referenced**:
-- `/Users/eugene/Dropbox/trinity/trinity/config/vector.yaml` - Vector config with daily rotation
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/log_archive_service.py` - APScheduler archival
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/archive_storage.py` - LocalArchiveStorage interface
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/logs.py` - Admin API endpoints
+- `config/vector.yaml` - Vector config with daily rotation
+- `src/backend/services/log_archive_service.py` - APScheduler archival
+- `src/backend/services/archive_storage.py` - LocalArchiveStorage interface
+- `src/backend/routers/logs.py` - Admin API endpoints
 
 ---
 

@@ -13,9 +13,12 @@ import json
 # Import the backend sanitizer directly
 import sys
 import importlib
+from pathlib import Path
+
+_project_root = Path(__file__).resolve().parents[2]
 
 # Remove agent path if it was added by other test
-agent_path = '/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/utils'
+agent_path = str(_project_root / 'docker' / 'base-image' / 'agent_server' / 'utils')
 if agent_path in sys.path:
     sys.path.remove(agent_path)
 
@@ -23,7 +26,7 @@ if agent_path in sys.path:
 if 'credential_sanitizer' in sys.modules:
     del sys.modules['credential_sanitizer']
 
-backend_utils_path = '/Users/eugene/Dropbox/trinity/trinity/src/backend/utils'
+backend_utils_path = str(_project_root / 'src' / 'backend' / 'utils')
 if backend_utils_path not in sys.path:
     sys.path.insert(0, backend_utils_path)
 

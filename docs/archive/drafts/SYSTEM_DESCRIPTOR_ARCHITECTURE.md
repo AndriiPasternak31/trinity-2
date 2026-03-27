@@ -4,7 +4,7 @@
 > **Created**: 2025-12-15
 > **Updated**: 2025-12-16
 > **Authors**: Eugene + Claude
-> **Based On**: `/Users/eugene/Dropbox/Agents/process-architecture.md`
+> **Based On**: Process architecture design document (external)
 > **Aligned With**: `docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md`
 
 ---
@@ -664,7 +664,7 @@ A system is essentially a collection of agents with:
 
 - **Trinity Compatible Agent Guide**: `docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md`
 - **LATS Idea**: `docs/drafts/LATS_APPROVAL_IDEA.md`
-- **Process-First Architecture**: `/Users/eugene/Dropbox/Agents/process-architecture.md`
+- **Process-First Architecture**: Process architecture design document (external)
 - **Trinity Multi-Agent Guide**: `docs/MULTI_AGENT_SYSTEM_GUIDE.md`
 - **Shared Folders Feature**: `docs/memory/feature-flows/agent-shared-folders.md`
 

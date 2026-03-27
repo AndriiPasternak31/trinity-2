@@ -82,7 +82,7 @@ This feature has no direct UI entry point. It is triggered automatically by the 
 
 ### Flow 1: Credential Health Check (Business Layer)
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py:258-306`
+**File**: `src/backend/services/monitoring_service.py:258-306`
 
 During the business health check, the monitoring service probes the agent container for subscription credential presence.
 
@@ -144,13 +144,13 @@ if credential_status == "missing":
     issues.append("Subscription credentials missing")
 ```
 
-**Important note**: The agent-side `/api/credentials/status` endpoint (`/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/credentials.py:135-176`) only checks a hardcoded list of files: `.env`, `.mcp.json`, `.mcp.json.template`, `.credentials.enc`. It does NOT include `.claude/.credentials.json` in its file list. This means `files.get(".claude/.credentials.json", {})` always returns `{}`, causing the check to always report "missing" for subscription-enabled agents. The auto-remediation mechanism compensates by re-injecting credentials each cycle.
+**Important note**: The agent-side `/api/credentials/status` endpoint (`docker/base-image/agent_server/routers/credentials.py:135-176`) only checks a hardcoded list of files: `.env`, `.mcp.json`, `.mcp.json.template`, `.credentials.enc`. It does NOT include `.claude/.credentials.json` in its file list. This means `files.get(".claude/.credentials.json", {})` always returns `{}`, causing the check to always report "missing" for subscription-enabled agents. The auto-remediation mechanism compensates by re-injecting credentials each cycle.
 
 ---
 
 ### Flow 2: Auto-Remediation
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py:423-439`
+**File**: `src/backend/services/monitoring_service.py:423-439`
 
 When `check_business_health()` reports `credential_status == "missing"`, the composite health check attempts to re-inject credentials before aggregating results.
 
@@ -203,7 +203,7 @@ if business_check.credential_status == "missing":
         print(f"Auto-remediation error for agent {agent_name}: {e}")
 ```
 
-**Injection retry behavior** (`/Users/eugene/Dropbox/trinity/trinity/src/backend/services/subscription_service.py:24-111`):
+**Injection retry behavior** (`src/backend/services/subscription_service.py:24-111`):
 
 The `inject_subscription_to_agent()` function retries up to **5 times** (increased from 3) with a 2-second delay between attempts:
 
@@ -220,8 +220,8 @@ async def inject_subscription_to_agent(
 
 ### Flow 3: Alert on Failed Remediation
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py:558-563`
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_alerts.py:379-413`
+**File**: `src/backend/services/monitoring_service.py:558-563`
+**File**: `src/backend/services/monitoring_alerts.py:379-413`
 
 If auto-remediation fails and `credential_status` is still "missing" after the remediation attempt, an alert is fired.
 
@@ -317,7 +317,7 @@ async def alert_subscription_credentials_missing(
 
 ### Flow 4: Aggregate Health Status Degradation
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py:310-387`
+**File**: `src/backend/services/monitoring_service.py:310-387`
 
 The `aggregate_health()` function includes credential status in its evaluation. If credentials are missing (after remediation attempt), the agent is classified as `DEGRADED`.
 
@@ -339,7 +339,7 @@ This check runs after all critical/unhealthy checks, so credential issues appear
 
 ### Flow 5: Subscription Assignment Error Surfacing
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/subscriptions.py:203-227`
+**File**: `src/backend/routers/subscriptions.py:203-227`
 
 When assigning a subscription to a running agent, the endpoint now properly reports injection failures instead of silently swallowing them.
 
@@ -369,7 +369,7 @@ The response always includes `injection_result` so callers (UI, MCP tools) can s
 
 ### Flow 6: Scheduler Auth Error Detection
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/scheduler/service.py:673-717`
+**File**: `src/scheduler/service.py:673-717`
 
 The scheduler's `_execute_schedule_with_lock()` method now detects authentication-related failures in scheduled task responses and labels them distinctly.
 
@@ -468,7 +468,7 @@ db.create_health_check(
 
 ## Known Limitations
 
-1. **Agent `/api/credentials/status` gap**: The agent-side endpoint (`/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/credentials.py:143-148`) does not include `.claude/.credentials.json` in its hardcoded file list. The monitoring service checks for this path in the response, which means the credential check always reports "missing" for subscription-enabled agents. Auto-remediation re-injects credentials every monitoring cycle as a compensating mechanism.
+1. **Agent `/api/credentials/status` gap**: The agent-side endpoint (`docker/base-image/agent_server/routers/credentials.py:143-148`) does not include `.claude/.credentials.json` in its hardcoded file list. The monitoring service checks for this path in the response, which means the credential check always reports "missing" for subscription-enabled agents. Auto-remediation re-injects credentials every monitoring cycle as a compensating mechanism.
 
 2. **Cooldown prevents repeated alerts**: The 10-minute cooldown on `subscription:credentials_missing` means only one alert per agent per 10 minutes, even if remediation fails every 30-second cycle.
 
@@ -523,15 +523,15 @@ db.create_health_check(
 
 | File | Lines | Change |
 |------|-------|--------|
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/db_models.py` | 710 | Added `credential_status` field to `BusinessHealthCheck` |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py` | 258-306 | Credential check in `check_business_health()` |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py` | 373-375 | `aggregate_health()` treats missing credentials as DEGRADED |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py` | 423-439 | Auto-remediation in `perform_health_check()` |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_service.py` | 558-563 | Alert trigger after failed remediation |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/monitoring_alerts.py` | 379-413 | New `alert_subscription_credentials_missing()` method |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/subscriptions.py` | 215-220 | Error logging for injection failures on assignment |
-| `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/subscription_service.py` | 27 | `max_retries` increased from 3 to 5 |
-| `/Users/eugene/Dropbox/trinity/trinity/src/scheduler/service.py` | 677-717 | Auth error detection and `[AUTH_ERROR]` prefix |
+| `src/backend/db_models.py` | 710 | Added `credential_status` field to `BusinessHealthCheck` |
+| `src/backend/services/monitoring_service.py` | 258-306 | Credential check in `check_business_health()` |
+| `src/backend/services/monitoring_service.py` | 373-375 | `aggregate_health()` treats missing credentials as DEGRADED |
+| `src/backend/services/monitoring_service.py` | 423-439 | Auto-remediation in `perform_health_check()` |
+| `src/backend/services/monitoring_service.py` | 558-563 | Alert trigger after failed remediation |
+| `src/backend/services/monitoring_alerts.py` | 379-413 | New `alert_subscription_credentials_missing()` method |
+| `src/backend/routers/subscriptions.py` | 215-220 | Error logging for injection failures on assignment |
+| `src/backend/services/subscription_service.py` | 27 | `max_retries` increased from 3 to 5 |
+| `src/scheduler/service.py` | 677-717 | Auth error detection and `[AUTH_ERROR]` prefix |
 
 ---
 

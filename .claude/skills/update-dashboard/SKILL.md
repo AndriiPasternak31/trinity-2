@@ -22,7 +22,7 @@ Write to: `/home/developer/dashboard.yaml`
 
 ## STEP 1: Gather Codebase Metrics
 
-Run the following commands from the project root (`/Users/eugene/Dropbox/trinity/trinity`):
+Run the following commands from the project root:
 
 ```bash
 # Backend Python lines of code (excluding __pycache__)

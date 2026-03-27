@@ -543,7 +543,7 @@ Claude Max limits are per-account, not per-agent. When multiple agents use the s
 
 ## References
 
-- [Agent Auth Detection Research](/Users/eugene/Dropbox/trinity/trinity-ops-agent/instances/ability-services/RESEARCH-agent-auth-detection.md)
+- [Agent Auth Detection Research](#)
 - [CRED-002: Credential System Refactor](CREDENTIAL_SYSTEM_REFACTOR.md)
 - [Claude Code Authentication Docs](https://docs.anthropic.com/en/docs/claude-code/cli-usage#authentication)
 - [GitHub Issue #1651: API key not used when logged in](https://github.com/anthropics/claude-code/issues/1651)

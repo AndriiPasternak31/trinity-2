@@ -2062,7 +2062,7 @@ See the Ruby Content Management System for a complete example:
 - Full mesh permissions
 - Test mode for safe development
 
-**Reference**: See `/Users/eugene/Dropbox/trinity/agents/Ruby/ruby-content-system-definition.md` for the complete system definition.
+**Reference**: See the Ruby agent's `ruby-content-system-definition.md` for the complete system definition.
 
 ---
 

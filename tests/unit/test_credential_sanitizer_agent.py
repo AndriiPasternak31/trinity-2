@@ -15,7 +15,8 @@ from pathlib import Path
 
 # Import the agent-side sanitizer directly from the module file
 import sys
-agent_utils_path = '/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/utils'
+_project_root = Path(__file__).resolve().parents[2]
+agent_utils_path = str(_project_root / 'docker' / 'base-image' / 'agent_server' / 'utils')
 if agent_utils_path not in sys.path:
     sys.path.insert(0, agent_utils_path)
 

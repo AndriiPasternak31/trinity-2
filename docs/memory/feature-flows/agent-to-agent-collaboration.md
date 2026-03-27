@@ -78,7 +78,7 @@ Frontend clients receive real-time collaboration events:
 ## MCP Layer
 
 ### Server Authentication
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/server.ts`
+**File**: `src/mcp-server/src/server.ts`
 **Lines**: 111-152
 
 ```typescript
@@ -113,7 +113,7 @@ const server = new FastMCP({
 ```
 
 ### Chat Tool Access Control
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/tools/chat.ts`
+**File**: `src/mcp-server/src/tools/chat.ts`
 **Lines**: 29-100
 
 ```typescript
@@ -158,7 +158,7 @@ async function checkAgentAccess(
 ```
 
 ### Chat Tool Execution
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/tools/chat.ts`
+**File**: `src/mcp-server/src/tools/chat.ts`
 **Lines**: 186-269
 
 ```typescript
@@ -190,7 +190,7 @@ execute: async ({ agent_name, message, parallel, ... }, context: any) => {
 ```
 
 ### MCP Client X-Source-Agent Header
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/client.ts`
+**File**: `src/mcp-server/src/client.ts`
 **Lines**: 336-378
 
 ```typescript
@@ -220,7 +220,7 @@ async chat(name: string, message: string, sourceAgent?: string): Promise<ChatRes
 ## Backend Layer
 
 ### CORS Configuration for X-Source-Agent
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/main.py`
+**File**: `src/backend/main.py`
 **Line**: 273
 
 ```python
@@ -234,7 +234,7 @@ app.add_middleware(
 ```
 
 ### Chat Endpoint
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py`
+**File**: `src/backend/routers/chat.py`
 **Lines**: 106-416
 
 ```python
@@ -260,7 +260,7 @@ async def chat_with_agent(
 ```
 
 ### Collaboration Event Broadcasting
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py`
+**File**: `src/backend/routers/chat.py`
 **Lines**: 91-104
 
 ```python
@@ -290,7 +290,7 @@ if x_source_agent:
 ```
 
 ### Activity Tracking for Collaboration
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py`
+**File**: `src/backend/routers/chat.py`
 **Lines**: 196-210
 
 ```python
@@ -317,7 +317,7 @@ collaboration_activity_id = await activity_service.track_activity(
 ## Agent Layer
 
 ### Trinity MCP Injection
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/services/trinity_mcp.py`
+**File**: `docker/base-image/agent_server/services/trinity_mcp.py`
 **Lines**: 15-81
 
 ```python
@@ -355,7 +355,7 @@ def _inject_claude_mcp(trinity_mcp_url: str, trinity_mcp_api_key: str) -> bool:
 ```
 
 ### Agent MCP Key Generation (Agent Creation)
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/agent_service/crud.py`
+**File**: `src/backend/services/agent_service/crud.py`
 **Lines**: 270-321
 
 ```python
@@ -387,7 +387,7 @@ if agent_mcp_key:
 ## Database Operations
 
 ### MCP Key Table Schema
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/database.py`
+**File**: `src/backend/database.py`
 **Lines**: 161-168
 
 ```python
@@ -399,7 +399,7 @@ migrations = [
 ```
 
 ### Create Agent MCP API Key
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/mcp_keys.py`
+**File**: `src/backend/db/mcp_keys.py`
 **Lines**: 107-161
 
 ```python
@@ -409,7 +409,7 @@ def create_agent_mcp_api_key(self, agent_name: str, owner_username: str, descrip
 ```
 
 ### Validate MCP API Key
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/mcp_keys.py`
+**File**: `src/backend/db/mcp_keys.py`
 **Lines**: 190-236
 
 Returns:
@@ -419,7 +419,7 @@ Returns:
 - `scope`: 'user', 'agent', or 'system'
 
 ### Backend Validation Endpoint
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/mcp_keys.py`
+**File**: `src/backend/routers/mcp_keys.py`
 **Lines**: 144-180
 
 ```python
@@ -434,7 +434,7 @@ async def validate_mcp_api_key_http_endpoint(request: Request):
 ## Type Definitions
 
 ### McpAuthContext
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/mcp-server/src/types.ts`
+**File**: `src/mcp-server/src/types.ts`
 **Lines**: 64-71
 
 ```typescript
@@ -449,7 +449,7 @@ export interface McpAuthContext extends Record<string, unknown> {
 ```
 
 ### ActivityType
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/models.py`
+**File**: `src/backend/models.py`
 **Line**: 135
 
 ```python

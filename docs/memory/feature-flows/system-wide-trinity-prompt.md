@@ -9,13 +9,13 @@ Allows admins to set a custom system prompt (Trinity Prompt) that is injected in
 As an admin, I want to define custom instructions that apply to all agents so that I can enforce platform-wide policies, coding standards, or behavioral guidelines without configuring each agent individually.
 
 ## Entry Points
-- **UI**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Settings.vue` - Settings page with Trinity Prompt textarea editor
+- **UI**: `src/frontend/src/views/Settings.vue` - Settings page with Trinity Prompt textarea editor
 - **API**: `GET/PUT/DELETE /api/settings/{key}` where key is `trinity_prompt`
 
 ## Frontend Layer
 
 ### Components
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/Settings.vue` - Full Settings page with:
+- `src/frontend/src/views/Settings.vue` - Full Settings page with:
   - Textarea for editing Trinity Prompt (lines 240-252)
   - Save/Clear buttons (lines 267-286)
   - Character count display (line 262)
@@ -25,7 +25,7 @@ As an admin, I want to define custom instructions that apply to all agents so th
   - Info box explaining how it works (lines 432-452)
 
 ### State Management
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/settings.js`
+- `src/frontend/src/stores/settings.js`
   - `fetchSettings()` - Fetches all settings from backend (lines 23-43)
   - `updateSetting(key, value)` - Updates a setting via PUT (lines 66-81)
   - `deleteSetting(key)` - Deletes a setting via DELETE (lines 87-102)
@@ -44,25 +44,25 @@ await axios.delete('/api/settings/trinity_prompt')
 ```
 
 ### Routing
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/router/index.js:138-142`
+- `src/frontend/src/router/index.js:138-142`
   - Route: `/settings` -> `Settings.vue`
   - Meta: `requiresAuth: true, requiresAdmin: true`
 
 ### Navigation
-- `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/NavBar.vue:46-53`
+- `src/frontend/src/components/NavBar.vue:46-53`
   - Settings link conditionally rendered: `v-if="isAdmin"` (line 47)
   - Admin check via `GET /api/users/me` response role field (lines 254-261)
 
 ## Backend Layer
 
 ### Settings Service
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/settings_service.py` - Centralized settings retrieval
+- `src/backend/services/settings_service.py` - Centralized settings retrieval
   - `SettingsService` class (lines 49-101)
   - `get_setting(key, default)` method (lines 59-62)
   - Singleton instance `settings_service` (line 104)
 
 ### Endpoints
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/settings.py`
+- `src/backend/routers/settings.py`
   - `GET /api/settings` (line 75) - List all settings (admin-only)
   - `GET /api/settings/{key}` (line 510) - Get specific setting (admin-only)
   - `PUT /api/settings/{key}` (line 537) - Create/update setting (admin-only)
@@ -79,7 +79,7 @@ await axios.delete('/api/settings/trinity_prompt')
 2. **Setting Storage**: Uses `db.set_setting(key, value)` for upsert
 
 ### Database Operations
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/db/settings.py` - `SettingsOperations` class
+- `src/backend/db/settings.py` - `SettingsOperations` class
 
 **Table**: `system_settings`
 ```sql
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
 - `get_settings_dict()` - Get settings as key-value dict (lines 116-123)
 
 ### Models
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/db_models.py:285-294`
+- `src/backend/db_models.py:285-294`
   ```python
   class SystemSetting(BaseModel):
       key: str
@@ -117,35 +117,35 @@ CREATE TABLE IF NOT EXISTS system_settings (
 Platform instructions are injected at runtime on every Claude Code invocation — not at startup.
 
 ### Platform Prompt Service (Single Source of Truth)
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/platform_prompt_service.py`
+- `src/backend/services/platform_prompt_service.py`
   - `PLATFORM_INSTRUCTIONS` constant — static platform instructions (collaboration tools, operator queue ref, package persistence)
   - `get_platform_system_prompt()` — combines static instructions with `trinity_prompt` DB setting
 
 ### Chat Path (Interactive)
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/chat.py`
+- `src/backend/routers/chat.py`
   - `POST /api/agents/{name}/chat` — calls `get_platform_system_prompt()`, adds `system_prompt` to payload sent to agent `/api/chat`
 
 ### Task Path (Headless)
-- `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/task_execution_service.py`
+- `src/backend/services/task_execution_service.py`
   - `execute_task()` — calls `get_platform_system_prompt()`, prepends to any caller-provided `system_prompt`
   - All callers (scheduled tasks, MCP delegation, manual tasks) flow through here
 
 ### Agent Server — Pass-Through
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/models.py`
+- `docker/base-image/agent_server/models.py`
   - `ChatRequest` — accepts optional `system_prompt` field
   - `ParallelTaskRequest` — already had `system_prompt` field
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/chat.py`
+- `docker/base-image/agent_server/routers/chat.py`
   - `POST /api/chat` — passes `request.system_prompt` to `runtime.execute()`
   - `POST /api/task` — already passed `request.system_prompt` to `runtime.execute_headless()`
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/services/runtime_adapter.py`
+- `docker/base-image/agent_server/services/runtime_adapter.py`
   - `AgentRuntime.execute()` — accepts `system_prompt` parameter
   - `AgentRuntime.execute_headless()` — already accepted `system_prompt`
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/services/claude_code.py`
+- `docker/base-image/agent_server/services/claude_code.py`
   - `execute_claude_code()` — adds `--append-system-prompt` when `system_prompt` provided
   - `execute_headless_task()` — already supported `--append-system-prompt`
 
 ### Trinity Status Endpoint (Agent-Side)
-- `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/trinity.py`
+- `docker/base-image/agent_server/routers/trinity.py`
   - `GET /api/trinity/status` — returns `{injected: true}` (always true, injection is per-request)
   - `POST /api/trinity/inject` and `POST /api/trinity/reset` — **removed**
 
@@ -262,7 +262,7 @@ This feature does not broadcast changes via WebSocket. Changes take effect immed
 
 ### Automated Tests
 
-**Test File**: `/Users/eugene/Dropbox/trinity/trinity/tests/test_settings.py`
+**Test File**: `tests/test_settings.py`
 
 **Test Classes**:
 

@@ -33,7 +33,7 @@ As a process operator, I want to view all process executions in one place so tha
 
 ### Component: ExecutionList.vue
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/ExecutionList.vue`
+**File**: `src/frontend/src/views/ExecutionList.vue`
 
 | Section | Lines | Description |
 |---------|-------|-------------|
@@ -77,7 +77,7 @@ As a process operator, I want to view all process executions in one place so tha
 
 ### State Management
 
-**Store**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/executions.js`
+**Store**: `src/frontend/src/stores/executions.js`
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -152,7 +152,7 @@ onUnmounted(() => {
 
 ### API Endpoints
 
-**Router**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/routers/executions.py`
+**Router**: `src/backend/routers/executions.py`
 
 | Method | Endpoint | Lines | Description |
 |--------|----------|-------|-------------|
@@ -223,7 +223,7 @@ Side Effects:
 
 ### Repository: SqliteProcessExecutionRepository
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/process_engine/repositories/sqlite_executions.py`
+**File**: `src/backend/services/process_engine/repositories/sqlite_executions.py`
 
 ### Database Schema
 
@@ -289,7 +289,7 @@ CREATE INDEX IF NOT EXISTS idx_step_exec_status ON step_executions(status);
 
 ## Execution Statuses
 
-**Enum**: `/Users/eugene/Dropbox/trinity/trinity/src/backend/services/process_engine/domain/enums.py:27-34`
+**Enum**: `src/backend/services/process_engine/domain/enums.py:27-34`
 
 ```python
 class ExecutionStatus(str, Enum):

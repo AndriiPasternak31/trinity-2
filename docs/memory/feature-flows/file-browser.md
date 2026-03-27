@@ -48,7 +48,7 @@ The file browser uses a **component-based** architecture with shared sub-compone
 
 ### FilesPanel Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/FilesPanel.vue` (~607 lines)
+**File**: `src/frontend/src/components/FilesPanel.vue` (~607 lines)
 
 Rendered in AgentDetail.vue (line 184-186):
 ```vue
@@ -105,7 +105,7 @@ const props = defineProps({
 
 ### FileTreeNode Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/file-manager/FileTreeNode.vue` (220 lines)
+**File**: `src/frontend/src/components/file-manager/FileTreeNode.vue` (220 lines)
 
 Recursive template-based component with rich file type icons:
 
@@ -130,7 +130,7 @@ const props = defineProps({
 
 ### FilePreview Component
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/file-manager/FilePreview.vue` (245 lines)
+**File**: `src/frontend/src/components/file-manager/FilePreview.vue` (245 lines)
 
 Rich media preview component supporting multiple file types:
 
@@ -158,19 +158,19 @@ const props = defineProps({
 
 ### Legacy: useFileBrowser Composable
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/composables/useFileBrowser.js`
+**File**: `src/frontend/src/composables/useFileBrowser.js`
 
 > **Note (2026-03-03)**: This composable is NO LONGER used by FilesPanel. It was replaced when FilesPanel was rewritten with inline state management. The composable still exists in the codebase and is exported from `composables/index.js` but has no active consumers. It may be a candidate for removal.
 
 ### Legacy: components/FileTreeNode.vue
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/components/FileTreeNode.vue`
+**File**: `src/frontend/src/components/FileTreeNode.vue`
 
 > **Note (2026-03-03)**: This is the OLD render-function based tree node (141 lines). It has been superseded by `file-manager/FileTreeNode.vue` (220 lines, template-based with icons). No components import it. It may be a candidate for removal.
 
 ### Store Actions
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/stores/agents.js`
+**File**: `src/frontend/src/stores/agents.js`
 
 #### listAgentFiles (Line 452-459)
 ```javascript
@@ -384,7 +384,7 @@ The file browser feature uses a **thin router + service layer** architecture:
 
 ### Agent Server Endpoints
 
-**File**: `/Users/eugene/Dropbox/trinity/trinity/docker/base-image/agent_server/routers/files.py` (370 lines)
+**File**: `docker/base-image/agent_server/routers/files.py` (370 lines)
 
 #### GET /api/files (Line 23-109)
 

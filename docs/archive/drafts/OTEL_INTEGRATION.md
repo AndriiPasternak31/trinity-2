@@ -474,7 +474,7 @@ requests.post(
 - `docs/memory/feature-flows/activity-stream.md` - Existing activity tracking
 - `docs/memory/feature-flows/agent-chat.md` - Chat metrics extraction
 - `docs/memory/feature-flows/agent-lifecycle.md` - Container creation flow
-- Claude Code Docs: `/Users/eugene/Dropbox/Agents/claude-code-docs/docs/monitoring-usage.md`
+- Claude Code Docs: Claude Code monitoring-usage documentation (external)
 
 ---
 

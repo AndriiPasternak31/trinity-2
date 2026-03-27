@@ -2,7 +2,7 @@
 
 **Created**: 2026-02-04
 **Source**: [Ruby Launcher Recommendations](https://github.com/Abilityai/ruby-launcher/blob/ruby-launcher/projects/Trinity/github-improvements.md)
-**Marketing Materials**: `/Users/eugene/Dropbox/trinity/marketing_materials/`
+**Marketing Materials**: Trinity marketing materials (external)
 
 ---
 
