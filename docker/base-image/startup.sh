@@ -22,6 +22,10 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
             cd /home/developer
             CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
             echo "Current branch: ${CURRENT_BRANCH} (preserved from previous run)"
+            # Update remote URL with current PAT (may have changed since last start)
+            if [ -n "${GITHUB_PAT}" ]; then
+                git remote set-url origin "https://oauth2:${GITHUB_PAT}@github.com/${GITHUB_REPO}.git"
+            fi
             git fetch origin 2>&1 || echo "Note: Could not fetch from remote"
 
             echo "Existing repository ready with persisted files"
