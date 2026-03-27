@@ -1,3 +1,11 @@
+### 2026-03-27
+
+**fix: MCP server healthcheck always fails — localhost resolves to IPv6 (#142)**
+
+The Dockerfile HEALTHCHECK used `localhost` which resolves to `[::1]` (IPv6) inside Alpine containers, but the Node.js server binds to `0.0.0.0:8080` (IPv4 only). Changed to `127.0.0.1` (explicit IPv4). Also bumped `start-period` from 5s to 10s.
+
+- `src/mcp-server/Dockerfile` — Fixed HEALTHCHECK to use `127.0.0.1` instead of `localhost`
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
