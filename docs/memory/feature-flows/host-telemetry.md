@@ -73,8 +73,11 @@ No Pinia store - component manages its own state:
 ### API Calls
 
 ```javascript
-// HostTelemetry.vue:30-35
+// HostTelemetry.vue:30-38
+const token = localStorage.getItem('token')
+const headers = { Authorization: `Bearer ${token}` }
 const hostRes = await fetch(`${API_BASE}/api/telemetry/host`, {
+  headers,
   signal: AbortSignal.timeout(3000)
 })
 ```
@@ -104,7 +107,7 @@ app.include_router(telemetry_router)
 
 Returns host system statistics via psutil.
 
-**No authentication required** (follows OpenTelemetry pattern).
+**Requires authentication** (Bearer token, SEC-180).
 
 **Response Schema:**
 ```json
@@ -145,7 +148,7 @@ disk = psutil.disk_usage('/')
 
 Returns aggregate statistics across all running agent containers.
 
-**No authentication required**.
+**Requires authentication** (Bearer token, SEC-180).
 
 **Response Schema:**
 ```json
@@ -251,7 +254,7 @@ Dashboard.vue
 - **No WebSocket**: Pure polling model
 - **No Audit Logging**: Telemetry endpoints are read-only, high-frequency
 - **No Database**: Metrics are computed fresh each request
-- **No Authentication**: Public endpoints (infrastructure monitoring should be accessible)
+- **Authentication Required**: Bearer token required (SEC-180, pentest finding 3.2.3)
 
 ---
 
@@ -280,7 +283,7 @@ signal: AbortSignal.timeout(3000)
 
 ## Security Considerations
 
-- **No Authentication Required**: Follows OTel pattern for infrastructure metrics
+- **Authentication Required**: Bearer token (JWT or MCP API key) required since SEC-180
 - **Read-Only**: No mutation endpoints
 - **Rate Limiting**: Not implemented (polling interval is client-controlled)
 - **No PII**: Only system metrics exposed
@@ -312,11 +315,12 @@ signal: AbortSignal.timeout(3000)
 | 3 | Wait 5 seconds | Values update | Numbers change |
 | 4 | Check color coding | Values <50% are green | Color matches threshold |
 
-#### Test 2: API Direct Access
+#### Test 2: API Direct Access (Requires Auth)
 | Step | Action | Expected | Verify |
 |------|--------|----------|--------|
-| 1 | `curl http://localhost:8000/api/telemetry/host` | JSON response | Contains cpu, memory, disk |
-| 2 | `curl http://localhost:8000/api/telemetry/containers` | JSON response | Contains running_count, containers array |
+| 1 | `curl http://localhost:8000/api/telemetry/host` (no auth) | 401 Unauthorized | Authentication enforced |
+| 2 | `curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/telemetry/host` | JSON response | Contains cpu, memory, disk |
+| 3 | `curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/telemetry/containers` | JSON response | Contains running_count, containers array |
 
 #### Test 3: Container Stats (OBS-012)
 | Step | Action | Expected | Verify |
@@ -347,4 +351,5 @@ No cleanup required - read-only endpoints.
 
 | Date | Change |
 |------|--------|
+| 2026-03-27 | SEC-180: Authentication added to all telemetry endpoints |
 | 2026-01-13 | Initial documentation |

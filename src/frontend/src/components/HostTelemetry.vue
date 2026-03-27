@@ -26,8 +26,14 @@ function initHistory() {
 
 async function fetchStats() {
   try {
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    const headers = { Authorization: `Bearer ${token}` }
+
     // Fetch host stats
     const hostRes = await fetch(`${API_BASE}/api/telemetry/host`, {
+      headers,
       signal: AbortSignal.timeout(3000)
     }).catch(() => null)
 

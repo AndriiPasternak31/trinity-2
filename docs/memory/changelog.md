@@ -1,5 +1,17 @@
 ### 2026-03-27
 
+🔒 **fix(security): Add authentication to telemetry, version, and OAuth provider endpoints (#180)**
+
+Unauthenticated information disclosure (pentest finding 3.2.3, CVSS 5.1). Telemetry, version, and OAuth endpoints exposed host metrics (CPU, RAM, disk capacity), container names/resource usage, and stack version info without authentication.
+
+- `src/backend/routers/telemetry.py` — Added `get_current_user` dependency to `/api/telemetry/host` and `/api/telemetry/containers`
+- `src/backend/main.py` — Added `get_current_user` dependency to `/api/version`
+- `src/backend/routers/credentials.py` — Added `get_current_user` dependency to `/api/oauth/providers`
+- `src/frontend/src/components/HostTelemetry.vue` — Added Bearer token to telemetry fetch requests
+- `/api/internal/health` already secured via shared secret — no changes needed
+
+---
+
 🐛 **fix: Update GITHUB_PAT env var on container recreation (#209)**
 
 Container recreation now updates `GITHUB_PAT` to the current system value, and agent restart detects stale PATs to trigger recreation. Previously, PAT was frozen at agent creation time.

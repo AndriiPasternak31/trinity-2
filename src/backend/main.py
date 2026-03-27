@@ -632,8 +632,8 @@ async def health_check():
 
 # Version endpoint
 @app.get("/api/version")
-async def get_version():
-    """Get Trinity platform version information."""
+async def get_version(current_user: User = Depends(get_current_user)):
+    """Get Trinity platform version information. Requires authentication (SEC-180)."""
     import os
     from pathlib import Path
 
