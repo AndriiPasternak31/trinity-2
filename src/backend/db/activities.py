@@ -6,7 +6,7 @@ Handles activity logging for real-time state monitoring and tool-level observabi
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 
 from .connection import get_db_connection
@@ -197,6 +197,9 @@ class ActivityOperations:
             Number of activities marked as failed.
         """
         now = utc_now_iso()
+        # Compute threshold in ISO 8601 format to match stored started_at
+        # (SQLite's datetime() returns space-separated format which breaks string comparison)
+        threshold = (datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)).strftime('%Y-%m-%dT%H:%M:%S')
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
@@ -204,8 +207,8 @@ class ActivityOperations:
             cursor.execute("""
                 SELECT id, started_at FROM agent_activities
                 WHERE activity_state = ?
-                AND started_at < datetime('now', ? || ' minutes')
-            """, (ActivityState.STARTED, f"-{timeout_minutes}"))
+                AND started_at < ?
+            """, (ActivityState.STARTED, threshold))
             stale_rows = cursor.fetchall()
 
             if not stale_rows:

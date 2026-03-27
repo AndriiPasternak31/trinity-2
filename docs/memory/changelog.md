@@ -1,3 +1,14 @@
+### 2026-03-27
+
+**fix: Cleanup service misses no-session running executions and doesn't terminal-state skipped executions (#137)**
+
+SQLite's `datetime('now', '-60 seconds')` returns space-separated format (`2026-03-27 01:20:00`) while `started_at` is stored in ISO 8601 with `T` separator (`2026-03-27T01:20:00.123456Z`). In SQLite string comparison, `T` (ASCII 84) sorts after space (ASCII 32), so the `<` comparison was always false for same-day timestamps — the cleanup query never matched any rows.
+
+**Fixes:**
+- Replaced SQLite `datetime('now', ...)` with Python-computed ISO 8601 thresholds in all 4 affected cleanup queries (`mark_stale_executions_failed`, `mark_no_session_executions_failed` in `db/schedules.py`, `mark_stale_activities_failed` in `db/activities.py`)
+- `finalize_orphaned_skipped_executions` now sets `status = 'failed'` (was only setting `completed_at`, leaving `skipped` as a non-terminal status forever)
+- No-session check now matches both `NULL` and empty-string `claude_session_id`
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**
