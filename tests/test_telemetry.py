@@ -68,11 +68,10 @@ class TestHostTelemetry:
         # Timestamp should be an ISO format string
         assert isinstance(data["timestamp"], str)
 
-    def test_host_no_auth_required(self, unauthenticated_client: TrinityApiClient):
-        """GET /api/telemetry/host does not require authentication."""
-        # Telemetry follows OpenTelemetry pattern - no auth required
+    def test_host_requires_auth(self, unauthenticated_client: TrinityApiClient):
+        """GET /api/telemetry/host requires authentication (pentest 3.2.3)."""
         response = unauthenticated_client.get("/api/telemetry/host", auth=False)
-        assert_status(response, 200)
+        assert_status(response, 401)
 
     def test_host_cpu_count_present(self, api_client: TrinityApiClient):
         """GET /api/telemetry/host includes CPU count."""
@@ -203,14 +202,54 @@ class TestContainerTelemetry:
         assert "timestamp" in data
         assert isinstance(data["timestamp"], str)
 
-    def test_containers_no_auth_required(
+    def test_containers_requires_auth(
         self,
         unauthenticated_client: TrinityApiClient
     ):
-        """GET /api/telemetry/containers does not require authentication."""
-        # Telemetry follows OpenTelemetry pattern - no auth required
+        """GET /api/telemetry/containers requires authentication (pentest 3.2.3)."""
         response = unauthenticated_client.get("/api/telemetry/containers", auth=False)
+        assert_status(response, 401)
+
+
+class TestEndpointAuthentication:
+    """Pentest 3.2.3: Verify previously-unauthenticated endpoints now require auth."""
+
+    def test_version_requires_auth(self, unauthenticated_client: TrinityApiClient):
+        """GET /api/version requires authentication."""
+        response = unauthenticated_client.get("/api/version", auth=False)
+        assert_status(response, 401)
+
+    def test_health_requires_auth(self, unauthenticated_client: TrinityApiClient):
+        """GET /health requires authentication."""
+        response = unauthenticated_client.get("/health", auth=False)
+        assert_status(response, 401)
+
+    def test_oauth_providers_requires_auth(self, unauthenticated_client: TrinityApiClient):
+        """GET /api/oauth/providers requires authentication."""
+        response = unauthenticated_client.get("/api/oauth/providers", auth=False)
+        assert_status(response, 401)
+
+    def test_version_accessible_with_auth(self, api_client: TrinityApiClient):
+        """GET /api/version returns 200 with valid authentication."""
+        response = api_client.get("/api/version")
         assert_status(response, 200)
+        data = assert_json_response(response)
+        assert "version" in data
+        assert "platform" in data
+
+    def test_health_accessible_with_auth(self, api_client: TrinityApiClient):
+        """GET /health returns 200 with valid authentication."""
+        response = api_client.get("/health")
+        assert_status(response, 200)
+        data = assert_json_response(response)
+        assert "status" in data
+
+    def test_oauth_providers_accessible_with_auth(self, api_client: TrinityApiClient):
+        """GET /api/oauth/providers returns 200 with valid authentication."""
+        response = api_client.get("/api/oauth/providers")
+        assert_status(response, 200)
+        data = assert_json_response(response)
+        assert "providers" in data
 
 
 class TestTelemetryConsistency:

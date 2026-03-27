@@ -122,8 +122,8 @@ async def init_oauth(
 
 
 @router.get("/oauth/providers")
-async def list_oauth_providers():
-    """List available OAuth providers."""
+async def list_oauth_providers(current_user: User = Depends(get_current_user)):
+    """List available OAuth providers. Requires authentication (pentest finding 3.2.3)."""
     oauth_scopes = {
         "google": ["openid", "email", "profile", "drive"],
         "github": ["repo", "user"],

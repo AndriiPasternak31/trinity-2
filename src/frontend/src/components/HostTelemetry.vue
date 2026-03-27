@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import SparklineChart from './SparklineChart.vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
+const authStore = useAuthStore()
 
 // History configuration: 60 samples at 5s intervals = 5 minutes
 const MAX_POINTS = 60
@@ -26,10 +28,16 @@ function initHistory() {
 
 async function fetchStats() {
   try {
-    // Fetch host stats
+    // Fetch host stats (requires authentication — pentest finding 3.2.3)
     const hostRes = await fetch(`${API_BASE}/api/telemetry/host`, {
+      headers: authStore.authHeader,
       signal: AbortSignal.timeout(3000)
     }).catch(() => null)
+
+    if (hostRes?.status === 401) {
+      hostStats.value = null
+      return
+    }
 
     if (hostRes?.ok) {
       hostStats.value = await hostRes.json()

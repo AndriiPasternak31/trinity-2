@@ -11,8 +11,10 @@ import psutil
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from dependencies import get_current_user
+from models import User
 from services.docker_service import docker_client, list_all_agents_fast
 
 # Module-level executor for Docker operations (blocking calls)
@@ -27,12 +29,12 @@ psutil.cpu_percent(interval=None)
 
 
 @router.get("/host")
-async def get_host_stats():
+async def get_host_stats(current_user: User = Depends(get_current_user)):
     """
     Get host system statistics using psutil.
 
     Returns CPU, memory, and disk usage metrics.
-    No authentication required (follows OTel pattern).
+    Requires authentication (pentest finding 3.2.3).
     """
     try:
         # CPU - use interval=None to get last computed value (non-blocking)
@@ -110,13 +112,13 @@ def _get_single_container_stats_sync(agent_name: str) -> Dict[str, Any]:
 
 
 @router.get("/containers")
-async def get_container_stats():
+async def get_container_stats(current_user: User = Depends(get_current_user)):
     """
     Get aggregate statistics across all running agent containers.
 
     Returns total CPU usage, memory consumption, and per-container breakdown.
     Uses parallel execution for better performance with multiple containers.
-    No authentication required (follows OTel pattern).
+    Requires authentication (pentest finding 3.2.3).
     """
     if not docker_client:
         raise HTTPException(status_code=503, detail="Docker not available")

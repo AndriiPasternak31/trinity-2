@@ -182,6 +182,24 @@ Added pluggable channel adapter architecture for external messaging platforms (S
 
 ---
 
+### 2026-03-27
+
+**fix: Add authentication to unauthenticated information disclosure endpoints (SEC-180, pentest 3.2.3)**
+
+Addresses pentest finding 3.2.3 (Medium, CVSS 5.1). Five endpoints previously exposed sensitive system information without authentication: telemetry host/container stats, platform version, health check, and OAuth provider configuration. All now require Bearer token authentication via `get_current_user`. The telemetry endpoints no longer follow the OpenTelemetry unauthenticated convention — this was an intentional reversal to address the information disclosure risk.
+
+**Backend:**
+- `src/backend/routers/telemetry.py` — Added `Depends(get_current_user)` to `/host` and `/containers`
+- `src/backend/main.py` — Added `Depends(get_current_user)` to `/health` and `/api/version`
+- `src/backend/routers/credentials.py` — Added `Depends(get_current_user)` to `/oauth/providers`
+- `docker-compose.prod.yml` — Updated backend healthcheck to use `/api/setup/status` (unauthenticated) since `/health` now requires auth
+
+**Frontend:**
+- `src/frontend/src/components/HostTelemetry.vue` — Added auth headers to telemetry fetch, handles 401 gracefully
+
+**Tests:**
+- `tests/test_telemetry.py` — Flipped no-auth tests to assert 401, added auth tests for version/health/OAuth
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**

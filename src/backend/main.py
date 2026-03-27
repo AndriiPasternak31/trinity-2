@@ -625,15 +625,15 @@ async def websocket_events_endpoint(
 
 # Health check endpoint
 @app.get("/health")
-async def health_check():
-    """Health check endpoint."""
+async def health_check(current_user: User = Depends(get_current_user)):
+    """Health check endpoint. Requires authentication (pentest finding 3.2.3)."""
     return {"status": "healthy", "timestamp": datetime.now()}
 
 
 # Version endpoint
 @app.get("/api/version")
-async def get_version():
-    """Get Trinity platform version information."""
+async def get_version(current_user: User = Depends(get_current_user)):
+    """Get Trinity platform version information. Requires authentication (pentest finding 3.2.3)."""
     import os
     from pathlib import Path
 
