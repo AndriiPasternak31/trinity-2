@@ -1,5 +1,13 @@
 ### 2026-03-27
 
+**fix: MCP schedule deletion error on empty 204 response**
+
+The `delete_agent_schedule` MCP tool failed with a JSON parse error because the backend returns HTTP 204 (No Content) on successful deletion, but the MCP API client unconditionally called `response.json()` on all successful responses.
+
+- `src/mcp-server/src/client.ts` — Added early return for 204 status in `request()` method before JSON parsing
+
+---
+
 **fix: Non-blocking Slack Socket Mode startup (SLACK-002)**
 
 Slack Socket Mode with an invalid or missing token entered an infinite retry loop, blocking the entire event loop and making the backend unresponsive. Fixed with token format validation, 10s connect timeout, and graceful fallback — backend continues without Slack if connection fails.

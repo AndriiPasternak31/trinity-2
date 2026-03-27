@@ -152,6 +152,11 @@ export class TrinityClient {
       throw new Error(`API error (${response.status}): ${error}`);
     }
 
+    // Handle 204 No Content (e.g., successful DELETE)
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     // Check content type - if text/plain or text/yaml, return as string
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("text/plain") || contentType.includes("text/yaml") || contentType.includes("application/x-yaml")) {
