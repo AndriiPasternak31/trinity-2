@@ -174,11 +174,11 @@ except Exception as e:
 #### mark_stale_executions_failed (ScheduleOperations)
 **File**: `src/backend/db/schedules.py:971-1013`
 
-**SQL** (finds stale rows):
+**SQL** (finds stale rows — threshold computed in Python as ISO 8601 to match stored format, Issue #137):
 ```sql
 SELECT id, started_at FROM schedule_executions
 WHERE status = 'running'
-AND started_at < datetime('now', '-120 minutes')
+AND started_at < ?  -- Python: (utcnow - 120 min).strftime('%Y-%m-%dT%H:%M:%S')
 ```
 
 **SQL** (updates each row):
@@ -206,14 +206,14 @@ WHERE id = ? AND status = 'running' AND claude_session_id IS NULL
 #### mark_no_session_executions_failed (ScheduleOperations) — Issue #106
 **File**: `src/backend/db/schedules.py:1036-1076`
 
-Only catches executions where `claude_session_id IS NULL` (never dispatched). Executions that were dispatched have `claude_session_id='dispatched'` and are not affected.
+Only catches executions where `claude_session_id IS NULL` or empty string (never dispatched). Executions that were dispatched have `claude_session_id='dispatched'` and are not affected.
 
-**SQL** (finds no-session rows):
+**SQL** (finds no-session rows — threshold computed in Python as ISO 8601, Issue #137):
 ```sql
 SELECT id, started_at FROM schedule_executions
 WHERE status = 'running'
-AND claude_session_id IS NULL
-AND started_at < datetime('now', '-60 seconds')
+AND (claude_session_id IS NULL OR claude_session_id = '')
+AND started_at < ?  -- Python: (utcnow - 60 sec).strftime('%Y-%m-%dT%H:%M:%S')
 ```
 
 **SQL** (updates each row):
@@ -229,11 +229,13 @@ WHERE id = ?
 #### finalize_orphaned_skipped_executions (ScheduleOperations) — Issue #106
 **File**: `src/backend/db/schedules.py:1057-1075`
 
-**SQL** (single update):
+**SQL** (single update — now sets terminal status, Issue #137):
 ```sql
 UPDATE schedule_executions
-SET completed_at = COALESCE(started_at, ?),
-    duration_ms = 0
+SET status = 'failed',
+    completed_at = COALESCE(started_at, ?),
+    duration_ms = 0,
+    error = 'Finalized by cleanup: skipped execution'
 WHERE status = 'skipped'
 AND completed_at IS NULL
 ```
@@ -241,11 +243,11 @@ AND completed_at IS NULL
 #### mark_stale_activities_failed (ActivityOperations)
 **File**: `src/backend/db/activities.py:187-225`
 
-**SQL** (finds stale rows):
+**SQL** (finds stale rows — threshold computed in Python as ISO 8601, Issue #137):
 ```sql
 SELECT id, started_at FROM agent_activities
 WHERE activity_state = 'started'
-AND started_at < datetime('now', '-30 minutes')
+AND started_at < ?  -- Python: (utcnow - timeout_min).strftime('%Y-%m-%dT%H:%M:%S')
 ```
 
 **SQL** (updates each row):
