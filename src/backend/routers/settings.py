@@ -585,7 +585,7 @@ async def get_slack_transport_status(
     from services.settings_service import get_slack_app_token, get_slack_transport_mode
 
     transport = getattr(request.app.state, 'slack_transport', None)
-    connected = transport is not None and getattr(transport, '_running', False)
+    connected = transport is not None and transport.is_connected
 
     app_token = get_slack_app_token()
     transport_mode = get_slack_transport_mode()
@@ -633,7 +633,7 @@ async def connect_slack_transport(
             raise HTTPException(status_code=400, detail="transport_mode must be 'socket' or 'webhook'")
         db.set_setting("slack_transport_mode", body.transport_mode.strip())
 
-    # Stop existing transport
+    # Stop existing transport before starting new one
     existing = getattr(request.app.state, 'slack_transport', None)
     if existing:
         try:
@@ -642,7 +642,6 @@ async def connect_slack_transport(
             logger.warning(f"Error stopping existing Slack transport: {e}")
         request.app.state.slack_transport = None
 
-    # Start new transport
     from services.settings_service import get_slack_app_token, get_slack_transport_mode, get_slack_signing_secret
     from adapters.slack_adapter import SlackAdapter
     from adapters.message_router import message_router
@@ -659,6 +658,8 @@ async def connect_slack_transport(
             from adapters.transports.slack_socket import SlackSocketTransport
             transport = SlackSocketTransport(app_token, adapter, message_router)
             await transport.start()
+            if not transport.is_connected:
+                raise HTTPException(status_code=400, detail="Failed to connect Socket Mode. Check app token is valid.")
         else:
             signing_secret = get_slack_signing_secret()
             if not signing_secret:
