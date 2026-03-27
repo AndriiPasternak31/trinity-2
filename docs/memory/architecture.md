@@ -181,7 +181,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `slot_service.py` - Parallel execution slot management with dynamic TTL (CAPACITY-001)
 - `execution_queue.py` - Redis-based execution queueing
 - `scheduler_service.py` - APScheduler-based scheduling service
-- `cleanup_service.py` - Background recovery of stale executions, activities, and slots (CLEANUP-001)
+- `cleanup_service.py` - Active watchdog reconciliation + passive stale recovery for executions, activities, and slots (CLEANUP-001, #129)
 
 *Monitoring & Activities:*
 - `activity_service.py` - Activity tracking and timeline
@@ -441,7 +441,7 @@ Services that run continuously in the backend process:
 
 | Service | Module | Description |
 |---------|--------|-------------|
-| **Cleanup Service** | `cleanup_service.py` | Recovers stale executions stuck in 'running' status, expires abandoned activities, releases orphaned slots. Runs on configurable interval (default 120 min). (CLEANUP-001) |
+| **Cleanup Service** | `cleanup_service.py` | Active watchdog reconciliation against agent process registries (orphan recovery, auto-terminate timeouts) + passive stale recovery. Runs every 5 min. (CLEANUP-001, #129) |
 | **Operator Queue Sync** | `operator_queue_service.py` | Polls running agents every 5s, reads `~/.trinity/operator-queue.json`, syncs to DB, writes responses back. (OPS-001) |
 | **Monitoring Service** | `monitoring_service.py` | Fleet-wide health checks on configurable interval. (MON-001) |
 | **Scheduler Service** | `scheduler_service.py` | APScheduler-based cron job execution. Async fire-and-forget with DB polling for status. |

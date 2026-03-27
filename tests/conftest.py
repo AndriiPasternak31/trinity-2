@@ -9,7 +9,7 @@ OPTIMIZATION NOTES (2025-12-09):
 Configuration:
 - TRINITY_API_URL: Backend URL (default: http://localhost:8000)
 - TRINITY_TEST_USERNAME: Test user username (default: admin)
-- TRINITY_TEST_PASSWORD: Test user password (default: trinity)
+- TRINITY_TEST_PASSWORD: Test user password (default: password)
 - TRINITY_MCP_API_KEY: MCP API key for authenticated tests
 - TEST_AGENT_NAME: Pre-existing agent for agent-server tests
 """
