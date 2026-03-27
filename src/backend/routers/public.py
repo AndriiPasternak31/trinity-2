@@ -5,7 +5,9 @@ These endpoints do NOT require authentication and are used by public users
 to access agents via shareable links.
 """
 import asyncio
+import ipaddress
 import json
+import os
 import secrets
 import httpx
 import logging
@@ -53,15 +55,73 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 # Rate limiting constants
 MAX_VERIFICATION_REQUESTS_PER_EMAIL = 3  # per 10 minutes
 MAX_CHAT_MESSAGES_PER_IP = 30  # per minute
+MAX_CHAT_MESSAGES_PER_TOKEN = 60  # per minute, per public link token
+
+# Trusted proxy networks — only trust X-Forwarded-For / X-Real-IP from these.
+# Default: RFC-1918 private ranges (covers Docker bridge networks).
+# Override via TRUSTED_PROXIES env var (comma-separated CIDRs).
+_trusted_proxy_networks: list | None = None
+
+
+def _get_trusted_networks() -> list:
+    """Parse TRUSTED_PROXIES env var into network objects (cached)."""
+    global _trusted_proxy_networks
+    if _trusted_proxy_networks is not None:
+        return _trusted_proxy_networks
+
+    raw = os.environ.get("TRUSTED_PROXIES", "172.16.0.0/12,192.168.0.0/16,10.0.0.0/8,127.0.0.0/8")
+    networks = []
+    for cidr in raw.split(","):
+        cidr = cidr.strip()
+        if cidr:
+            try:
+                networks.append(ipaddress.ip_network(cidr, strict=False))
+            except ValueError:
+                logger.warning(f"Invalid TRUSTED_PROXIES entry ignored: {cidr}")
+    _trusted_proxy_networks = networks
+    return networks
+
+
+def _is_trusted_proxy(ip_str: str) -> bool:
+    """Check if an IP belongs to a trusted proxy network."""
+    try:
+        addr = ipaddress.ip_address(ip_str)
+        return any(addr in net for net in _get_trusted_networks())
+    except ValueError:
+        return False
 
 
 def _get_client_ip(request: Request) -> str:
-    """Get client IP address from request."""
-    # Check for forwarded headers (behind proxy)
+    """Get client IP for rate limiting.
+
+    Only trusts proxy headers (X-Real-IP, X-Forwarded-For) when the direct
+    TCP peer is a known trusted proxy (e.g. the nginx container in Docker).
+    This prevents attackers from bypassing rate limits by spoofing headers.
+
+    See: pentest finding 3.2.4 / GitHub issue #181.
+    """
+    direct_ip = request.client.host if request.client else "unknown"
+
+    if direct_ip == "unknown":
+        return direct_ip
+
+    # Only read proxy headers when the connection comes from a trusted proxy
+    if not _is_trusted_proxy(direct_ip):
+        return direct_ip
+
+    # X-Real-IP is set (and overwritten) by our nginx — preferred source
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    # Fallback: rightmost non-trusted IP in X-Forwarded-For
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+        for ip in reversed([ip.strip() for ip in forwarded_for.split(",")]):
+            if not _is_trusted_proxy(ip):
+                return ip
+
+    return direct_ip
 
 
 @router.get("/link/{token}", response_model=PublicLinkInfo)
@@ -316,9 +376,17 @@ async def public_chat(
             session_identifier = secrets.token_urlsafe(16)
         identifier_type = "anonymous"
 
-    # Rate limiting by IP
+    # Rate limiting by IP (primary) — pentest 3.2.4: uses real TCP peer, not spoofable header
     recent_messages = db.count_recent_messages_by_ip(client_ip, minutes=1)
     if recent_messages >= MAX_CHAT_MESSAGES_PER_IP:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please wait a moment."
+        )
+
+    # Rate limiting by token (secondary) — caps total flood regardless of IP diversity
+    recent_token_messages = db.count_recent_messages_by_token(link["id"], minutes=1)
+    if recent_token_messages >= MAX_CHAT_MESSAGES_PER_TOKEN:
         raise HTTPException(
             status_code=429,
             detail="Too many requests. Please wait a moment."

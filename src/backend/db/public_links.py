@@ -432,6 +432,24 @@ class PublicLinkOperations:
 
         return count
 
+    def count_recent_messages_by_token(self, link_id: str, minutes: int = 1) -> int:
+        """Count all messages to a public link in the last N minutes (secondary rate limit).
+
+        This caps flood attacks that rotate IPs to bypass the per-IP limit.
+        """
+        cutoff = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT COALESCE(SUM(message_count), 0)
+                FROM public_link_usage
+                WHERE link_id = ? AND last_used_at > ?
+            """, (link_id, cutoff))
+            count = cursor.fetchone()[0]
+
+        return count
+
     # =========================================================================
     # Per-User Memory (MEM-001)
     # =========================================================================

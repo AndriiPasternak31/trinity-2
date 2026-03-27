@@ -1,5 +1,16 @@
 ### 2026-03-27
 
+🔒 **fix(security): Rate limiting bypass via X-Forwarded-For header spoofing (#181)**
+
+`POST /api/public/chat/{TOKEN}` trusted the client-supplied `X-Forwarded-For` header unconditionally, letting an attacker rotate spoofed IPs to bypass all per-IP rate limits (pentest finding 3.2.4, CVSS 5.1).
+
+- `src/backend/routers/public.py` — `_get_client_ip` now only reads `X-Real-IP`/`X-Forwarded-For` when the direct TCP peer is a trusted proxy (RFC-1918 ranges by default, overridable via `TRUSTED_PROXIES` env var); added per-token secondary rate limit (`MAX_CHAT_MESSAGES_PER_TOKEN=60/min`) so flood attacks are capped even with IP diversity
+- `src/backend/db/public_links.py` — Added `count_recent_messages_by_token()` for the per-link-token rate limit query
+- `src/backend/database.py` — Exposed `count_recent_messages_by_token()` on the `Database` facade
+- `tests/test_ip_rate_limit_fix.py` — 14 unit tests covering trusted-proxy matching, spoofed-header rejection, pentest PoC scenario, and per-token rate limit constant
+
+---
+
 🔒 **fix(security): Subscription BOLA — restrict assign/clear to owner/admin only (#182)**
 
 `PUT /api/subscriptions/agents/{name}` and `DELETE /api/subscriptions/agents/{name}` used `can_user_access_agent` (owners + admins + shared users) instead of `can_user_share_agent` (owners + admins only). A shared user could hot-swap or clear an agent's Claude subscription, enabling credential abuse, unexpected billing, or DoS (pentest finding 3.2.5, CVSS 4.8).

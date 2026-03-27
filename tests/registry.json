@@ -103,6 +103,13 @@
       "added": "2026-03-27",
       "categories": ["backend", "security", "ssrf", "unit"],
       "description": "Tests for SSRF prevention in skills library URL: github.com hostname enforcement, internal IP rejection, scheme validation, bypass attempts (28 tests)"
+    },
+    {
+      "file": "test_ip_rate_limit_fix.py",
+      "feature": "Issue #181",
+      "added": "2026-03-27",
+      "categories": ["backend", "security", "rate-limiting", "unit"],
+      "description": "Tests for X-Forwarded-For rate limit bypass fix: trusted-proxy validation, spoofed header rejection, per-token secondary rate limit, pentest 3.2.4 PoC scenario"
     }
   ]
 }
