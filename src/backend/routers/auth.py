@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 LOGIN_RATE_LIMIT = 5  # Max attempts
 LOGIN_RATE_WINDOW = 600  # 10 minutes in seconds
 
+# OTP verification rate limiting (pentest finding 3.1.5)
+OTP_MAX_ATTEMPTS = 5   # Max failed OTP attempts before lockout
+OTP_RATE_WINDOW = 600  # 10 minutes in seconds
+
 # Redis client for rate limiting
 _redis_client = None
 
@@ -93,6 +97,58 @@ def record_login_attempt(client_ip: str, success: bool):
             pipe.execute()
     except Exception as e:
         logger.warning(f"Failed to record login attempt: {e}")
+
+
+def check_otp_rate_limit(email: str) -> bool:
+    """
+    Check if OTP verification attempts for this email are within rate limit.
+    Returns True if allowed, raises HTTPException if rate limited.
+
+    Security fix (pentest 3.1.5): Prevents brute-force of 6-digit OTP codes.
+    After OTP_MAX_ATTEMPTS failures the current code is effectively invalidated.
+    """
+    r = get_redis_client()
+    if r is None:
+        logger.warning("Rate limiting unavailable - Redis not connected")
+        return True
+
+    key = f"otp_attempts:{email}"
+    try:
+        attempts = r.get(key)
+        if attempts and int(attempts) >= OTP_MAX_ATTEMPTS:
+            ttl = r.ttl(key)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Too many verification attempts. Request a new code or try again in {ttl} seconds."
+            )
+        return True
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"OTP rate limit check failed: {e}")
+        return True
+
+
+def record_otp_attempt(email: str, success: bool):
+    """
+    Record an OTP verification attempt for an email.
+    Failed attempts increment counter; success clears it.
+    """
+    r = get_redis_client()
+    if r is None:
+        return
+
+    key = f"otp_attempts:{email}"
+    try:
+        if success:
+            r.delete(key)
+        else:
+            pipe = r.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, OTP_RATE_WINDOW)
+            pipe.execute()
+    except Exception as e:
+        logger.warning(f"Failed to record OTP attempt: {e}")
 
 
 def is_setup_completed() -> bool:
@@ -316,19 +372,34 @@ async def verify_email_login_code(request: Request):
             detail="Email authentication is disabled"
         )
 
+    # Get client IP for rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Check IP-based rate limit (pentest 3.1.5)
+    check_login_rate_limit(client_ip)
+
     # Parse request
     body = await request.json()
     verify_request = EmailLoginVerify(**body)
     email = verify_request.email.lower()
     code = verify_request.code
 
+    # Check per-email OTP attempt rate limit (pentest 3.1.5)
+    check_otp_rate_limit(email)
+
     # Verify code
     verification = db.verify_login_code(email, code)
     if not verification:
+        record_login_attempt(client_ip, success=False)
+        record_otp_attempt(email, success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired verification code"
         )
+
+    # Clear rate limit counters on successful verification
+    record_login_attempt(client_ip, success=True)
+    record_otp_attempt(email, success=True)
 
     # Get or create user
     user = db.get_or_create_email_user(email)

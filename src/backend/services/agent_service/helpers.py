@@ -3,11 +3,14 @@ Agent Service Helpers - Shared utility functions.
 
 Contains functions used across multiple agent operations.
 """
+import fnmatch
+import json
 import logging
 import asyncio
 from typing import Optional, List, Callable, Any
 
 import httpx
+from fastapi import HTTPException
 
 from models import User, AgentStatus
 from database import db
@@ -18,10 +21,54 @@ from services.docker_service import (
     get_agent_container,
 )
 from services.docker_utils import volume_get
-from services.settings_service import get_anthropic_api_key, get_agent_full_capabilities
+from services.settings_service import get_anthropic_api_key, get_agent_full_capabilities, settings_service
 from utils.helpers import sanitize_agent_name
 
 logger = logging.getLogger(__name__)
+
+# SEC-172: Default allowlist of permitted Docker base images (fnmatch patterns)
+DEFAULT_BASE_IMAGE_ALLOWLIST = [
+    "trinity-agent-base:*",
+]
+
+
+def validate_base_image(image: str) -> None:
+    """
+    Validate that a Docker base image is on the allowlist.
+
+    Checks against the admin-configurable 'base_image_allowlist' setting,
+    falling back to DEFAULT_BASE_IMAGE_ALLOWLIST.
+
+    Raises:
+        HTTPException(403): If image is not on the allowlist.
+    """
+    # Load allowlist from settings, fall back to default
+    allowlist_json = settings_service.get_setting("base_image_allowlist")
+    if allowlist_json:
+        try:
+            allowlist = json.loads(allowlist_json)
+            if not isinstance(allowlist, list):
+                logger.warning("base_image_allowlist setting is not a list, using default")
+                allowlist = DEFAULT_BASE_IMAGE_ALLOWLIST
+        except json.JSONDecodeError:
+            logger.warning("base_image_allowlist setting is invalid JSON, using default")
+            allowlist = DEFAULT_BASE_IMAGE_ALLOWLIST
+    else:
+        allowlist = DEFAULT_BASE_IMAGE_ALLOWLIST
+
+    for pattern in allowlist:
+        if fnmatch.fnmatch(image, pattern):
+            return
+
+    logger.warning(
+        "Blocked agent creation with disallowed base image: %s (allowlist: %s)",
+        image, allowlist,
+    )
+    raise HTTPException(
+        status_code=403,
+        detail=f"Base image '{image}' is not in the allowed image list. "
+        f"Allowed patterns: {allowlist}"
+    )
 
 
 async def agent_http_request(

@@ -623,7 +623,15 @@ async def get_execution_events(
 ):
     """
     Get audit log of events for an execution.
+
+    Requires: EXECUTION_VIEW permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_view_execution(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     event_repo = get_event_repo()
 
     try:
@@ -643,7 +651,15 @@ async def get_step_output(
 ):
     """
     Get the output of a specific step.
+
+    Requires: EXECUTION_VIEW permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_view_execution(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     execution_repo = get_execution_repo()
     output_storage = OutputStorage(execution_repo)
 
@@ -674,8 +690,15 @@ async def get_execution_costs(
     Get cost breakdown for an execution.
 
     Returns per-step costs and total execution cost.
-    Reference: BACKLOG_ADVANCED.md - E11-01
+
+    Requires: EXECUTION_VIEW permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_view_execution(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     execution_repo = get_execution_repo()
 
     try:
@@ -724,8 +747,15 @@ async def get_step_analytics(
     Get step-level performance analytics.
 
     Returns slowest and most expensive steps across all processes.
-    Reference: BACKLOG_ADVANCED.md - E11-02
+
+    Requires: EXECUTION_VIEW permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_view_execution(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     from services.process_engine.services.analytics import ProcessAnalytics
 
     definition_repo = get_definition_repo()

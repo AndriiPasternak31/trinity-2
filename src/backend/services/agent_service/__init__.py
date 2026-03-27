@@ -12,6 +12,7 @@ from .helpers import (
     get_latest_version,
     check_shared_folder_mounts_match,
     check_api_key_env_matches,
+    validate_base_image,
 )
 from .lifecycle import (
     inject_assigned_credentials,
@@ -89,6 +90,7 @@ __all__ = [
     "get_latest_version",
     "check_shared_folder_mounts_match",
     "check_api_key_env_matches",
+    "validate_base_image",
     # Lifecycle
     "inject_assigned_credentials",
     "start_agent_internal",

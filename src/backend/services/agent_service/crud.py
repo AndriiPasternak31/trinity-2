@@ -31,6 +31,7 @@ from services.template_service import (
 from services import git_service
 from services.settings_service import get_anthropic_api_key, get_github_pat, get_agent_full_capabilities
 from utils.helpers import sanitize_agent_name
+from .helpers import validate_base_image
 from .lifecycle import RESTRICTED_CAPABILITIES, FULL_CAPABILITIES
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,9 @@ async def create_agent_internal(
 
     if get_agent_by_name(config.name) or db.get_agent_owner(config.name):
         raise HTTPException(status_code=409, detail="Agent already exists")
+
+    # SEC-172: Validate base image against allowlist before any Docker operations
+    validate_base_image(config.base_image)
 
     template_data = {}
     github_template_path = None
@@ -291,6 +295,22 @@ async def create_agent_internal(
         'AGENT_RUNTIME_MODEL': config.runtime_model or ''
     }
 
+    # Auto-assign subscription (round-robin) — #74
+    auto_assigned_subscription_id = None
+    try:
+        least_used = db.get_least_used_subscription()
+        if least_used:
+            token = db.get_subscription_token(least_used.id)
+            if token:
+                env_vars['CLAUDE_CODE_OAUTH_TOKEN'] = token
+                env_vars.pop('ANTHROPIC_API_KEY', None)
+                auto_assigned_subscription_id = least_used.id
+                logger.info(f"Auto-assigned subscription '{least_used.name}' to agent {config.name}")
+            else:
+                logger.warning(f"Failed to decrypt subscription '{least_used.name}' token, using platform API key")
+    except Exception as e:
+        logger.warning(f"Subscription auto-assign failed for {config.name}: {e}")
+
     # Add Google API key if using Gemini runtime
     # Gemini CLI expects GEMINI_API_KEY environment variable
     if config.runtime == 'gemini-cli' or config.runtime == 'gemini':
@@ -480,6 +500,13 @@ async def create_agent_internal(
                 }))
 
             db.register_agent_owner(config.name, current_user.username)
+
+            # Persist auto-assigned subscription (#74)
+            if auto_assigned_subscription_id:
+                try:
+                    db.assign_subscription_to_agent(config.name, auto_assigned_subscription_id)
+                except Exception as e:
+                    logger.warning(f"Failed to persist subscription assignment for {config.name}: {e}")
 
             # AVATAR-003: Seed avatar prompt from template
             _avatar_prompt = template_data.get("avatar_prompt") if template_data else None

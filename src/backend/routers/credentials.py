@@ -19,7 +19,7 @@ from models import (
     CredentialImportResponse,
 )
 from config import OAUTH_CONFIGS, BACKEND_URL
-from dependencies import get_current_user, require_admin, get_authorized_agent_by_name
+from dependencies import get_current_user, require_admin, get_authorized_agent_by_name, get_owned_agent_by_name
 from services.docker_service import get_agent_container, get_agent_status_from_container
 
 router = APIRouter(prefix="/api", tags=["credentials"])
@@ -151,7 +151,7 @@ async def list_oauth_providers():
 async def inject_credentials(
     request_body: CredentialInjectRequest,
     request: Request,
-    agent_name: str = Depends(get_authorized_agent_by_name),
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -212,7 +212,7 @@ async def inject_credentials(
 @router.post("/agents/{agent_name}/credentials/export")
 async def export_credentials(
     request: Request,
-    agent_name: str = Depends(get_authorized_agent_by_name),
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -257,7 +257,7 @@ async def export_credentials(
 @router.post("/agents/{agent_name}/credentials/import")
 async def import_credentials(
     request: Request,
-    agent_name: str = Depends(get_authorized_agent_by_name),
+    agent_name: str = Depends(get_owned_agent_by_name),
     current_user: User = Depends(get_current_user)
 ):
     """
