@@ -82,6 +82,20 @@
       "added": "2026-03-27",
       "categories": ["backend", "security", "credentials", "unit"],
       "description": "Tests for credential injection file path allowlist: allowed paths (.env, .mcp.json, etc.), blocked paths (arbitrary HTML, path traversal, CLAUDE.md overwrite), mixed paths, edge cases (20 tests)"
+    },
+    {
+      "file": "unit/test_websocket_auth.py",
+      "feature": "Issue #178",
+      "added": "2026-03-27",
+      "categories": ["backend", "security", "websocket", "unit"],
+      "description": "Tests for WebSocket authentication enforcement: reject before accept() for missing/invalid/expired tokens, valid token authentication, first-message auth removal (15 tests)"
+    },
+    {
+      "file": "test_websocket_auth.py",
+      "feature": "Issue #178",
+      "added": "2026-03-27",
+      "categories": ["backend", "security", "websocket", "integration"],
+      "description": "Integration tests for WebSocket authentication: HTTP-level rejection for missing/invalid tokens, valid token acceptance"
     }
   ]
 }

@@ -15,7 +15,12 @@ export function useWebSocket() {
     if (ws.value) return
 
     const token = localStorage.getItem('token')
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws${token ? '?token=' + encodeURIComponent(token) : ''}`
+    if (!token) {
+      console.log('WebSocket: No auth token, skipping connection')
+      return
+    }
+
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws?token=${encodeURIComponent(token)}`
     ws.value = new WebSocket(wsUrl)
 
     ws.value.onopen = () => {
@@ -32,9 +37,14 @@ export function useWebSocket() {
       }
     }
 
-    ws.value.onclose = () => {
+    ws.value.onclose = (event) => {
       isConnected.value = false
       ws.value = null
+      // Don't reconnect on auth rejection (code 4001)
+      if (event.code === 4001) {
+        console.log('WebSocket: Authentication rejected, not reconnecting')
+        return
+      }
       console.log('WebSocket disconnected')
       // Attempt to reconnect after 5 seconds
       setTimeout(connect, 5000)

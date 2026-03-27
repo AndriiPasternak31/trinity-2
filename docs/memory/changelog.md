@@ -1,5 +1,16 @@
 ### 2026-03-27
 
+🔒 **fix(security): WebSocket authentication before accept — reject unauthenticated connections (#178)**
+
+WebSocket endpoint `/ws` accepted TCP upgrade and established connection before any authentication check (pentest finding 3.2.1, CVSS 6.9). An unauthenticated attacker could receive real-time platform activity broadcasts including agent names, task progress, PII (shared_with emails), and process execution details.
+
+- `src/backend/main.py` — Removed first-message auth backward compatibility. Token MUST be provided via `?token=<jwt>` query parameter. Connection is rejected with close code 4001 BEFORE `websocket.accept()` if token is missing, invalid, or expired.
+- `src/frontend/src/utils/websocket.js` — Guard against connecting without auth token; handle close code 4001 without infinite reconnect loop
+- `src/frontend/src/stores/network.js` — Same guards: skip connection if no token, stop reconnect on 4001 auth rejection
+- `tests/unit/test_websocket_auth.py` — 15 unit tests verifying reject-before-accept for missing/invalid/expired tokens, valid token authentication, and first-message auth removal
+
+---
+
 🔒 **fix(security): Add authentication to telemetry, version, and OAuth provider endpoints (#180)**
 
 Unauthenticated information disclosure (pentest finding 3.2.3, CVSS 5.1). Telemetry, version, and OAuth endpoints exposed host metrics (CPU, RAM, disk capacity), container names/resource usage, and stack version info without authentication.

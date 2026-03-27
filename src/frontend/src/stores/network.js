@@ -531,7 +531,12 @@ export const useNetworkStore = defineStore('network', () => {
     intentionalDisconnect.value = false
 
     const token = localStorage.getItem('token')
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws${token ? '?token=' + encodeURIComponent(token) : ''}`
+    if (!token) {
+      console.log('[Collaboration] No auth token, skipping WebSocket connection')
+      return
+    }
+
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws?token=${encodeURIComponent(token)}`
 
     // Prevent duplicate connections
     if (websocket.value?.readyState === WebSocket.OPEN) {
@@ -576,12 +581,18 @@ export const useNetworkStore = defineStore('network', () => {
         isConnected.value = false
       }
 
-      websocket.value.onclose = () => {
+      websocket.value.onclose = (event) => {
         console.log('[Collaboration] WebSocket disconnected')
         isConnected.value = false
 
         // Stop heartbeat
         stopWebSocketHeartbeat()
+
+        // Don't reconnect on auth rejection (code 4001)
+        if (event.code === 4001) {
+          console.log('[Collaboration] Authentication rejected, not reconnecting')
+          return
+        }
 
         // Only reconnect if this was NOT an intentional disconnect
         if (!intentionalDisconnect.value) {

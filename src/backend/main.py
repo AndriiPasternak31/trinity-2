@@ -470,67 +470,38 @@ app.include_router(event_subscriptions_router)  # Agent Event Subscriptions (EVT
 
 # WebSocket endpoint
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str = None):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(default=None)):
     """
     WebSocket endpoint for real-time updates.
 
-    Accepts authentication via:
-    - Query parameter: /ws?token=<jwt_token>
-    - First message after connection (for backward compatibility)
+    Security (#178, C-002): Authentication is REQUIRED before accepting the
+    connection. The JWT token MUST be provided via query parameter:
+      /ws?token=<jwt_token>
 
-    Security (C-002): Authentication is required. Connections without a valid
-    JWT token are rejected. Token can be provided via query parameter or as
-    the first message ("Bearer <token>").
+    Connections without a valid token are rejected before websocket.accept()
+    to prevent any unauthenticated data leakage.
     """
     from jose import JWTError, jwt as jose_jwt
     from config import SECRET_KEY, ALGORITHM
 
-    # Validate token if provided via query parameter
-    authenticated = False
-    username = None
+    # Reject immediately if no token provided — before accept()
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required: provide ?token=<jwt>")
+        return
 
-    if token:
-        try:
-            payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            username = payload.get("sub")
-            if username:
-                authenticated = True
-        except JWTError:
-            await websocket.close(code=4001, reason="Invalid authentication token")
+    # Validate token before accepting the connection
+    try:
+        payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            await websocket.close(code=4001, reason="Invalid token: missing subject")
             return
+    except JWTError:
+        await websocket.close(code=4001, reason="Invalid authentication token")
+        return
 
-    if not authenticated:
-        # Accept temporarily to allow first-message auth (backward compatibility)
-        await websocket.accept()
-        try:
-            # Wait for auth message with a timeout
-            data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-            if data.startswith("Bearer "):
-                try:
-                    msg_token = data[7:]
-                    payload = jose_jwt.decode(msg_token, SECRET_KEY, algorithms=[ALGORITHM])
-                    username = payload.get("sub")
-                    if username:
-                        authenticated = True
-                        await websocket.send_text(json.dumps({"type": "authenticated", "user": username}))
-                except JWTError:
-                    pass
-
-            if not authenticated:
-                await websocket.close(code=4001, reason="Authentication required")
-                return
-        except (asyncio.TimeoutError, WebSocketDisconnect):
-            try:
-                await websocket.close(code=4001, reason="Authentication required")
-            except Exception:
-                pass
-            return
-
-        # First-message auth succeeded — add to manager
-        manager.active_connections.append(websocket)
-    else:
-        # Token auth succeeded — connect normally
-        await manager.connect(websocket)
+    # Token validated — now accept the connection
+    await manager.connect(websocket)
 
     try:
         while True:
