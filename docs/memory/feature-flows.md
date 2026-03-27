@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-27 | #182 | Subscription BOLA fix — restrict assign/clear to owner/admin via `can_user_share_agent` | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-27 | SEC-179 | SSRF prevention — skills library URL validation against github.com allowlist | [skills-library-sync.md](feature-flows/skills-library-sync.md) |
 | 2026-03-26 | EVT-001 | Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines | [agent-event-subscriptions.md](feature-flows/agent-event-subscriptions.md) |
 | 2026-03-25 | #148 | Fix silent subscription registration failure — encryption key auto-generation, status endpoint, frontend warning | [subscription-management.md](feature-flows/subscription-management.md) |

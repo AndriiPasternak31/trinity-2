@@ -715,8 +715,9 @@ async def assign_subscription_to_agent(
     """Assign a subscription to an agent. Owner access required.
     If running, agent is restarted with CLAUDE_CODE_OAUTH_TOKEN env var."""
 
-    if not db.can_user_access_agent(current_user.username, agent_name):
-        raise HTTPException(status_code=403, detail="Access denied to this agent")
+    # Owner or admin only — shared users must not mutate subscription assignments (#182)
+    if not db.can_user_share_agent(current_user.username, agent_name):
+        raise HTTPException(status_code=403, detail="Only the agent owner or an admin can manage subscriptions")
 
     subscription = db.get_subscription_by_name(subscription_name)
     if not subscription:
@@ -1161,7 +1162,7 @@ MCP client methods: `src/mcp-server/src/client.ts:1079-1196`
 
 1. **Encryption at Rest**: Tokens encrypted with AES-256-GCM before database storage
 2. **Admin-Only Registration**: Only admins can register new subscriptions
-3. **Owner Access for Assignment**: Users can only assign subscriptions to agents they own
+3. **Owner/Admin Access for Assignment**: Only agent owners and admins can assign or clear subscriptions (`can_user_share_agent`); shared users with read access cannot mutate assignments (#182)
 4. **No Token Exposure**: API never returns decrypted tokens -- only metadata
 5. **Password Input**: Frontend uses `type="password"` for token field
 6. **Prefix Validation**: Both frontend and backend validate `sk-ant-oat01-` prefix
