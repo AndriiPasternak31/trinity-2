@@ -397,20 +397,27 @@ export class TrinityClient {
 
   /**
    * Generate ephemeral SSH credentials for direct agent access
-   * Returns private key (one-time display) or password and connection command
+   * For key auth, client supplies their public key (private key never leaves client)
+   * For password auth, server generates ephemeral password
    * @param name - Agent name
    * @param ttlHours - Credential validity in hours (0.1-24, default: 4)
    * @param authMethod - Authentication method: "key" (default) or "password"
+   * @param publicKey - Client's SSH public key (required for "key" auth)
    */
   async createSshAccess(
     name: string,
     ttlHours: number = 4,
-    authMethod: "key" | "password" = "key"
+    authMethod: "key" | "password" = "key",
+    publicKey?: string
   ): Promise<SshAccessResponse> {
+    const body: Record<string, unknown> = { ttl_hours: ttlHours, auth_method: authMethod };
+    if (publicKey) {
+      body.public_key = publicKey;
+    }
     return this.request<SshAccessResponse>(
       "POST",
       `/api/agents/${encodeURIComponent(name)}/ssh-access`,
-      { ttl_hours: ttlHours, auth_method: authMethod }
+      body
     );
   }
 
@@ -873,6 +880,91 @@ export class TrinityClient {
       "POST",
       "/api/notifications",
       data
+    );
+  }
+
+  // ============================================================================
+  // Agent Event Subscriptions (EVT-001)
+  // ============================================================================
+
+  /**
+   * Emit an event from an agent
+   */
+  async emitEvent(data: {
+    event_type: string;
+    payload?: Record<string, unknown>;
+  }): Promise<{
+    id: string;
+    source_agent: string;
+    event_type: string;
+    payload?: Record<string, unknown>;
+    subscriptions_triggered: number;
+    created_at: string;
+  }> {
+    return this.request(
+      "POST",
+      "/api/events",
+      data
+    );
+  }
+
+  /**
+   * Create an event subscription
+   */
+  async createEventSubscription(
+    agentName: string,
+    data: {
+      source_agent: string;
+      event_type: string;
+      target_message: string;
+      enabled?: boolean;
+    }
+  ): Promise<{
+    id: string;
+    subscriber_agent: string;
+    source_agent: string;
+    event_type: string;
+    target_message: string;
+    enabled: boolean;
+    created_at: string;
+  }> {
+    return this.request(
+      "POST",
+      `/api/agents/${encodeURIComponent(agentName)}/event-subscriptions`,
+      data
+    );
+  }
+
+  /**
+   * List event subscriptions for an agent
+   */
+  async listEventSubscriptions(
+    agentName: string,
+    direction: string = "subscriber"
+  ): Promise<{
+    count: number;
+    subscriptions: Array<{
+      id: string;
+      subscriber_agent: string;
+      source_agent: string;
+      event_type: string;
+      target_message: string;
+      enabled: boolean;
+    }>;
+  }> {
+    return this.request(
+      "GET",
+      `/api/agents/${encodeURIComponent(agentName)}/event-subscriptions?direction=${direction}`
+    );
+  }
+
+  /**
+   * Delete an event subscription
+   */
+  async deleteEventSubscription(subscriptionId: string): Promise<{ status: string }> {
+    return this.request(
+      "DELETE",
+      `/api/event-subscriptions/${encodeURIComponent(subscriptionId)}`
     );
   }
 

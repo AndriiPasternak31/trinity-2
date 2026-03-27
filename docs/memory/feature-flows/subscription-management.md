@@ -39,10 +39,10 @@ Claude Code checks credentials in this order (highest priority first):
 **Critical**: Because `ANTHROPIC_API_KEY` takes precedence, Trinity must **remove** the API key env var from the container when a subscription is assigned. If both exist, Claude Code uses the API key and never falls back to the token.
 
 This mutual exclusion is enforced by:
-- `check_api_key_env_matches()` in `src/backend/services/agent_service/helpers.py:313-351` -- detects subscription/API key conflicts on agent start
-- `recreate_container_with_updated_config()` in `src/backend/services/agent_service/lifecycle.py:275-311` -- sets `CLAUDE_CODE_OAUTH_TOKEN` and removes `ANTHROPIC_API_KEY` when subscription is assigned
-- `assign_subscription_to_agent` endpoint in `src/backend/routers/subscriptions.py:170-232` -- restarts running agents to apply env var changes
-- `clear_agent_subscription` endpoint in `src/backend/routers/subscriptions.py:235-284` -- restarts running agents to restore API key
+- `check_api_key_env_matches()` in `src/backend/services/agent_service/helpers.py:367-406` -- detects subscription/API key conflicts on agent start
+- `recreate_container_with_updated_config()` in `src/backend/services/agent_service/lifecycle.py:243-403` -- sets `CLAUDE_CODE_OAUTH_TOKEN` and removes `ANTHROPIC_API_KEY` when subscription is assigned
+- `assign_subscription_to_agent` endpoint in `src/backend/routers/subscriptions.py:190-253` -- restarts running agents to apply env var changes
+- `clear_agent_subscription` endpoint in `src/backend/routers/subscriptions.py:255-304` -- restarts running agents to restore API key
 
 ### Data Model
 
@@ -88,8 +88,8 @@ create_agent_internal()
 
 **Files:**
 - `src/backend/db/subscriptions.py:540` — `get_least_used_subscription()` (iterates candidates, skips rate-limited)
-- `src/backend/services/agent_service/crud.py:294` — lookup + env var injection before container creation
-- `src/backend/services/agent_service/crud.py:500` — DB persist after `register_agent_owner()`
+- `src/backend/services/agent_service/crud.py:301` — lookup + env var injection before container creation
+- `src/backend/services/agent_service/crud.py:507` — DB persist after `register_agent_owner()`
 
 **Edge cases:**
 - No subscriptions → skip, use `ANTHROPIC_API_KEY`
@@ -131,13 +131,13 @@ The Settings page (`/settings`) includes a "Claude Subscriptions" section for ma
 ### Location
 
 - **File**: `src/frontend/src/views/Settings.vue`
-- **Template**: Lines 382-582 (Claude Subscriptions section)
-- **State**: Lines 1031-1041
-- **Methods**: Lines 1473-1567
+- **Template**: Lines 483-775 (Claude Subscriptions section)
+- **State**: Lines 1422-1441
+- **Methods**: Lines 2082-2249
 
 ### UI Components
 
-#### 1. Add Subscription Form (`Settings.vue:394-472`)
+#### 1. Add Subscription Form (`Settings.vue:512-591`)
 
 Form fields:
 - **Name** (`v-model="newSubscription.name"`) -- Unique identifier (e.g., "eugene-max")
@@ -161,7 +161,7 @@ Buttons:
 - **Clear** -- Reset form (visible when form has data)
 - **Register Subscription** -- Submit (disabled until name + valid token provided)
 
-#### 2. Subscriptions Table (`Settings.vue:475-575`)
+#### 2. Subscriptions Table (`Settings.vue:594-737`)
 
 Columns:
 | Column | Data |
@@ -178,7 +178,7 @@ Features:
 - **Expandable rows** showing owner, rate limit tier, assigned agents
 - **Delete confirmation** with cascade warning (agent count)
 
-#### 3. Expanded Details Row (`Settings.vue:544-614`)
+#### 3. Expanded Details Row (`Settings.vue:662-733`)
 
 Shows when row is clicked (`expandedSubscriptions.has(sub.id)`):
 - Owner email
@@ -187,7 +187,7 @@ Shows when row is clicked (`expandedSubscriptions.has(sub.id)`):
 - **Agent assignment dropdown + Assign button** — `<select>` listing available agents (excludes agents already on this subscription). Agents assigned to other subscriptions show `"(on sub-name)"` suffix. Plus an "Assign" button that calls `assignAgentToSubscription()`.
 - Empty state: "No agents assigned yet."
 
-### State Variables (`Settings.vue:1075-1103`)
+### State Variables (`Settings.vue:1422-1452`)
 
 ```javascript
 // Subscriptions state (SUB-002)
@@ -215,7 +215,7 @@ const agentSubscriptionMap = computed(() => { ... })
 
 ### Methods
 
-#### `fetchAgentList()` (`Settings.vue:1632-1645`)
+#### `fetchAgentList()` (`Settings.vue:2191-2204`)
 
 Fetches agent list on first row expand. Cached — returns immediately if already loaded.
 
@@ -232,15 +232,15 @@ async function fetchAgentList() {
 }
 ```
 
-#### `getAvailableAgents(subId)` (`Settings.vue:1647-1657`)
+#### `getAvailableAgents(subId)` (`Settings.vue:2206-2216`)
 
 Returns agents not assigned to this subscription, sorted unassigned-first (agents on other subs sorted to end).
 
-#### `assignAgentToSubscription(subName, agentName)` (`Settings.vue:1659-1674`)
+#### `assignAgentToSubscription(subName, agentName)` (`Settings.vue:2218-2233`)
 
 Calls `PUT /api/subscriptions/agents/{name}?subscription_name=X`. Reloads subscriptions and clears dropdown selections on success.
 
-#### `unassignAgentFromSubscription(agentName)` (`Settings.vue:1676-1691`)
+#### `unassignAgentFromSubscription(agentName)` (`Settings.vue:2235-2249`)
 
 Shows confirm dialog, then calls `DELETE /api/subscriptions/agents/{name}`. Reloads subscriptions on success.
 
@@ -266,7 +266,7 @@ async function loadSubscriptions() {
 }
 ```
 
-#### `clearNewSubscription()` (`Settings.vue:1491-1497`)
+#### `clearNewSubscription()` (`Settings.vue:2112-2118`)
 
 Resets the add form.
 
@@ -280,7 +280,7 @@ function clearNewSubscription() {
 }
 ```
 
-#### `addSubscription()` (`Settings.vue:1499-1527`)
+#### `addSubscription()` (`Settings.vue:2120-2148`)
 
 Registers a new subscription via API.
 
@@ -306,7 +306,7 @@ async function addSubscription() {
 }
 ```
 
-#### `deleteSubscription(subscription)` (`Settings.vue:1529-1557`)
+#### `deleteSubscription(subscription)` (`Settings.vue:2150-2178`)
 
 Deletes subscription with cascade confirmation.
 
@@ -330,7 +330,7 @@ async function deleteSubscription(subscription) {
 }
 ```
 
-#### `toggleSubscriptionDetails(subscriptionId)` (`Settings.vue:1621-1630`)
+#### `toggleSubscriptionDetails(subscriptionId)` (`Settings.vue:2180-2189`)
 
 Toggles row expansion with forced reactivity update. When expanding, also calls `fetchAgentList()` to load available agents for the dropdown.
 
@@ -371,7 +371,7 @@ On the Agent Detail page, admins see the auth method badge in the `AgentHeader` 
 ### Location
 
 - **AgentHeader badge/switcher**: `src/frontend/src/components/AgentHeader.vue:109-145`
-- **AgentDetail wiring**: `src/frontend/src/views/AgentDetail.vue:27-67` (template), `307-309` (state), `784-817` (functions), `927-928` (onMounted), `839` (route-change watch)
+- **AgentDetail wiring**: `src/frontend/src/views/AgentDetail.vue:27-67` (template), `307-309` (state), `784-817` (functions), `927-928` (onMounted), `840` (route-change watch)
 
 ### UI Behavior
 
@@ -486,7 +486,7 @@ Admin             MCP/Claude Code          Backend                     Database
   |  registered"       |                      |                            |
 ```
 
-### Pydantic Validation (`src/backend/db_models.py:622-634`)
+### Pydantic Validation (`src/backend/db_models.py:623-635`)
 
 ```python
 class SubscriptionCredentialCreate(BaseModel):
@@ -504,7 +504,7 @@ class SubscriptionCredentialCreate(BaseModel):
         return v
 ```
 
-### MCP Tool (`src/mcp-server/src/tools/subscriptions.ts:42-85`)
+### MCP Tool (`src/mcp-server/src/tools/subscriptions.ts:42-80`)
 
 ```typescript
 registerSubscription: {
@@ -529,7 +529,7 @@ registerSubscription: {
 }
 ```
 
-### MCP Client (`src/mcp-server/src/client.ts:946-968`)
+### MCP Client (`src/mcp-server/src/client.ts:1079-1101`)
 
 ```typescript
 async registerSubscription(
@@ -703,7 +703,7 @@ Admin            MCP/Claude Code        Backend                         Agent Co
 
 Note: No file injection step exists in SUB-002. The token is part of the container environment from creation.
 
-### Backend Endpoint (`src/backend/routers/subscriptions.py:170-232`)
+### Backend Endpoint (`src/backend/routers/subscriptions.py:190-253`)
 
 ```python
 @router.put("/agents/{agent_name}")
@@ -744,7 +744,7 @@ async def assign_subscription_to_agent(
     }
 ```
 
-### Clear Subscription Endpoint (`src/backend/routers/subscriptions.py:235-284`)
+### Clear Subscription Endpoint (`src/backend/routers/subscriptions.py:255-304`)
 
 When a subscription is cleared from a running agent, the agent is restarted so `ANTHROPIC_API_KEY` is restored and `CLAUDE_CODE_OAUTH_TOKEN` is removed.
 
@@ -773,7 +773,7 @@ When an agent starts, the lifecycle service checks whether the container needs r
 
 ### Subscription-Aware Container Recreation
 
-Before starting, `check_api_key_env_matches()` (`src/backend/services/agent_service/helpers.py:313-351`) detects conflicts:
+Before starting, `check_api_key_env_matches()` (`src/backend/services/agent_service/helpers.py:367-406`) detects conflicts:
 
 ```python
 def check_api_key_env_matches(container, agent_name: str) -> bool:
@@ -810,7 +810,7 @@ def check_api_key_env_matches(container, agent_name: str) -> bool:
         return not has_api_key and not has_oauth_token
 ```
 
-If mismatch detected, `recreate_container_with_updated_config()` (`src/backend/services/agent_service/lifecycle.py:275-311`) handles the env vars:
+If mismatch detected, `recreate_container_with_updated_config()` (`src/backend/services/agent_service/lifecycle.py:243-403`) handles the env vars:
 
 ```python
 # Update auth env vars based on current setting (SUB-002).
@@ -861,7 +861,7 @@ API Request        lifecycle.py                 helpers.py                Agent
      |<-----------------|                           |                      |
 ```
 
-### Lifecycle Integration (`src/backend/services/agent_service/lifecycle.py:198-272`)
+### Lifecycle Integration (`src/backend/services/agent_service/lifecycle.py:168-241`)
 
 ```python
 async def start_agent_internal(agent_name: str) -> dict:
@@ -881,13 +881,13 @@ async def start_agent_internal(agent_name: str) -> dict:
     await container_start(container)
 
     # Post-start injections (NO subscription injection in SUB-002)
-    trinity_result = await inject_trinity_meta_prompt(agent_name)
+    # NOTE: Trinity platform instructions now injected at runtime via
+    # --append-system-prompt on every chat/task request (Issue #136).
     credentials_result = await inject_assigned_credentials(agent_name)
     skills_result = await inject_assigned_skills(agent_name)
 
     return {
         "message": f"Agent {agent_name} started",
-        "trinity_injection": trinity_result.get("status", "unknown"),
         "credentials_injection": credentials_result.get("status", "unknown"),
         "skills_injection": skills_result.get("status", "unknown"),
         # No subscription_injection field -- handled at container level
@@ -902,7 +902,7 @@ async def start_agent_internal(agent_name: str) -> dict:
 
 Determines how an agent is authenticated (subscription, API key, or not configured) by checking **database state only** (no HTTP calls to the agent). The auth status is displayed as a badge in the AgentHeader.
 
-### Subscription Service (`src/backend/services/subscription_service.py:20-56`)
+### Subscription Service (`src/backend/services/subscription_service.py:20-57`)
 
 ```python
 async def get_agent_auth_mode(agent_name: str) -> AgentAuthStatus:
@@ -931,7 +931,7 @@ async def get_agent_auth_mode(agent_name: str) -> AgentAuthStatus:
     )
 ```
 
-### Backend Endpoint (`src/backend/routers/subscriptions.py:287-307`)
+### Backend Endpoint (`src/backend/routers/subscriptions.py:307-328`)
 
 ```python
 @router.get("/agents/{agent_name}/auth", response_model=AgentAuthStatus)
@@ -1018,7 +1018,7 @@ async def get_auth_report(request: Request, current_user: User = Depends(get_cur
 
 ## Agent-Side Diagnostics
 
-### Claude Code Execution Diagnostics (`docker/base-image/agent_server/services/claude_code.py:569-590`)
+### Claude Code Execution Diagnostics (`docker/base-image/agent_server/services/claude_code.py:685-710`)
 
 When Claude Code exits with an error and stderr is empty, the agent server checks for the `CLAUDE_CODE_OAUTH_TOKEN` env var to provide diagnostic hints:
 
@@ -1040,7 +1040,7 @@ def _diagnose_exit_failure(return_code: int) -> str:
 
 ## Database Schema
 
-### Table: subscription_credentials (`src/backend/db/migrations.py:349-362`)
+### Table: subscription_credentials (`src/backend/db/migrations.py:359-379`)
 
 ```sql
 CREATE TABLE IF NOT EXISTS subscription_credentials (
@@ -1058,7 +1058,7 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_name ON subscription_credentials(na
 CREATE INDEX IF NOT EXISTS idx_subscriptions_owner ON subscription_credentials(owner_id);
 ```
 
-### Column: agent_ownership.subscription_id (`src/backend/db/migrations.py:366-378`)
+### Column: agent_ownership.subscription_id (`src/backend/db/migrations.py:393`)
 
 ```sql
 ALTER TABLE agent_ownership ADD COLUMN subscription_id TEXT REFERENCES subscription_credentials(id);
@@ -1066,7 +1066,7 @@ ALTER TABLE agent_ownership ADD COLUMN subscription_id TEXT REFERENCES subscript
 
 ---
 
-## Pydantic Models (`src/backend/db_models.py:618-660`)
+## Pydantic Models (`src/backend/db_models.py:623-663`)
 
 ```python
 class SubscriptionCredentialCreate(BaseModel):
@@ -1153,7 +1153,7 @@ All 6 subscription tools defined in `src/mcp-server/src/tools/subscriptions.ts`:
 | `get_agent_auth` | Get auth status for an agent | `agent_name` | Owner |
 | `delete_subscription` | Delete subscription (cascades to clear agent assignments) | `subscription_name` | Admin |
 
-MCP client methods: `src/mcp-server/src/client.ts:946-1063`
+MCP client methods: `src/mcp-server/src/client.ts:1079-1196`
 
 ---
 
@@ -1342,6 +1342,7 @@ The error flows through: Claude Code → `process_stream_line()` (stores in `met
 
 | Date | Changes |
 |------|---------|
+| 2026-03-26 | **Line number refresh**: Updated all stale line references across Settings.vue (template +100, state +390, methods +600), subscriptions.py (+20), helpers.py (+54), lifecycle.py (-30 to +90), crud.py (+7), claude_code.py (+116), db_models.py, migrations.py, and MCP client.ts (+133). Updated `start_agent_internal` code snippet to reflect removal of `inject_trinity_meta_prompt` (now runtime via `--append-system-prompt`). |
 | 2026-03-18 | **Subscription switcher dropdown on Agent Detail** (commit d166976): Updated doc to reflect current `AgentHeader.vue` and `AgentDetail.vue` wiring — corrected line numbers, clarified that `loadAvailableSubscriptions` is called only once in `onMounted` (not on route change), documented the three props passed to `AgentHeader` (`:auth-status`, `:subscriptions`, `:subscription-changing`), and added switcher test cases for admin and non-admin paths. |
 | 2026-03-03 | **SUB-003 Agent assignment UI**: Added assign/unassign controls to expanded subscription rows in Settings. Agent badges have X buttons for removal, dropdown + Assign button for adding agents, agents on other subs shown with "(on sub-name)" suffix. No backend changes. |
 | 2026-03-03 | **SUB-002 complete rewrite**: Token-based auth replacing file-injection. Registration takes `token` (from `claude setup-token`, prefix `sk-ant-oat01-`) instead of `credentials_json`. Storage encrypts `{"token": ...}` instead of `{".credentials.json": ...}`. Injection via `CLAUDE_CODE_OAUTH_TOKEN` env var on container creation -- no file injection needed. Removed `inject_subscription_to_agent()`, `inject_subscription_on_start()`, HTTP credential verification, and monitoring/auto-remediation. `get_agent_auth_mode()` simplified to pure DB-state detection. Frontend changed from file upload to password input with prefix validation. |

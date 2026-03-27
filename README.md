@@ -1,8 +1,8 @@
 <div align="center">
   <img src="docs/assets/trinity-logo.svg" alt="Trinity" width="120"/>
   <h1>Trinity</h1>
-  <p><strong>Sovereign infrastructure for autonomous AI agents</strong></p>
-  <p>Deploy, orchestrate, and govern fleets of autonomous AI agents with real-time observability, enterprise-grade controls, and complete audit trails.</p>
+  <p><strong>Autonomous agent orchestration and infrastructure</strong></p>
+  <p>Deploy, orchestrate, and govern fleets of autonomous AI agents — with real-time observability, fleet-wide scheduling, agent-to-agent delegation, and complete audit trails. On your own infrastructure.</p>
 
   <p>
     <a href="https://github.com/abilityai/trinity/stargazers"><img src="https://img.shields.io/github/stars/abilityai/trinity?style=social" alt="Stars"></a>
@@ -35,7 +35,7 @@
 
 **The problem:** Everyone wants autonomous AI agents. But your options are terrible — SaaS platforms where data leaves your security perimeter, custom builds that take 6-12 months, or frameworks that don't handle governance and audit trails.
 
-**The solution:** Trinity is sovereign infrastructure for autonomous AI agents. Each agent runs in its own isolated Docker container. You get real-time observability, fleet-wide health monitoring, cron-based scheduling, agent-to-agent delegation, and cost tracking — all on your own hardware.
+**The solution:** Trinity is autonomous agent orchestration infrastructure. Each agent runs in its own isolated Docker container. You get real-time observability, fleet-wide health monitoring, cron-based scheduling, agent-to-agent delegation, and cost tracking — all on your own hardware.
 
 | Option | Problem | Trinity |
 |--------|---------|---------|
@@ -119,19 +119,6 @@ If you're an AI agent given this repository:
 4. **To contribute to Trinity itself** — Read `CLAUDE.md` for development guidelines
 
 ---
-
-## Deep Agents vs Chatbots
-
-Unlike reactive chatbots ("System 1" AI), Deep Agents operate with deliberative reasoning ("System 2" AI): they decompose goals into task graphs, persist memory across sessions, delegate to specialized sub-agents, and recover from failures autonomously.
-
-## The Four Pillars of Deep Agency
-
-Trinity implements four foundational capabilities that transform simple AI assistants into autonomous agents:
-
-1. **Hierarchical Delegation** — Orchestrator-Worker pattern with context quarantine
-2. **Persistent Memory** — Virtual filesystems, vector databases, episodic memory
-3. **Extreme Context Engineering** — High-Order Prompts defining reasoning processes
-4. **Autonomous Operations** — Scheduling, monitoring, and self-healing capabilities
 
 ## Features
 
@@ -548,6 +535,7 @@ EMAIL_PROVIDER=console  # Use 'resend' or 'smtp' for production
 
 ## Documentation
 
+- [**User Documentation**](docs/user-docs/README.md) — Complete guide for UI workflows, agent management, and API reference
 - [Development Workflow](docs/DEVELOPMENT_WORKFLOW.md) — How to develop Trinity (context loading, testing, documentation)
 - [Deployment Guide](docs/DEPLOYMENT.md) — Production deployment instructions
 - [Versioning & Upgrades](docs/VERSIONING_AND_UPGRADES.md) — Version strategy and upgrade procedures

@@ -54,6 +54,27 @@
       "added": "2026-03-19",
       "categories": ["backend", "api", "public-links", "memory"],
       "description": "Tests for per-user persistent memory for public link agents: DB operations (get_or_create, increment, update), system prompt formatting, anonymous session isolation"
+    },
+    {
+      "file": "unit/test_base_image_allowlist.py",
+      "feature": "Issue #172",
+      "added": "2026-03-26",
+      "categories": ["backend", "security", "agents", "unit"],
+      "description": "Tests for base image allowlist validation: default allowlist, custom settings, malformed settings fallback, error messages (19 tests)"
+    },
+    {
+      "file": "unit/test_otp_rate_limiting.py",
+      "feature": "Issue #176",
+      "added": "2026-03-26",
+      "categories": ["backend", "security", "auth", "unit"],
+      "description": "Tests for OTP verification rate limiting: per-email attempt counter, IP rate limit, brute-force lockout after 5 failures, counter reset on success"
+    },
+    {
+      "file": "test_access_control.py",
+      "feature": "Issue #174",
+      "added": "2026-03-26",
+      "categories": ["backend", "security", "api", "access-control"],
+      "description": "Tests for broken access control fix: admin-only endpoints (ops, observability, system-agent, alerts), owner-only agent endpoints (credentials, chat history, queue, skills), agent access checks (stats, queue, skills, detail, logs)"
     }
   ]
 }

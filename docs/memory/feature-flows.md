@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-26 | EVT-001 | Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines | [agent-event-subscriptions.md](feature-flows/agent-event-subscriptions.md) |
 | 2026-03-25 | #129 | Active watchdog — reconcile DB state against agent process registries, recover orphans, auto-terminate timeouts | [cleanup-service.md](feature-flows/cleanup-service.md) |
 | 2026-03-25 | #148 | Fix silent subscription registration failure — encryption key auto-generation, status endpoint, frontend warning | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-25 | #74 | Auto-assign subscription to new agents (round-robin, rate-limit aware) | [subscription-management.md](feature-flows/subscription-management.md) |
@@ -136,6 +137,7 @@
 | Flow | Document | Description |
 |------|----------|-------------|
 | Agent-to-Agent Collaboration | [agent-to-agent-collaboration.md](feature-flows/agent-to-agent-collaboration.md) | Inter-agent communication via MCP |
+| Agent Event Subscriptions | [agent-event-subscriptions.md](feature-flows/agent-event-subscriptions.md) | Lightweight pub/sub for inter-agent event pipelines |
 | Agent Permissions | [agent-permissions.md](feature-flows/agent-permissions.md) | Agent communication permissions |
 | Agent Sharing | [agent-sharing.md](feature-flows/agent-sharing.md) | Email-based sharing with access levels |
 | Agent Shared Folders | [agent-shared-folders.md](feature-flows/agent-shared-folders.md) | File collaboration via shared volumes |

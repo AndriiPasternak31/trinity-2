@@ -48,7 +48,7 @@ from routers.system_agent import router as system_agent_router
 from routers.ops import router as ops_router
 from routers.public_links import router as public_links_router, set_websocket_manager as set_public_links_ws_manager
 from routers.public import router as public_router
-from routers.setup import router as setup_router
+from routers.setup import router as setup_router, get_setup_token as get_setup_setup_token
 from routers.telemetry import router as telemetry_router
 from routers.logs import router as logs_router
 from routers.agent_dashboard import router as agent_dashboard_router
@@ -74,6 +74,7 @@ from routers.image_generation import router as image_generation_router
 from routers.avatar import router as avatar_router
 from routers.operator_queue import router as operator_queue_router, set_websocket_manager as set_operator_queue_ws_manager
 from routers.voice import router as voice_router
+from routers.event_subscriptions import router as event_subscriptions_router, set_websocket_manager as set_event_subs_ws_manager, set_filtered_websocket_manager as set_event_subs_filtered_ws_manager
 
 # Import activity service
 from services.activity_service import activity_service
@@ -203,6 +204,8 @@ set_monitoring_ws_manager(manager)
 set_monitoring_filtered_ws_manager(filtered_manager)
 set_operator_queue_ws_manager(manager)
 set_opqueue_sync_ws_manager(manager)
+set_event_subs_ws_manager(manager)
+set_event_subs_filtered_ws_manager(filtered_manager)
 
 # NOTE: Trinity platform instructions are now injected at runtime via
 # --append-system-prompt on every chat/task request (Issue #136).
@@ -229,6 +232,20 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     # Set up structured JSON logging (captured by Vector)
     setup_logging()
+
+    # Print setup token if first-time setup is not yet complete (SEC #177).
+    # Only someone with access to server logs can read this token and complete setup,
+    # preventing installation hijack by unauthenticated remote attackers.
+    from database import db as _db
+    if _db.get_setting_value('setup_completed', 'false') != 'true':
+        _setup_token = get_setup_setup_token()
+        print("=" * 60)
+        print("TRINITY FIRST-TIME SETUP REQUIRED")
+        print("=" * 60)
+        print(f"Setup token: {_setup_token}")
+        print("Visit the Trinity UI and enter this token to set the admin password.")
+        print("This token is only valid for this session.")
+        print("=" * 60)
 
     if docker_client:
         try:
@@ -451,6 +468,7 @@ app.include_router(image_generation_router)  # Image Generation (IMG-001)
 app.include_router(avatar_router)  # Agent Avatars (AVATAR-001)
 app.include_router(operator_queue_router)  # Operator Queue (OPS-001)
 app.include_router(voice_router)  # Voice Chat (VOICE-001)
+app.include_router(event_subscriptions_router)  # Agent Event Subscriptions (EVT-001)
 
 
 # WebSocket endpoint

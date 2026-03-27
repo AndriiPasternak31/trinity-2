@@ -1,6 +1,6 @@
 # Welcome to Trinity 🚀
 
-**The Deep Agent Orchestration Platform**
+**Autonomous agent orchestration and infrastructure**
 
 Trinity transforms the way you deploy and manage autonomous AI agents. Whether you're building a single intelligent assistant or orchestrating a network of specialized agents working together, Trinity provides the infrastructure you need.
 
@@ -8,7 +8,7 @@ Trinity transforms the way you deploy and manage autonomous AI agents. Whether y
 
 ## What is Trinity?
 
-Trinity is a **sovereign infrastructure platform** for deploying, orchestrating, and governing autonomous AI systems. Unlike simple chatbots that react to user input, Trinity enables **Deep Agents** — AI systems that:
+Trinity is a **sovereign infrastructure platform** for deploying, orchestrating, and governing autonomous AI agents. Agents can:
 
 - 🎯 **Plan independently** — Break down complex goals into executable tasks
 - 🧠 **Remember persistently** — Store knowledge across sessions using vector databases
@@ -163,7 +163,7 @@ Here's what your first few days with Trinity might look like:
 
 ## What Makes Trinity Different?
 
-| Feature | Traditional Chatbots | Trinity Deep Agents |
+| Feature | Traditional Chatbots | Trinity Agents |
 |---------|---------------------|-------------------|
 | **Execution Model** | Reactive (responds to input) | Autonomous (runs on schedules) |
 | **Memory** | Ephemeral conversation history | Persistent vector database |

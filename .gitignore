@@ -118,6 +118,8 @@ repositories/
 *.png
 # Allow PWA icons
 !src/frontend/public/icons/*.png
+# Allow documentation screenshots
+!docs/screenshots/*.png
 
 # Frontend build output
 src/frontend/dist/

@@ -18,6 +18,7 @@ from services.docker_utils import (
     container_stop, container_remove, container_start, container_reload,
     volume_get, volume_create, containers_run
 )
+from services.agent_service.helpers import validate_base_image
 from services.settings_service import get_anthropic_api_key, get_agent_full_capabilities
 from services.skill_service import skill_service
 from .helpers import check_shared_folder_mounts_match, check_api_key_env_matches, check_resource_limits_match, check_full_capabilities_match
@@ -250,7 +251,9 @@ async def recreate_container_with_updated_config(agent_name: str, old_container,
     old_host_config = old_container.attrs.get("HostConfig", {})
 
     # Get key settings
-    image = old_config.get("Image", "trinity-agent:latest")
+    image = old_config.get("Image", "trinity-agent-base:latest")
+    # SEC-172: Validate image on container recreation (defense in depth)
+    validate_base_image(image)
     env_vars = {e.split("=", 1)[0]: e.split("=", 1)[1] for e in old_config.get("Env", []) if "=" in e}
     labels = old_config.get("Labels", {})
 

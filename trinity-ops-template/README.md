@@ -1,6 +1,6 @@
 # Trinity Operations Template
 
-A template for creating an operations agent that manages Trinity Deep Agent Platform instances.
+A template for creating an operations agent that manages Trinity autonomous agent platform instances.
 
 ## Quick Start
 
@@ -81,4 +81,4 @@ This template is designed to work with Claude Code. When using Claude:
 
 ---
 
-*Part of the Trinity Deep Agent Orchestration Platform*
+*Part of the Trinity Autonomous Agent Platform*

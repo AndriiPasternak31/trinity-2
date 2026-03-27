@@ -1,3 +1,87 @@
+### 2026-03-26
+
+🔒 **fix(security): Broken access control — user-level horizontal privilege escalation (#174)**
+
+Hardened 39 endpoints across 11 routers to enforce proper access control. Previously, any authenticated user could access admin-only operational data, modify other users' agents, and view cross-tenant resources. CVSS 8.5 (High).
+
+- **Admin-only enforcement** (22 endpoints): `routers/ops.py` (fleet status/health, schedules, costs, auth-report, alerts), `routers/observability.py` (metrics, status), `routers/system_agent.py` (status), `routers/alerts.py` (threshold set/delete)
+- **Owner-only enforcement** (10 endpoints): `routers/credentials.py` (inject/export/import — upgraded from `AuthorizedAgent` to `OwnedAgent`), `routers/chat.py` (DELETE history), `routers/agents.py` (queue/clear, queue/release), `routers/skills.py` (PUT skills, assign, unassign, inject)
+- **Access checks added** (7 endpoints): `routers/agents.py` (stats, queue GET — added `AuthorizedAgentByName`), `routers/skills.py` (GET skills — added `AuthorizedAgentByName`), `routers/notifications.py` (list/get/acknowledge/dismiss — filtered by accessible agents), `routers/processes.py` (archive, new-version — added RBAC), `routers/executions.py` (events, step output, costs, analytics — added `can_view_execution`)
+- **Tests**: `tests/test_access_control.py` — 30 tests verifying non-admin users get 403 on admin endpoints, non-owners get 403 on owner endpoints, and regular users retain access to their own resources
+
+🔒 **fix(security): SSH private key no longer transmitted in API response (#175)**
+
+Eliminated server-side SSH keypair generation. The `POST /api/agents/{name}/ssh-access` endpoint for key-based auth now requires clients to supply their own `public_key` — private keys never leave the client machine.
+
+- `src/backend/routers/agent_ssh.py` — Added `public_key` field to `SshAccessRequest` (required for key auth); removed `private_key` from response; enforced owner-only access (`can_user_delete_agent` instead of `can_user_access_agent`) since SSH grants shell access to credentials
+- `src/backend/services/ssh_service.py` — Removed `generate_ssh_keypair()` method and `cryptography` import; server no longer generates or handles private keys
+- `src/mcp-server/src/tools/agents.ts` — Added `public_key` parameter to `get_agent_ssh_access` tool
+- `src/mcp-server/src/client.ts` — Added `publicKey` parameter to `createSshAccess()`
+- `src/mcp-server/src/types.ts` — Removed `private_key` from `SshAccessResponse`
+- `tests/unit/test_ssh_service.py` — Removed keypair generation tests, simplified mocks (no cryptography dependency)
+
+🔒 **fix(security): OTP rate limiting for email verification — prevent brute-force (#176)**
+
+`POST /api/auth/email/verify` now enforces two layers of rate limiting. Previously, a 6-digit OTP (~20 bits of entropy) could be brute-forced in ~8 minutes at 2k req/s — within the 10-minute validity window — yielding a valid 7-day JWT.
+
+- `src/backend/routers/auth.py` — Added `check_otp_rate_limit(email)` and `record_otp_attempt(email, success)`: per-email Redis counter (`otp_attempts:{email}`) that locks out after 5 failed attempts for 10 minutes. Also applied existing `check_login_rate_limit(client_ip)` + `record_login_attempt()` to the verify endpoint (IP-based, was already on admin login).
+- `src/backend/routers/public.py` — Applied IP-based rate limiting to `POST /api/public/verify/confirm` (public link email verification).
+- `tests/unit/test_otp_rate_limiting.py` — 17 unit tests covering lockout at threshold, per-email key isolation, brute-force simulation, counter reset on success, Redis fail-open.
+
+🔒 **fix(security): Base image allowlist — block arbitrary Docker image pull (#172)**
+
+Agent creation now validates `base_image` against a configurable allowlist before any Docker operations. Previously, any authenticated user could deploy a container with an arbitrary Docker image (e.g., `alpine:latest`), gaining network access to internal services (backend, MCP server, Redis).
+
+- `src/backend/services/agent_service/helpers.py` — Added `validate_base_image()` with fnmatch-based allowlist check
+- `src/backend/services/agent_service/crud.py` — Calls `validate_base_image()` before template processing in `create_agent_internal()`
+- `src/backend/services/agent_service/lifecycle.py` — Calls `validate_base_image()` in `recreate_container_with_updated_config()` (defense in depth); fixed default fallback from wrong image name `trinity-agent:latest` to `trinity-agent-base:latest`
+- **Default allowlist**: `["trinity-agent-base:*"]` — only local Trinity base images permitted
+- **Configurable**: Admins can set `base_image_allowlist` in system settings (JSON array of fnmatch patterns)
+- **Blocked requests**: Return HTTP 403 with informative error including rejected image and allowlist
+- **Tests**: 19 unit tests in `tests/unit/test_base_image_allowlist.py`
+
+✨ **feat: Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines (#169)**
+
+Agents can now emit named events and subscribe to events from other agents. When a matching event fires, the subscribing agent receives an async task with the payload interpolated into a message template. Uses existing `agent_permissions` for access control.
+
+- **New MCP tools**: `emit_event`, `subscribe_to_event`, `list_event_subscriptions`, `delete_event_subscription`
+- **New API endpoints**:
+  - `POST /api/agents/{name}/event-subscriptions` — Create subscription
+  - `GET /api/agents/{name}/event-subscriptions` — List subscriptions
+  - `GET/PUT/DELETE /api/event-subscriptions/{id}` — CRUD by ID
+  - `POST /api/events` — Emit event (agent-scoped, from MCP auth context)
+  - `POST /api/agents/{name}/emit-event` — Emit event for specific agent
+  - `GET /api/agents/{name}/events` — Event history
+  - `GET /api/events` — All events
+- **New database tables**: `agent_event_subscriptions`, `agent_events`
+- **New files**: `src/backend/db/event_subscriptions.py`, `src/backend/routers/event_subscriptions.py`, `src/mcp-server/src/tools/events.ts`
+- **Modified**: `database.py` (delegation), `db/schema.py` (tables+indexes), `db_models.py` (models), `main.py` (router registration), `server.ts` (tool registration), `client.ts` (API methods), `routers/agents.py` (cleanup on delete)
+
+**feat: Slack connection management UI + per-agent channel binding (SLACK-002, #64)**
+
+Socket Mode management and per-agent Slack channel binding, decoupled from the public links OAuth flow.
+
+**Bug fixes:**
+- Fix encrypted bot token bug — `routers/slack.py` read raw SQL bypassing `_decrypt_token()`, causing `Illegal header value` errors when calling Slack API
+- Add missing `mark_execution_dispatched` delegation to `DatabaseManager`
+
+**Settings UI — Transport management:**
+- `GET /api/settings/slack/status` — connection state, workspaces, bound agents
+- `POST /api/settings/slack/connect` — save app token, start Socket Mode transport
+- `POST /api/settings/slack/disconnect` — stop transport
+- `POST /api/settings/slack/install` — platform-level OAuth (stores workspace + bot token without agent context)
+- `src/frontend/src/views/Settings.vue` — unified Slack section: OAuth credentials, transport mode, connect/disconnect, Install to Workspace, workspace list with agent badges
+
+**Per-agent channel binding:**
+- `GET /api/agents/{name}/slack/channel` — check channel binding status
+- `POST /api/agents/{name}/slack/channel` — create Slack channel + bind to agent
+- `DELETE /api/agents/{name}/slack/channel` — unbind agent from channel
+- `src/frontend/src/components/SlackChannelPanel.vue` — bound/unbound/access-denied states in Sharing tab
+
+**Tests:** 15 new integration tests (7 transport management + 8 channel binding)
+
+---
+
 ### 2026-03-25
 
 **feat: Active watchdog — remediate stuck executions detected by monitoring (#129)**

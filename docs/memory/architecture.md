@@ -1,19 +1,10 @@
-# Trinity Deep Agent Orchestration Platform - Architecture
+# Trinity - Autonomous Agent Orchestration Platform - Architecture
 
 > **Purpose**: Documents the CURRENT system design. Update only when implementing changes.
 
 ## System Overview
 
-**Trinity** is a **Deep Agent Orchestration Platform** — sovereign infrastructure for deploying, orchestrating, and governing autonomous AI systems ("System 2" AI).
-
-### The Four Pillars of Deep Agency
-
-| Pillar | Trinity Implementation |
-|--------|----------------------|
-| **I. Explicit Planning** | Scheduling, activity timeline, runtime platform prompt injection (Task DAGs removed 2025-12-23) |
-| **II. Hierarchical Delegation** | Agent-to-Agent via MCP, access control, collaboration dashboard |
-| **III. Persistent Memory** | SQLite chat persistence, virtual filesystems, file browser |
-| **IV. Extreme Context Engineering** | Template system with CLAUDE.md, credential injection, Trinity commands |
+**Trinity** is an **autonomous agent orchestration and infrastructure platform** — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
 Each agent runs as an isolated Docker container with standardized interfaces for credentials, tools, and MCP server integrations.
 
@@ -146,12 +137,12 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `public.py` - Public chat endpoints
 - `paid.py` - x402 payment-gated chat (NVM-001)
 - `nevermined.py` - Nevermined payment config management
-- `slack.py` - Slack integration (OAuth, events, multi-agent channel routing) (SLACK-001/002)
+- `slack.py` - Slack integration (OAuth, events, multi-agent channel routing, per-agent channel binding) (SLACK-001/002)
 
 *Subscriptions & Skills:*
 - `subscriptions.py` - Subscription management (SUB-002)
 - `skills.py` - Skill CRUD and assignment
-- `settings.py` - Platform admin settings
+- `settings.py` - Platform admin settings (includes Slack transport management: connect/disconnect/install)
 
 *Process Engine:*
 - `processes.py` - Process definition CRUD, execution control
@@ -305,6 +296,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 | `monitoring.ts` (3) | `get_fleet_health`, `get_agent_health`, `trigger_health_check` | Fleet health monitoring |
 | `nevermined.ts` (4) | `configure_nevermined`, `get_nevermined_config`, `toggle_nevermined`, `get_nevermined_payments` | x402 payment configuration |
 | `notifications.ts` (1) | `send_notification` | Agent-to-platform notifications |
+| `events.ts` (4) | `emit_event`, `subscribe_to_event`, `list_event_subscriptions`, `delete_event_subscription` | Agent event pub/sub (EVT-001) |
 | `docs.ts` (1) | `get_agent_requirements` | Agent documentation |
 
 ### Vector Log Aggregator (`config/vector.yaml`)
@@ -907,6 +899,30 @@ CREATE INDEX idx_shared_folders_consume ON agent_shared_folder_config(consume_en
 - Permission-gated: only agents with permissions (via `agent_permissions`) can mount
 - Container recreation on restart when mount config changes
 - Volume ownership automatically fixed to UID 1000
+
+**agent_event_subscriptions:** (EVT-001 - Agent Event Pub/Sub)
+```sql
+CREATE TABLE agent_event_subscriptions (
+    id TEXT PRIMARY KEY,
+    subscriber_agent TEXT NOT NULL,       -- Agent receiving events
+    source_agent TEXT NOT NULL,           -- Agent emitting events
+    event_type TEXT NOT NULL,             -- Namespaced event type
+    target_message TEXT NOT NULL,         -- Message template with {{payload.field}}
+    enabled INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    UNIQUE(subscriber_agent, source_agent, event_type)
+);
+CREATE TABLE agent_events (
+    id TEXT PRIMARY KEY,
+    source_agent TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload TEXT,                         -- JSON
+    subscriptions_triggered INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+```
 
 **slack_workspaces:** (SLACK-002 - Channel Adapters)
 ```sql

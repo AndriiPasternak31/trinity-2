@@ -13,9 +13,11 @@ import os
 from typing import Optional, List
 from pathlib import Path
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Header, Request
+from fastapi import APIRouter, HTTPException, Header, Request, Depends
 from pydantic import BaseModel
 
+from dependencies import get_current_user, CurrentUser
+from models import User
 from services.process_engine.domain import (
     WebhookTriggerConfig,
     ScheduleTriggerConfig,
@@ -105,7 +107,7 @@ def _find_trigger(trigger_id: str) -> tuple[Optional[ProcessDefinition], Optiona
 
 
 @router.get("", response_model=list[TriggerInfo])
-async def list_triggers(request: Request):
+async def list_triggers(request: Request, current_user: CurrentUser):
     """
     List all webhook triggers across all processes.
 
@@ -208,7 +210,7 @@ async def invoke_webhook(
 
 
 @router.get("/webhook/{trigger_id}/info", response_model=TriggerInfo)
-async def get_trigger_info(trigger_id: str, request: Request):
+async def get_trigger_info(trigger_id: str, request: Request, current_user: CurrentUser):
     """
     Get information about a specific webhook trigger.
     """
@@ -265,7 +267,7 @@ def _get_schedule_triggers_from_db() -> List[dict]:
 
 
 @router.get("/schedules", response_model=List[ScheduleTriggerInfo])
-async def list_schedule_triggers():
+async def list_schedule_triggers(current_user: CurrentUser):
     """
     List all schedule triggers across all processes.
 
@@ -309,7 +311,7 @@ async def list_schedule_triggers():
 
 
 @router.get("/schedules/{schedule_id}", response_model=ScheduleTriggerInfo)
-async def get_schedule_trigger(schedule_id: str):
+async def get_schedule_trigger(schedule_id: str, current_user: CurrentUser):
     """
     Get information about a specific schedule trigger.
     """
@@ -358,7 +360,7 @@ async def get_schedule_trigger(schedule_id: str):
 
 
 @router.get("/process/{process_id}/schedules", response_model=List[ScheduleTriggerInfo])
-async def list_process_schedule_triggers(process_id: str):
+async def list_process_schedule_triggers(process_id: str, current_user: CurrentUser):
     """
     List all schedule triggers for a specific process.
     """
