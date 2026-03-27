@@ -679,7 +679,8 @@ async def assign_subscription_to_agent(
     """Assign a subscription to an agent. Owner access required.
     If running, agent is restarted with CLAUDE_CODE_OAUTH_TOKEN env var."""
 
-    if not db.can_user_access_agent(current_user.username, agent_name):
+    # Owner/admin only — shared users cannot manage subscriptions (issue #182)
+    if not db.can_user_share_agent(current_user.username, agent_name):
         raise HTTPException(status_code=403, detail="Access denied to this agent")
 
     subscription = db.get_subscription_by_name(subscription_name)
