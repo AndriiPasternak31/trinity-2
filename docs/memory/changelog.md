@@ -1,3 +1,14 @@
+### 2026-03-27
+
+**refactor: Clean up dead code — unused imports across 4 files (#126)**
+
+Removed 11 unused imports detected by Vulture (80%+ confidence). Verified via grep that none are re-exported or referenced by other modules.
+
+- `src/backend/database.py` — Removed 8 unused re-exports: `AgentOwnership`, `AgentPermissionInfo`, `EmailWhitelistEntry`, `HealthCheckRecord`, `HealthCheckType`, `McpAgentKeyCreate`, `SharedFolderConfigUpdate`, `SharedFolderInfo`
+- `src/backend/routers/monitoring.py` — Removed unused `HealthCheckRecord` import
+- `src/backend/services/monitoring_service.py` — Removed unused `HealthCheckType` import
+- `src/backend/services/process_engine/events/websocket_publisher.py` — Removed unused `asdict` import
+
 ### 2026-03-26
 
 🔒 **fix(security): Broken access control — user-level horizontal privilege escalation (#174)**
