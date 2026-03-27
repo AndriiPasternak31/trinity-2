@@ -2,12 +2,7 @@
   <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 opacity-80">
     <div class="flex items-start gap-3">
       <!-- Agent Avatar -->
-      <div
-        class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-        :class="profile.color"
-      >
-        {{ profile.initials }}
-      </div>
+      <AgentAvatar :name="item.agent_name" :avatar-url="agentAvatarUrl" size="md" />
 
       <!-- Content -->
       <div class="flex-1 min-w-0">
@@ -42,13 +37,19 @@
 <script setup>
 import { computed } from 'vue'
 import { useOperatorQueueStore } from '../../stores/operatorQueue'
+import { useAgentsStore } from '../../stores/agents'
+import AgentAvatar from '../AgentAvatar.vue'
 
 const props = defineProps({
   item: { type: Object, required: true }
 })
 
 const store = useOperatorQueueStore()
-const profile = computed(() => store.getProfile(props.item.agent_name))
+const agentsStore = useAgentsStore()
+const agentAvatarUrl = computed(() => {
+  const agent = agentsStore.agents.find(a => a.name === props.item.agent_name)
+  return agent?.avatar_url || null
+})
 
 function timeAgo(isoString) {
   if (!isoString) return ''

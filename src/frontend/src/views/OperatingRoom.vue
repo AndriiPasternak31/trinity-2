@@ -159,12 +159,14 @@ import CostAlertsPanel from '../components/operator/CostAlertsPanel.vue'
 import { useOperatorQueueStore } from '../stores/operatorQueue'
 import { useNotificationsStore } from '../stores/notifications'
 import { useAlertsStore } from '../stores/alerts'
+import { useAgentsStore } from '../stores/agents'
 
 const route = useRoute()
 const router = useRouter()
 const operatorQueueStore = useOperatorQueueStore()
 const notificationsStore = useNotificationsStore()
 const alertsStore = useAlertsStore()
+const agentsStore = useAgentsStore()
 
 const VALID_TABS = ['needs-response', 'notifications', 'cost-alerts', 'resolved']
 
@@ -203,6 +205,10 @@ function refresh() {
 
 onMounted(() => {
   operatorQueueStore.startPolling(10000)
+  // Ensure agent data (including avatars) is available for QueueCard/ResolvedCard
+  if (agentsStore.agents.length === 0) {
+    agentsStore.fetchAgents()
+  }
 })
 
 onUnmounted(() => {

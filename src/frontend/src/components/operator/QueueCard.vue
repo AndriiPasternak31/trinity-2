@@ -10,12 +10,7 @@
     <div class="p-4">
       <div class="flex items-start gap-3">
         <!-- Agent Avatar -->
-        <div
-          class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-          :class="profile.color"
-        >
-          {{ profile.initials }}
-        </div>
+        <AgentAvatar :name="item.agent_name" :avatar-url="agentAvatarUrl" size="lg" />
 
         <!-- Main content -->
         <div class="flex-1 min-w-0">
@@ -173,15 +168,21 @@
 import { ref, computed, watch } from 'vue'
 import { renderMarkdown } from '../../utils/markdown'
 import { useOperatorQueueStore } from '../../stores/operatorQueue'
+import { useAgentsStore } from '../../stores/agents'
+import AgentAvatar from '../AgentAvatar.vue'
 
 const props = defineProps({
   item: { type: Object, required: true }
 })
 
 const store = useOperatorQueueStore()
+const agentsStore = useAgentsStore()
 
 const isExpanded = computed(() => store.expandedItemId === props.item.id)
-const profile = computed(() => store.getProfile(props.item.agent_name))
+const agentAvatarUrl = computed(() => {
+  const agent = agentsStore.agents.find(a => a.name === props.item.agent_name)
+  return agent?.avatar_url || null
+})
 
 const selectedOption = ref(null)
 const responseText = ref('')

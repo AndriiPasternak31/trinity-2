@@ -47,9 +47,9 @@ As an operator, I want a single inbox where I can see and respond to all agent r
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/frontend/src/views/OperatingRoom.vue` | 1-219 | Main page -- 4-tab layout (Needs Response / Notifications / Cost Alerts / Resolved), `?tab=` deep linking, combined subtitle, refresh button, polling lifecycle |
-| `src/frontend/src/components/operator/QueueCard.vue` | 1-257 | Expandable card -- agent avatar, markdown body, inline response controls |
-| `src/frontend/src/components/operator/ResolvedCard.vue` | 1-68 | Compact resolved item -- checkmark, response text, timestamp |
+| `src/frontend/src/views/OperatingRoom.vue` | 1-222 | Main page -- 4-tab layout (Needs Response / Notifications / Cost Alerts / Resolved), `?tab=` deep linking, combined subtitle, refresh button, polling lifecycle. Imports `useAgentsStore` and fetches agents on mount to provide avatar URLs |
+| `src/frontend/src/components/operator/QueueCard.vue` | 1-253 | Expandable card -- `AgentAvatar` component (with real avatar images from agents store), markdown body, inline response controls |
+| `src/frontend/src/components/operator/ResolvedCard.vue` | 1-67 | Compact resolved item -- `AgentAvatar` component (with real avatar images), checkmark, response text, timestamp |
 | `src/frontend/src/components/operator/NotificationsPanel.vue` | 1-541 | Notification list with agent/type/priority/status filters, bulk actions (acknowledge/dismiss), stats row, expandable messages, empty state |
 | `src/frontend/src/components/operator/CostAlertsPanel.vue` | 1-174 | Cost alert list with status filter, active/total stats, severity icons, dismiss controls, empty state |
 | `src/frontend/src/components/operator/QueueList.vue` | 1-195 | Filterable list view (type, priority, agent, status) with priority indicators |
@@ -95,6 +95,7 @@ Tab selection uses `?tab=` query parameter. `OperatingRoom.vue` reads `route.que
 **Additional Stores** (used by Notifications and Cost Alerts tabs; see their own flow docs for full details):
 - `src/frontend/src/stores/notifications.js` (315 lines) -- Manages notification list, filters, bulk actions, pending count. Used by `NotificationsPanel.vue`. Key getters: `pendingCount`, `hasUrgentPending`.
 - `src/frontend/src/stores/alerts.js` (183 lines) -- Manages cost alerts, active count. Used by `CostAlertsPanel.vue`. Key getters: `activeCount`, `hasActiveAlerts`.
+- `src/frontend/src/stores/agents.js` -- Provides agent data including `avatar_url`. Fetched on mount by `OperatingRoom.vue` if not already loaded. Used by `QueueCard.vue` and `ResolvedCard.vue` to resolve agent avatar images.
 
 **Operator Queue Store State:**
 - `items` (ref) -- Array of queue items from backend API
@@ -109,7 +110,7 @@ Tab selection uses `?tab=` query parameter. `OperatingRoom.vue` reads `route.que
 - `pendingCount` -- Count of items with status=pending (drives NavBar badge)
 - `criticalCount` -- Count of pending items with priority=critical (drives badge color: red+pulse vs orange)
 - `openItemsByAgent` -- Open items grouped by agent_name
-- `getProfile(agentName)` -- Returns `{initials, color, role}` using deterministic hash of agent name against 8 Tailwind colors
+- `getProfile(agentName)` -- Returns `{initials, color, role}` using deterministic hash of agent name against 8 Tailwind colors (legacy; `QueueCard` and `ResolvedCard` now use `AgentAvatar` component with real avatar images instead)
 
 **Actions:**
 - `fetchItems()` -- `GET /api/operator-queue?limit=200` with auth header (line 82-97)
