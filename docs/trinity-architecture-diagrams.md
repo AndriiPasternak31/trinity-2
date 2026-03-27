@@ -1,7 +1,7 @@
 # Trinity Agent Platform - Architecture Diagrams
 
 > **Last Updated**: 2026-01-22
-> **Platform Version**: Deep Agent Orchestration Platform implementing the Four Pillars of Deep Agency
+> **Platform Version**: Autonomous Agent Orchestration and Infrastructure Platform
 
 ## 1. High-Level Platform Architecture
 
@@ -67,59 +67,7 @@ graph TB
     style SYS fill:#7C4DFF,stroke:#651FFF,stroke-width:3px,color:#fff
 ```
 
-## 2. The Four Pillars of Deep Agency
-
-Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, reason, and execute autonomously.
-
-```mermaid
-graph TB
-    subgraph "Pillar I: Explicit Planning"
-        P1A[Scheduling System]
-        P1B[Activity Timeline]
-        P1C[Process Engine DAGs]
-    end
-
-    subgraph "Pillar II: Hierarchical Delegation"
-        P2A[Agent-to-Agent MCP]
-        P2B[Permission System]
-        P2C[Collaboration Dashboard]
-    end
-
-    subgraph "Pillar III: Persistent Memory"
-        P3A[SQLite Chat Persistence]
-        P3B[Virtual Filesystems]
-        P3C[Agent Workspaces]
-    end
-
-    subgraph "Pillar IV: Context Engineering"
-        P4A[Template System]
-        P4B[CLAUDE.md Injection]
-        P4C[Trinity Commands]
-    end
-
-    AGENT[Deep Agent Container]
-
-    P1A --> AGENT
-    P1B --> AGENT
-    P1C --> AGENT
-    P2A --> AGENT
-    P2B --> AGENT
-    P2C --> AGENT
-    P3A --> AGENT
-    P3B --> AGENT
-    P3C --> AGENT
-    P4A --> AGENT
-    P4B --> AGENT
-    P4C --> AGENT
-
-    style P1A fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
-    style P2A fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
-    style P3A fill:#FF9800,stroke:#F57C00,stroke-width:2px,color:#000
-    style P4A fill:#9C27B0,stroke:#7B1FA2,stroke-width:2px,color:#fff
-    style AGENT fill:#673AB7,stroke:#512DA8,stroke-width:3px,color:#fff
-```
-
-## 3. Agent Container Architecture
+## 2. Agent Container Architecture
 
 ```mermaid
 graph TB
@@ -619,7 +567,7 @@ graph TB
 
 ## Key Architecture Principles
 
-### 1. Deep Agent Orchestration
+### 1. Autonomous Agent Orchestration
 - Agents are autonomous units with planning, memory, and delegation capabilities
 - System Agent (`trinity-system`) provides platform-level orchestration
 - Process Engine enables complex multi-agent workflows

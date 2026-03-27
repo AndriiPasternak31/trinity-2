@@ -68,10 +68,11 @@ class TestSetupAdminPassword:
         if not status_data.get("setup_completed"):
             pytest.skip("Setup not completed - cannot test blocked state")
 
-        # Try to set password again - should be blocked
+        # Try to set password again - should be blocked (include setup_token to pass Pydantic validation)
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={
+                "setup_token": "any-token-setup-is-already-done",
                 "password": "newpassword123",
                 "confirm_password": "newpassword123"
             },
@@ -82,54 +83,30 @@ class TestSetupAdminPassword:
         data = response.json()
         assert "already completed" in data.get("detail", "").lower() or "setup" in data.get("detail", "").lower()
 
-    def test_password_validation_short_password(self, unauthenticated_client: TrinityApiClient):
-        """POST /api/setup/admin-password rejects passwords that don't meet complexity requirements."""
+    def test_invalid_setup_token_rejected(self, unauthenticated_client: TrinityApiClient):
+        """POST /api/setup/admin-password rejects requests with an invalid setup token."""
         # First check if setup is completed
         status_response = unauthenticated_client.get("/api/setup/status", auth=False)
         status_data = status_response.json()
 
         if status_data.get("setup_completed"):
-            pytest.skip("Setup already completed - cannot test validation")
+            pytest.skip("Setup already completed - cannot test token validation")
 
-        # Try to set short password
+        # Try with a wrong token but otherwise valid request
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={
-                "password": "short",
-                "confirm_password": "short"
+                "setup_token": "invalid-token-that-will-not-match",
+                "password": "V@lidP4ssword!123",
+                "confirm_password": "V@lidP4ssword!123"
             },
             auth=False
         )
 
-        # Should reject with 400
-        assert_status(response, 400)
+        # Should reject with 403 (invalid token)
+        assert_status(response, 403)
         data = response.json()
-        detail = data.get("detail", "").lower()
-        assert "requirements" in detail or "12 characters" in detail or "complexity" in detail
-
-    def test_password_validation_mismatch(self, unauthenticated_client: TrinityApiClient):
-        """POST /api/setup/admin-password rejects mismatched passwords."""
-        # First check if setup is completed
-        status_response = unauthenticated_client.get("/api/setup/status", auth=False)
-        status_data = status_response.json()
-
-        if status_data.get("setup_completed"):
-            pytest.skip("Setup already completed - cannot test validation")
-
-        # Try to set mismatched passwords (both meet complexity requirements)
-        response = unauthenticated_client.post(
-            "/api/setup/admin-password",
-            json={
-                "password": "V@lidP4ssword!",
-                "confirm_password": "V@lidP4ssword!Different"
-            },
-            auth=False
-        )
-
-        # Should reject with 400
-        assert_status(response, 400)
-        data = response.json()
-        assert "match" in data.get("detail", "").lower() or "mismatch" in data.get("detail", "").lower()
+        assert "token" in data.get("detail", "").lower()
 
     def test_password_validation_missing_fields(self, unauthenticated_client: TrinityApiClient):
         """POST /api/setup/admin-password rejects missing required fields."""
@@ -140,14 +117,14 @@ class TestSetupAdminPassword:
         if status_data.get("setup_completed"):
             pytest.skip("Setup already completed - cannot test validation")
 
-        # Try with empty body
+        # Try with empty body - missing all required fields (password, confirm_password, setup_token)
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={},
             auth=False
         )
 
-        # Should reject with 422 (validation error)
+        # Should reject with 422 (Pydantic validation error for missing required fields)
         assert_status_in(response, [400, 422])
 
 

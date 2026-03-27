@@ -1,5 +1,6 @@
 """SSH access endpoints for Trinity agents."""
 import time
+from typing import Optional
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +19,7 @@ class SshAccessRequest(BaseModel):
     """Request body for SSH access."""
     ttl_hours: float = 4.0
     auth_method: str = "key"  # "key" for SSH key, "password" for ephemeral password
+    public_key: Optional[str] = None  # Required for key auth — client-supplied OpenSSH public key
 
 
 @router.post("/{agent_name}/ssh-access")
@@ -30,17 +32,17 @@ async def create_ssh_access(
     Generate ephemeral SSH credentials for direct agent access.
 
     Supports two authentication methods:
-    - "key": Generate ED25519 key pair (save locally, more secure)
+    - "key": Client supplies their public key; server injects it into authorized_keys
     - "password": Generate ephemeral password (one-liner with sshpass)
 
     Keys/passwords expire automatically after the specified TTL.
 
     Args:
         agent_name: Name of the agent to access
-        body: Request body with ttl_hours (0.1-24 hours, default: 4) and auth_method
+        body: Request body with ttl_hours, auth_method, and public_key (for key auth)
 
     Returns:
-        SSH connection details
+        SSH connection details (never includes private keys)
     """
     from services.ssh_service import get_ssh_service, get_ssh_host, SSH_ACCESS_MAX_TTL_HOURS
     from services.settings_service import get_ops_setting
@@ -52,9 +54,10 @@ async def create_ssh_access(
             detail="SSH access is disabled. Enable it in Settings → Ops Settings → ssh_access_enabled"
         )
 
-    # Check access
-    if not db.can_user_access_agent(current_user.username, agent_name):
-        raise HTTPException(status_code=403, detail="Access denied")
+    # Enforce owner-only access (owner or admin, not shared users)
+    # SSH grants shell access to credentials — stricter than normal agent access
+    if not db.can_user_delete_agent(current_user.username, agent_name):
+        raise HTTPException(status_code=403, detail="Access denied. Only the agent owner or admin can generate SSH credentials.")
 
     container = get_agent_container(agent_name)
     if not container:
@@ -137,11 +140,38 @@ async def create_ssh_access(
         }
 
     else:
-        # Key-based authentication (original behavior)
-        keypair = ssh_service.generate_ssh_keypair(agent_name)
+        # Key-based authentication — client supplies their public key
+        if not body.public_key or not body.public_key.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="public_key is required for key-based authentication. "
+                       "Generate a key locally (ssh-keygen -t ed25519) and provide the public key."
+            )
 
-        # Inject public key into container (async to avoid blocking)
-        if not await ssh_service.inject_ssh_key(agent_name, keypair["public_key"]):
+        public_key = body.public_key.strip()
+
+        # Basic validation: must look like an SSH public key
+        if not public_key.startswith(("ssh-ed25519 ", "ssh-rsa ", "ecdsa-sha2-", "sk-ssh-", "ssh-dss ")):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid public key format. Must be an OpenSSH public key "
+                       "(starts with ssh-ed25519, ssh-rsa, ecdsa-sha2-, etc.)"
+            )
+
+        # Create a tracking comment for cleanup
+        timestamp = int(time.time())
+        comment = f"trinity-ephemeral-{agent_name}-{timestamp}"
+
+        # Append comment to public key if not already present
+        if "trinity-ephemeral-" not in public_key:
+            public_key_with_comment = f"{public_key} {comment}"
+        else:
+            public_key_with_comment = public_key
+            # Extract existing comment for tracking
+            comment = public_key.split()[-1] if len(public_key.split()) > 2 else comment
+
+        # Inject client's public key into container (async to avoid blocking)
+        if not await ssh_service.inject_ssh_key(agent_name, public_key_with_comment):
             raise HTTPException(
                 status_code=500,
                 detail="Failed to inject SSH key into agent container"
@@ -150,15 +180,14 @@ async def create_ssh_access(
         # Store metadata in Redis with TTL
         ssh_service.store_key_metadata(
             agent_name=agent_name,
-            comment=keypair["comment"],
-            public_key=keypair["public_key"],
+            comment=comment,
+            public_key=public_key_with_comment,
             created_by=current_user.username,
             ttl_hours=ttl_hours
         )
 
         # Build SSH command
-        key_filename = f"~/.trinity/keys/{agent_name}.key"
-        ssh_command = f"ssh -p {ssh_port} -i {key_filename} developer@{host}"
+        ssh_command = f"ssh -p {ssh_port} developer@{host}"
 
         return {
             "status": "success",
@@ -170,12 +199,9 @@ async def create_ssh_access(
                 "port": ssh_port,
                 "user": "developer"
             },
-            "private_key": keypair["private_key"],
             "expires_at": expires_at.isoformat() + "Z",
             "expires_in_hours": ttl_hours,
             "instructions": [
-                f"Save the private key to a file: {key_filename}",
-                f"Set permissions: chmod 600 {key_filename}",
                 f"Connect: {ssh_command}",
                 f"Key expires in {ttl_hours} hours"
             ]

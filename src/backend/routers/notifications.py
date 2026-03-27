@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from database import db
 from dependencies import get_current_user, AuthorizedAgent
+from services.agent_service import get_accessible_agents
 from db_models import (
     User,
     NotificationCreate,
@@ -148,12 +149,24 @@ async def list_notifications(
                 detail=f"Invalid priorities: {', '.join(invalid)}"
             )
 
+    # Filter to notifications from agents the user can access
+    accessible_agent_names = {a['name'] for a in get_accessible_agents(current_user)}
+
+    # If filtering by specific agent, verify access
+    if agent_name:
+        if agent_name not in accessible_agent_names:
+            raise HTTPException(status_code=403, detail="Access denied to agent")
+
     notifications = db.list_notifications(
         agent_name=agent_name,
         status=status,
         priority=priority_list,
-        limit=limit
+        limit=limit * 2 if not agent_name else limit  # Fetch extra for filtering
     )
+
+    # Filter to only accessible agents' notifications
+    if not agent_name:
+        notifications = [n for n in notifications if n.agent_name in accessible_agent_names][:limit]
 
     return NotificationList(
         count=len(notifications),
@@ -172,6 +185,8 @@ async def get_notification(
     notification = db.get_notification(notification_id)
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
+    if not db.can_user_access_agent(current_user.username, notification.agent_name):
+        raise HTTPException(status_code=403, detail="Access denied")
     return notification
 
 
@@ -185,6 +200,13 @@ async def acknowledge_notification(
 
     Changes the notification status from 'pending' to 'acknowledged'.
     """
+    # Check the notification exists and user has access to the agent
+    existing = db.get_notification(notification_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if not db.can_user_access_agent(current_user.username, existing.agent_name):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     notification = db.acknowledge_notification(
         notification_id,
         acknowledged_by=str(current_user.id)
@@ -210,6 +232,13 @@ async def dismiss_notification(
 
     Changes the notification status to 'dismissed'.
     """
+    # Check the notification exists and user has access to the agent
+    existing = db.get_notification(notification_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if not db.can_user_access_agent(current_user.username, existing.agent_name):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     notification = db.dismiss_notification(
         notification_id,
         dismissed_by=str(current_user.id)

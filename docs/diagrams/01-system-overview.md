@@ -2,11 +2,10 @@
 
 ## What This Diagram Shows
 
-This document provides a high-level architectural overview of the Trinity Deep Agent Orchestration Platform. It illustrates:
+This document provides a high-level architectural overview of the Trinity autonomous agent platform. It illustrates:
 
 1. **Platform Layers**: How the web interface, platform services, and agent runtime relate to each other
-2. **The Four Pillars**: The core principles that make Trinity different from reactive chatbots
-3. **Key Differentiators**: Why "System 2" AI agents are fundamentally different from traditional chatbots
+2. **Key Differentiators**: How autonomous agents differ from reactive chatbots
 
 Use this as a starting point for understanding Trinity's architecture before diving into specific feature flows.
 
@@ -14,13 +13,13 @@ Use this as a starting point for understanding Trinity's architecture before div
 
 ## What is Trinity?
 
-Trinity is a **Deep Agent Orchestration Platform** — infrastructure for deploying, orchestrating, and governing autonomous AI agents that plan, reason, and execute independently.
+Trinity is an **autonomous agent orchestration and infrastructure platform** — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
 ```
 +---------------------------------------------------------------------------------+
 |                                                                                 |
 |                         TRINITY PLATFORM                                        |
-|                    "Deep Agent Orchestration"                                   |
+|                  "Autonomous Agent Orchestration"                               |
 |                                                                                 |
 |   +-------------------------------------------------------------------------+  |
 |   |                         WEB INTERFACE                                    |  |
@@ -83,45 +82,15 @@ Trinity is a **Deep Agent Orchestration Platform** — infrastructure for deploy
 
 ---
 
-## The Four Pillars of Deep Agency
-
-Trinity implements infrastructure for "System 2" AI — agents that think deliberately rather than react.
-
-```
-+---------------------------------------------------------------------------------+
-|                                                                                 |
-|                    THE FOUR PILLARS OF DEEP AGENCY                              |
-|                                                                                 |
-+---------------------+---------------------+---------------------+---------------+
-|                     |                     |                     |               |
-|   I. HIERARCHICAL   |  II. PERSISTENT     |  III. EXTREME       |  IV. AUTO-    |
-|      DELEGATION     |      MEMORY         |      CONTEXT        |     NOMOUS    |
-|                     |                     |      ENGINEERING    |     OPS       |
-|                     |                     |                     |               |
-|  +---------------+  |  +---------------+  |  +---------------+  |  +---------+  |
-|  |  Orchestrator |  |  |   Database    |  |  |   CLAUDE.md   |  |  |Schedule |  |
-|  |       |       |  |  |   Chat Logs   |  |  |   Templates   |  |  |  Cron   |  |
-|  |   +---+---+   |  |  |   Sessions    |  |  |   Prompts     |  |  |  Jobs   |  |
-|  |   v       v   |  |  +---------------+  |  +---------------+  |  +---------+  |
-|  | Worker Worker |  |                     |                     |               |
-|  +---------------+  |  +---------------+  |  +---------------+  |  +---------+  |
-|                     |  |  File System  |  |  |  Credentials  |  |  | Health  |  |
-|  Agent-to-Agent     |  |  Workspaces   |  |  |  MCP Configs  |  |  | Monitor |  |
-|  via Trinity MCP    |  |  Shared Dirs  |  |  |  Injection    |  |  | Restart |  |
-|                     |  +---------------+  |  +---------------+  |  +---------+  |
-|                     |                     |                     |               |
-+---------------------+---------------------+---------------------+---------------+
-```
-
----
-
 ## Key Differentiators
 
+Trinity agents go beyond chatbots: they run on schedules, delegate work to other agents, persist memory across sessions, and operate without human intervention.
+
 ```
 +---------------------------------------------------------------------------------+
 |                                                                                 |
-|   Traditional Chatbot (System 1)          Trinity Agent (System 2)              |
-|   -----------------------------           -------------------------             |
+|   Traditional Chatbot                     Trinity Agent                         |
+|   --------------------                    ----------------------                |
 |                                                                                 |
 |   User --> Bot --> Response               User --> Agent --> Plan              |
 |       (reactive)                                              |                 |

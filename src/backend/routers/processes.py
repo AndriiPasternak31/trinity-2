@@ -579,7 +579,18 @@ async def archive_process(
     Archive a process definition.
 
     Archived processes cannot be executed but are preserved for history.
+
+    Requires: PROCESS_UPDATE permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_update_process(current_user)
+    if not auth_result:
+        auth.log_authorization_failure(
+            current_user, "process.archive", "process", process_id, auth_result.reason
+        )
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     repo = get_repository()
 
     try:
@@ -623,7 +634,18 @@ async def create_new_version(
     Create a new version from an existing process.
 
     Creates a new DRAFT copy with incremented version number.
+
+    Requires: PROCESS_CREATE permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_create_process(current_user)
+    if not auth_result:
+        auth.log_authorization_failure(
+            current_user, "process.new_version", "process", process_id, auth_result.reason
+        )
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     repo = get_repository()
 
     try:
@@ -872,8 +894,15 @@ async def get_process_cost_stats(
     Get cost statistics for a process.
 
     Returns average cost, total cost, and execution count.
-    Reference: BACKLOG_ADVANCED.md - E11-01
+
+    Requires: PROCESS_READ permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_read_process(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     definition_repo = get_definition_repo()
 
     try:
@@ -942,8 +971,15 @@ async def get_process_analytics(
     Get analytics metrics for a specific process.
 
     Returns success rate, average duration, average cost, and more.
-    Reference: BACKLOG_ADVANCED.md - E11-02
+
+    Requires: PROCESS_READ permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_read_process(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     from .executions import get_execution_repo
     from services.process_engine.services.analytics import ProcessAnalytics
 
@@ -971,8 +1007,15 @@ async def get_process_trends(
     Get execution trend data over time.
 
     Returns daily execution counts, success rates, and costs.
-    Reference: BACKLOG_ADVANCED.md - E11-02
+
+    Requires: PROCESS_READ permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_read_process(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     from .executions import get_execution_repo
     from services.process_engine.services.analytics import ProcessAnalytics
 
@@ -1001,8 +1044,15 @@ async def get_all_process_analytics(
     Get analytics metrics for all published processes.
 
     Returns a list of metrics per process for the dashboard.
-    Reference: BACKLOG_ADVANCED.md - E11-02
+
+    Requires: PROCESS_READ permission
     """
+    # Authorization check (SEC-174)
+    auth = get_auth_service()
+    auth_result = auth.can_read_process(current_user)
+    if not auth_result:
+        raise HTTPException(status_code=403, detail=auth_result.reason)
+
     from .executions import get_execution_repo
     from services.process_engine.services.analytics import ProcessAnalytics
 

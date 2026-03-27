@@ -20,7 +20,7 @@ As an authenticated user, I want a simple chat interface with my agents that:
 
 - **UI**: `src/frontend/src/views/AgentDetail.vue:498` - Chat tab in tab list (`{ id: 'chat', label: 'Chat' }`)
 - **UI**: `src/frontend/src/views/AgentDetail.vue:95-96` - Chat tab content rendering
-- **Component**: `src/frontend/src/components/ChatPanel.vue` (646 lines) - Main authenticated chat panel
+- **Component**: `src/frontend/src/components/ChatPanel.vue` (755 lines) - Main authenticated chat panel
 
 ## Frontend Layer
 
@@ -28,7 +28,7 @@ As an authenticated user, I want a simple chat interface with my agents that:
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `ChatPanel.vue` | `components/ChatPanel.vue` (~670 lines) | Main authenticated chat panel with session selector, model selector + SSE streaming |
+| `ChatPanel.vue` | `components/ChatPanel.vue` (~755 lines) | Main authenticated chat panel with session selector, model selector + SSE streaming |
 | `ModelSelector.vue` | `components/ModelSelector.vue` (172 lines) | Reusable model dropdown with presets and free-text input |
 | `ChatMessages.vue` | `components/chat/ChatMessages.vue` (87 lines) | Shared message list with bottom-aligned layout |
 | `ChatInput.vue` | `components/chat/ChatInput.vue` (83 lines) | Shared input with auto-resize textarea |
@@ -43,16 +43,16 @@ As an authenticated user, I want a simple chat interface with my agents that:
    - List of past sessions with message counts
    - Click to switch sessions and load history
 
-2. **New Chat Button** (lines 59-68)
+2. **New Chat Button** (lines 64-74)
    - Creates fresh session
    - Clears messages
    - Closes any active SSE connection
 
-3. **Agent Not Running State** (lines 72-84)
+3. **Agent Not Running State** (lines 78-91)
    - Yellow warning icon
    - Message: "Start the agent to begin chatting."
 
-4. **Message Display** (lines 117-137)
+4. **Message Display** (lines 124-144)
    - Uses shared `ChatMessages` component
    - User messages: indigo bubbles (right-aligned)
    - Assistant messages: white/gray with markdown (left-aligned)
@@ -60,13 +60,13 @@ As an authenticated user, I want a simple chat interface with my agents that:
    - Custom empty slot for welcome message
    - Dynamic loading text via `loadingText` prop (THINK-001)
 
-5. **Model Selector** (lines 147-151)
+5. **Model Selector** (lines 60-62)
    - `ModelSelector` component (compact mode) above chat input
    - Persisted to `localStorage` as `trinity_chat_model`
    - Passed as `model` parameter in `/task` payload
    - Empty value = agent default model
 
-6. **Input Area** (lines 152-157)
+6. **Input Area** (lines 159-171)
    - Uses shared `ChatInput` component
    - Auto-resize textarea
    - Send on Enter or button click
@@ -74,7 +74,7 @@ As an authenticated user, I want a simple chat interface with my agents that:
 ### State Management
 
 ```javascript
-// ChatPanel.vue state (lines 187-203)
+// ChatPanel.vue state (lines 256-267)
 const message = ref('')              // Current input
 const messages = ref([])             // Current conversation
 const loading = ref(false)           // Send in progress
@@ -82,7 +82,7 @@ const loadingText = ref('Thinking...') // Dynamic status label (THINK-001)
 const error = ref(null)              // Error message
 const isRateLimitError = computed()  // Detects rate/usage limit errors for amber styling
 
-// SSE state (THINK-001) - lines 200-203
+// SSE state (THINK-001) - lines 279-282
 let heartbeatTimer = null            // 10s timeout fallback to "Working..."
 let labelTimer = null                // Min 500ms display time scheduler
 let lastLabelTime = 0                // Timestamp of last label change
@@ -96,7 +96,7 @@ const sessionsLoading = ref(false)   // Loading sessions
 const currentSessionId = ref(null)   // Active session
 const showSessionDropdown = ref(false)
 
-// Resume mode state (EXEC-023) - lines 207-211
+// Resume mode state (EXEC-023) - lines 291-296
 const resumeSessionIdLocal = ref(null)     // Claude session ID for --resume
 const resumeExecutionIdLocal = ref(null)   // Execution ID for banner display
 const resumeBannerDismissed = ref(false)   // Banner-only dismissal flag
@@ -108,28 +108,28 @@ const isResumeMode = computed(() =>        // Show banner when in resume mode AN
 
 | Method | Line | Description |
 |--------|------|-------------|
-| `formatSessionDate()` | 224 | Format timestamp as relative time ("2h ago") |
-| `loadSessions()` | 247 | Fetch user's chat sessions for this agent |
-| `selectSession()` | 280 | Select a session and load its messages (includes timestamps) |
-| `startNewChat()` | 310 | Clear current session, start fresh, close SSE |
-| `buildContextPrompt()` | 331 | Build conversation context from last 20 messages |
-| `updateLoadingText()` | 351 | Update status label with 500ms min display time (THINK-001) |
-| `resetHeartbeat()` | 374 | Reset 10s heartbeat timer for "Working..." fallback (THINK-001) |
-| `closeSSE()` | 386 | Close SSE stream reader + cleanup timers (THINK-001) |
-| `subscribeToStream()` | 398 | Subscribe to execution SSE stream via fetch ReadableStream (THINK-001) |
-| `pollExecution()` | 472 | Poll execution status every 5s until complete (THINK-001) |
-| `sendMessage()` | 506 | Send message via async `/task` endpoint with `chat_session_id` (THINK-001 refactor) |
+| `formatSessionDate()` | 309 | Format timestamp as relative time ("2h ago") |
+| `loadSessions()` | 332 | Fetch user's chat sessions for this agent |
+| `selectSession()` | 359 | Select a session and load its messages (includes timestamps) |
+| `startNewChat()` | 398 | Clear current session, start fresh, close SSE |
+| `buildContextPrompt()` | 421 | Build conversation context from last 20 messages |
+| `updateLoadingText()` | 441 | Update status label with 500ms min display time (THINK-001) |
+| `resetHeartbeat()` | 464 | Reset 10s heartbeat timer for "Working..." fallback (THINK-001) |
+| `closeSSE()` | 476 | Close SSE stream reader + cleanup timers (THINK-001) |
+| `subscribeToStream()` | 488 | Subscribe to execution SSE stream via fetch ReadableStream (THINK-001) |
+| `pollExecution()` | 562 | Poll execution status every 5s until complete (THINK-001) |
+| `sendMessage()` | 589 | Send message via async `/task` endpoint with `chat_session_id` (THINK-001 refactor) |
 
 ### API Calls
 
 ```javascript
-// List sessions (line 250)
+// List sessions (line 335)
 await axios.get(`/api/agents/${agentName}/chat/sessions`, { headers: authStore.authHeader })
 
-// Get session details with messages (line 292)
+// Get session details with messages (line 377)
 await axios.get(`/api/agents/${agentName}/chat/sessions/${sessionId}`, { headers: authStore.authHeader })
 
-// Send message - async mode (THINK-001) (line 529)
+// Send message - async mode (THINK-001) (line 632)
 await axios.post(`/api/agents/${agentName}/task`, {
   message: contextPrompt,          // Full message with conversation context
   save_to_session: true,           // Persist to chat_sessions table
@@ -140,12 +140,12 @@ await axios.post(`/api/agents/${agentName}/task`, {
   model: selectedModel.value || undefined  // User-selected model override
 }, { headers: authStore.authHeader })
 
-// SSE stream subscription (line 404) - via fetch, not EventSource (custom auth headers)
+// SSE stream subscription (line 494) - via fetch, not EventSource (custom auth headers)
 fetch(`/api/agents/${agentName}/executions/${executionId}/stream`, {
   headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'text/event-stream' }
 })
 
-// Poll execution status (line 481)
+// Poll execution status (line 571)
 await axios.get(`/api/agents/${agentName}/executions/${executionId}`, { headers: authStore.authHeader })
 ```
 
@@ -179,7 +179,7 @@ When `async_mode: true` is set on the `/task` endpoint:
 6. Background task persists to `chat_sessions` when `save_to_session=true` (passes `user_id` + `user_email`)
 7. Background task broadcasts `chat_response_ready` WebSocket event with `chat_session_id`
 
-**Key backend code** (`src/backend/routers/chat.py:726-754`):
+**Key backend code** (`src/backend/routers/chat.py:735-808`):
 ```python
 if request.async_mode:
     db.update_execution_status(execution_id=execution_id, status="running")
@@ -197,7 +197,7 @@ if request.async_mode:
     return { "status": "accepted", "execution_id": execution_id, ... }
 ```
 
-**Session persistence in background** (`src/backend/routers/chat.py:453-514`):
+**Session persistence in background** (`src/backend/routers/chat.py:513-551`):
 ```python
 if request.save_to_session and user_id and user_email:
     if request.create_new_session:
@@ -214,7 +214,7 @@ if request.save_to_session and user_id and user_email:
     # Broadcast chat_session_id via WebSocket
 ```
 
-### SSE Stream Proxy (`src/backend/routers/chat.py:1559-1620`)
+### SSE Stream Proxy (`src/backend/routers/chat.py:1496-1563`)
 
 The backend proxies SSE streams from agent containers to the authenticated frontend:
 
@@ -307,7 +307,7 @@ Labels change rapidly during fast tool sequences. Two mechanisms prevent flicker
    - `lastLabelTime` tracks when the current label was set
 
    ```javascript
-   // ChatPanel.vue:351-371
+   // ChatPanel.vue:441-461
    const updateLoadingText = (newText) => {
      const elapsed = Date.now() - lastLabelTime
      if (elapsed < MIN_LABEL_DISPLAY_MS) {
@@ -330,7 +330,7 @@ Labels change rapidly during fast tool sequences. Two mechanisms prevent flicker
    - Timer is reset on every new event via `resetHeartbeat()`
 
    ```javascript
-   // ChatPanel.vue:374-381
+   // ChatPanel.vue:464-471
    const resetHeartbeat = () => {
      clearTimeout(heartbeatTimer)
      heartbeatTimer = setTimeout(() => {
@@ -339,7 +339,7 @@ Labels change rapidly during fast tool sequences. Two mechanisms prevent flicker
    }
    ```
 
-### SSE Stream Processing (`ChatPanel.vue:398-468`)
+### SSE Stream Processing (`ChatPanel.vue:488-558`)
 
 The SSE connection uses `fetch` with `ReadableStream` (not `EventSource`) because `EventSource` does not support custom authorization headers.
 
@@ -381,7 +381,7 @@ const subscribeToStream = (executionId) => {
 }
 ```
 
-### Execution Polling (`ChatPanel.vue:472-496`)
+### Execution Polling (`ChatPanel.vue:562-586`)
 
 Parallel to the SSE subscription, the frontend polls for execution completion:
 
@@ -647,20 +647,20 @@ Tasks | Chat | Dashboard | Schedules | Credentials | Skills | ...
 
 ChatPanel supports resuming executions as chat via the "Continue as Chat" feature. When navigating with `resumeSessionId` query parameter:
 
-1. **Watch handler** (lines 611-621) enters resume mode:
+1. **Watch handler** (lines 715-725) enters resume mode:
    - Clears messages
    - Sets `resumeSessionIdLocal`
    - Sets `resumeBannerDismissed = false`
    - Displays resume banner
 
-2. **Session auto-select prevention** (line 260):
+2. **Session auto-select prevention** (line 345):
    ```javascript
    // Fix: Don't auto-select session when in resume mode
    if (autoSelect && sessions.value.length > 0 && !currentSessionId.value &&
        messages.value.length === 0 && !isResumeMode.value) {
    ```
 
-3. **ALL messages** include `resume_session_id` in payload (lines 532-536):
+3. **ALL messages** include `resume_session_id` in payload (lines 625-629):
    ```javascript
    // EXEC-023: Include resume_session_id for ALL messages in resume mode
    // The /task endpoint is stateless - it doesn't use --continue.
@@ -671,7 +671,7 @@ ChatPanel supports resuming executions as chat via the "Continue as Chat" featur
    }
    ```
 
-4. **Resume mode state** (lines 207-211):
+4. **Resume mode state** (lines 291-296):
    ```javascript
    const resumeSessionIdLocal = ref(null)
    const resumeExecutionIdLocal = ref(null)
@@ -711,9 +711,9 @@ See [continue-execution-as-chat.md](continue-execution-as-chat.md) for complete 
 
 ### Rate Limit Error Styling
 
-Rate limit and subscription usage errors are visually distinguished from generic errors. A computed property `isRateLimitError` (`src/frontend/src/components/ChatPanel.vue:193-197`) detects these by checking if `error.value` contains any of: `"usage limit"`, `"rate limit"`, `"out of extra usage"`, or `"out of usage"` (case-insensitive).
+Rate limit and subscription usage errors are visually distinguished from generic errors. A computed property `isRateLimitError` (`src/frontend/src/components/ChatPanel.vue:261-265`) detects these by checking if `error.value` contains any of: `"usage limit"`, `"rate limit"`, `"out of extra usage"`, or `"out of usage"` (case-insensitive).
 
-When detected (lines 140-143):
+When detected (lines 147-150):
 - Error box uses **amber** styling (`bg-amber-100`, `border-amber-200`, `text-amber-600`) instead of the default **red** styling
 - A bold header **"Subscription Usage Limit"** is displayed above the error message text
 - This helps users understand the error is a billing/quota issue, not a system failure
@@ -729,7 +729,7 @@ When detected (lines 140-143):
 | 2026-03-07 | **Rate limit error styling**. Added `isRateLimitError` computed property (line 193) that detects subscription/rate limit errors by keyword matching. Error display (lines 140-143) now uses amber styling (`bg-amber-100`, `text-amber-700`) with a "Subscription Usage Limit" header for these errors, distinguishing them from red generic errors. |
 | 2026-03-03 | **THINK-001: Dynamic Thinking Status**. Refactored `sendMessage()` from synchronous POST to async mode (`async_mode=true`). Added SSE stream subscription via `fetch` + `ReadableStream` for real-time status labels. New utility `execution-status.js` maps Claude Code `stream-json` events to human-readable labels ("Reading file...", "Searching code...", etc.). Added 500ms minimum display time per label to prevent flicker. Added 10s heartbeat timeout fallback to "Working...". Added polling loop (5s intervals) for execution completion. Updated `ChatLoadingIndicator.vue` with CSS fade transition animation (`:key` binding for re-render). Backend `_execute_task_background` now accepts `user_id`/`user_email` for session persistence in async mode. |
 | 2026-02-27 | **Bug Fix (CHAT-002)**: Fixed chat message ordering issue. Replaced fragile flex spacer technique (`<div class="flex-1">` pushing content down) with `min-h-full flex flex-col justify-end` pattern in `ChatMessages.vue`. This provides reliable bottom-alignment without race conditions between spacer resizing and message rendering. |
-| 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed resume mode context lost after first message. Since `/task` is stateless (no `--continue`), clearing `resumeSessionIdLocal` after first message caused subsequent messages to lose context. Fix: (1) Added `resumeBannerDismissed` flag for banner-only dismissal, (2) Keep `resumeSessionIdLocal` for ALL messages, (3) `dismissResumeMode()` only hides banner (session ID persists), (4) Clear resume mode only on "New Chat" or session switch. See lines 207-211, 323-328, 532-536. |
-| 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed session auto-select overriding resume mode. Added `!isResumeMode.value` condition at line 260 in `loadSessions()`. Without this fix, `onMounted` -> `loadSessions()` would select an existing session even when ChatPanel was entered via "Continue as Chat" button, breaking the resume flow. |
+| 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed resume mode context lost after first message. Since `/task` is stateless (no `--continue`), clearing `resumeSessionIdLocal` after first message caused subsequent messages to lose context. Fix: (1) Added `resumeBannerDismissed` flag for banner-only dismissal, (2) Keep `resumeSessionIdLocal` for ALL messages, (3) `dismissResumeMode()` only hides banner (session ID persists), (4) Clear resume mode only on "New Chat" or session switch. See lines 291-296, 416-418, 625-629. |
+| 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed session auto-select overriding resume mode. Added `!isResumeMode.value` condition at line 345 in `loadSessions()`. Without this fix, `onMounted` -> `loadSessions()` would select an existing session even when ChatPanel was entered via "Continue as Chat" button, breaking the resume flow. |
 | 2026-02-20 | Fixed session persistence - `/task` now saves to `chat_sessions` when `save_to_session=true`. Added `create_new_session` for "New Chat" button. |
 | 2026-02-19 | Initial implementation (CHAT-001) |

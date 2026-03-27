@@ -17,6 +17,28 @@
       <!-- Setup Form -->
       <div class="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
         <form @submit.prevent="handleSubmit" class="space-y-4">
+          <!-- Setup Token Field -->
+          <div>
+            <label for="setupToken" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Setup Token
+            </label>
+            <div class="mt-1">
+              <input
+                type="text"
+                id="setupToken"
+                v-model="setupToken"
+                :disabled="loading"
+                class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white font-mono text-sm"
+                placeholder="Paste token from server logs"
+                required
+                autocomplete="off"
+              />
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Check server logs (<code class="bg-gray-100 dark:bg-gray-700 px-1 rounded">docker compose logs backend</code>) for the setup token printed at startup.
+            </p>
+          </div>
+
           <!-- Password Field -->
           <div>
             <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -167,6 +189,7 @@ import { clearSetupCache } from '../router'
 
 const router = useRouter()
 
+const setupToken = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
@@ -223,7 +246,7 @@ const passwordStrengthBarClass = computed(() => {
 })
 
 const isValid = computed(() => {
-  return passwordRequirements.value.every(r => r.met) && passwordsMatch.value
+  return setupToken.value.length > 0 && passwordRequirements.value.every(r => r.met) && passwordsMatch.value
 })
 
 async function handleSubmit() {
@@ -234,6 +257,7 @@ async function handleSubmit() {
 
   try {
     await axios.post('/api/setup/admin-password', {
+      setup_token: setupToken.value,
       password: password.value,
       confirm_password: confirmPassword.value
     })
@@ -245,8 +269,13 @@ async function handleSubmit() {
     router.push('/login')
   } catch (e) {
     if (e.response?.status === 403) {
-      error.value = 'Setup has already been completed.'
-      setTimeout(() => router.push('/login'), 2000)
+      const detail = e.response?.data?.detail || ''
+      if (detail.toLowerCase().includes('token')) {
+        error.value = 'Invalid setup token. Check server logs for the correct token.'
+      } else {
+        error.value = 'Setup has already been completed.'
+        setTimeout(() => router.push('/login'), 2000)
+      }
     } else {
       error.value = e.response?.data?.detail || 'Failed to set password. Please try again.'
     }

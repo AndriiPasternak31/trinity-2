@@ -44,11 +44,10 @@ async def get_system_agent_status(
     """
     Get the status of the system agent.
 
-    Returns health information including:
-    - Container status (running/stopped/not found)
-    - Agent details if running
-    - Last activity timestamp
+    Admin-only. Returns container status, agent details, and health info.
     """
+    require_admin(current_user)
+
     container = get_agent_container(SYSTEM_AGENT_NAME)
 
     if not container:

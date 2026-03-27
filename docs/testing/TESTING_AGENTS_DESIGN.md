@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document defines a suite of **testing agents** designed to systematically verify all core functionality of the Trinity Deep Agent Orchestration Platform. These agents are:
+This document defines a suite of **testing agents** designed to systematically verify all core functionality of the Trinity autonomous agent platform. These agents are:
 
 1. **Simple & Predictable** - Each agent does ONE thing well with deterministic behavior
 2. **Fast Response** - Minimal AI reasoning, mostly echo/transform operations

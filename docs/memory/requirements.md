@@ -1,18 +1,18 @@
-# Trinity Deep Agent Orchestration Platform - Requirements
+# Trinity - Autonomous Agent Orchestration Platform - Requirements
 
 > **SINGLE SOURCE OF TRUTH** - All development must trace back to this document.
 > Update this file BEFORE implementing any new feature.
 
-## Vision: The Four Pillars of Deep Agency
+## Vision
 
-Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, reason, and execute autonomously.
+Trinity is autonomous agent orchestration and infrastructure — sovereign infrastructure for deploying, orchestrating, and governing fleets of autonomous AI agents on your own hardware.
 
-| Pillar | Description | Implementation Status |
-|--------|-------------|----------------------|
-| **I. Explicit Planning** | Task DAGs persisting outside context window | ❌ REMOVED (2025-12-23) - Deferred to orchestrator-level |
-| **II. Hierarchical Delegation** | Orchestrator-Worker with context quarantine | ✅ Agent-to-Agent via MCP |
-| **III. Persistent Memory** | Virtual filesystems, memory folding | ✅ Chat persistence, file browser |
-| **IV. Extreme Context Engineering** | High-Order Prompts defining reasoning | ✅ Templates with CLAUDE.md |
+| Capability | Description | Implementation Status |
+|------------|-------------|----------------------|
+| **Hierarchical Delegation** | Orchestrator-Worker with context quarantine | ✅ Agent-to-Agent via MCP |
+| **Persistent Memory** | Virtual filesystems, memory folding | ✅ Chat persistence, file browser |
+| **Agent Configuration** | Template system with CLAUDE.md and credential injection | ✅ Templates with CLAUDE.md |
+| **Autonomous Operations** | Scheduling, monitoring, and fleet management | ✅ Cron scheduling, health monitoring |
 
 ## Status Labels
 - ⏳ Not Started
@@ -62,9 +62,10 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 ## 2. Authentication & Authorization
 
 ### 2.1 Email-Based Authentication
-- **Status**: ✅ Implemented (2025-12-26)
+- **Status**: ✅ Implemented (2025-12-26, security-hardened 2026-03-26)
 - **Description**: Passwordless email login with 6-digit verification codes
-- **Key Features**: 2-step verification, admin-managed whitelist, auto-whitelist on agent sharing, rate limiting
+- **Key Features**: 2-step verification, admin-managed whitelist, auto-whitelist on agent sharing, rate limiting (IP-based + per-email OTP lockout after 5 failures)
+- **Security**: OTP brute-force prevented by dual rate limits — `login_attempts:{ip}` (shared with admin login) and `otp_attempts:{email}` (max 5 failures → 10-min lockout). Both `POST /api/auth/email/verify` and `POST /api/public/verify/confirm` are protected. (pentest 3.1.5 / #176)
 - **Flow**: `docs/memory/feature-flows/email-authentication.md`
 
 ### 2.2 Admin Password Login
@@ -202,12 +203,20 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 ### 7.1 Trinity MCP Server
 - **Status**: ✅ Implemented
 - **Description**: Agent orchestration via Model Context Protocol
-- **Key Features**: FastMCP with Streamable HTTP, 55 tools, API key authentication
+- **Key Features**: FastMCP with Streamable HTTP, 62 tools, API key authentication
 - **Flow**: `docs/memory/feature-flows/mcp-orchestration.md`
 
 ### 7.2 Per-User API Keys
 - **Status**: ✅ Implemented
 - **Description**: Generate, revoke, and track usage per key
+
+### 7.3 MCP Execution Query Tools (MCP-007)
+- **Status**: ✅ Implemented (2026-03-25)
+- **Requirement ID**: MCP-007
+- **GitHub Issue**: #19
+- **Description**: MCP tools for querying execution history, polling async results, and monitoring agent activity
+- **Key Features**: `list_recent_executions`, `get_execution_result`, `get_agent_activity_summary`; enables async polling pattern for agent-to-agent collaboration beyond 60s MCP timeout
+- **Spec**: `docs/requirements/MCP_EXECUTION_QUERY_TOOLS.md`
 
 ---
 
@@ -230,9 +239,10 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 - **Description**: Security event tracking via Vector log aggregation
 
 ### 8.5 Container Security
-- **Status**: ✅ Implemented
-- **Description**: Non-root execution, CAP_DROP ALL, isolated network
-- **Key Features**: Optional full capabilities mode for containers needing system access
+- **Status**: ✅ Implemented (Updated 2026-03-26)
+- **Description**: Non-root execution, CAP_DROP ALL, isolated network, base image allowlist
+- **Key Features**: Optional full capabilities mode for containers needing system access, base image allowlist validation (SEC-172)
+- **Base Image Allowlist** (SEC-172): Agent creation validates `base_image` against configurable allowlist (`base_image_allowlist` system setting, default `["trinity-agent-base:*"]`). Blocks arbitrary Docker image pulls that could access internal network services. Returns HTTP 403 for disallowed images.
 
 ### 8.6 GCP Production Deployment
 - **Status**: ✅ Implemented
@@ -577,6 +587,41 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 - **Spec**: `docs/requirements/SLACK_INTEGRATION.md`
 - **Flow**: `docs/memory/feature-flows/slack-integration.md`
 
+### 15.1b-ii Channel Adapters + Multi-Agent Slack (SLACK-002)
+- **Status**: ✅ Implemented (2026-03-23, updated 2026-03-26)
+- **Requirement ID**: SLACK-002
+- **Priority**: P1
+- **Description**: Pluggable channel adapter abstraction for external messaging platforms. Extends SLACK-001 with multi-agent routing (multiple agents per workspace), @mention support in channels, thread continuity (reply-without-mention), and configurable operational limits.
+- **Key Features**:
+  - Channel-agnostic adapter pattern (`ChannelAdapter` base class) supporting Slack, future Telegram/Discord
+  - `ChannelMessageRouter` — unified message pipeline: resolve agent → rate limit → verify → execute → respond
+  - Multi-agent workspace: bind different agents to different Slack channels
+  - @mention routing in channels + DM default agent
+  - Thread tracking: bot auto-responds to thread replies without requiring @mention
+  - Configurable rate limits, execution timeout, and allowed tools via `settings_service`
+  - Periodic pruning of rate-limit buckets to prevent memory leaks
+  - **Settings UI**: Socket Mode connect/disconnect, app token management, connection status badge
+  - **Platform OAuth**: "Install to Workspace" from Settings page (no agent context needed)
+  - **Per-agent channel binding**: Standalone UI in Sharing tab to create/unbind Slack channels per agent
+- **Database Tables**:
+  - `slack_workspaces` — Workspace connections (team_id, bot_token encrypted)
+  - `slack_channel_agents` — Channel-to-agent bindings (multi-agent routing)
+  - `slack_active_threads` — Active thread tracking (reply-without-mention)
+- **Configurable Settings** (via Settings UI or DB):
+  - `channel_rate_limit_max` — Messages per window (default: 30)
+  - `channel_rate_limit_window` — Window in seconds (default: 60)
+  - `channel_timeout_seconds` — Execution timeout (default: 120)
+  - `channel_allowed_tools` — Comma-separated tool list (default: WebSearch,WebFetch)
+- **API Endpoints (new in 2026-03-26)**:
+  - `GET /api/settings/slack/status` — Transport connection state + workspace info
+  - `POST /api/settings/slack/connect` — Save app token + start Socket Mode
+  - `POST /api/settings/slack/disconnect` — Stop transport
+  - `POST /api/settings/slack/install` — Platform-level OAuth (workspace install)
+  - `GET /api/agents/{name}/slack/channel` — Channel binding status
+  - `POST /api/agents/{name}/slack/channel` — Create channel + bind agent
+  - `DELETE /api/agents/{name}/slack/channel` — Unbind agent
+- **Flow**: `docs/memory/feature-flows/slack-channel-routing.md`
+
 ### 15.1c Telegram Bot Integration (TGRAM-001)
 - **Status**: ⏳ Not Started
 - **Requirement ID**: TGRAM-001
@@ -737,17 +782,27 @@ Trinity implements infrastructure for "System 2" AI — Deep Agents that plan, r
 - **Description**: Agent pools with N instances for parallel workloads
 - **Key Concepts**: Pool configuration, load balancing, auto-scaling triggers
 
-### 17.2 Event Bus Infrastructure
-- **Status**: ⏳ Not Started
-- **Priority**: High
-- **Description**: Platform-wide pub/sub for agent event broadcasting
-- **Key Concepts**: Redis Streams, permission-gated subscriptions, event persistence
+### 17.2 Agent Event Subscriptions (EVT-001)
+- **Status**: ✅ Implemented (2026-03-26)
+- **Priority**: High (P1)
+- **Description**: Lightweight SQLite-backed pub/sub for inter-agent event pipelines
+- **Key Features**:
+  - MCP tool `emit_event(event_type, payload)` — agents emit named events with structured data
+  - CRUD API for event subscriptions (source agent, event type, message template)
+  - Subscription trigger: matching event → async task to subscriber with `{{payload.field}}` interpolation
+  - Permission-gated: uses existing `agent_permissions` — subscriber must be permitted to call source
+  - Events persisted to `agent_events` table, subscriptions to `agent_event_subscriptions`
+  - WebSocket broadcast for real-time event visibility
+  - MCP tools: `emit_event`, `subscribe_to_event`, `list_event_subscriptions`, `delete_event_subscription`
+- **GitHub Issue**: #169
+- **Relationship to 17.2 (Redis Streams)**: This is a pragmatic first step. If Redis Streams (#22) lands later, subscriptions can migrate.
 
 ### 17.3 Event Handlers & Reactions
-- **Status**: ⏳ Not Started
+- **Status**: ✅ Partially Implemented via EVT-001 (2026-03-26)
 - **Priority**: High
 - **Description**: Configure automatic agent reactions to events
 - **Key Concepts**: Event matching with filters, debouncing/throttling
+- **Note**: Basic event → task triggering implemented in EVT-001. Advanced filtering, debouncing, and throttling are future enhancements.
 
 ### 17.4 Async MCP Chat Commands
 - **Status**: ✅ Implemented (2026-01-30)
@@ -943,6 +998,17 @@ The Process Engine supports six step types:
   - `src/backend/routers/subscriptions.py` - REST API
   - `src/backend/services/subscription_service.py` - Auth mode detection
   - `src/mcp-server/src/tools/subscriptions.ts` - MCP tools
+
+### 20.3a Subscription Auto-Assign on Agent Creation (#74)
+- **Status**: ✅ Implemented (2026-03-25)
+- **GitHub Issue**: #74
+- **Extends**: SUB-002
+- **Description**: When a new agent is created, automatically assign the subscription with fewest assigned agents (round-robin). Tie-break: alphabetical by name. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents (`trinity-system`) are unaffected (separate creation path).
+- **Key Features**:
+  - `get_least_used_subscription()` DB method (SQL: COUNT + ORDER BY)
+  - Auto-assign logic in `create_agent_internal()` — token injected before container creation, DB assignment after `register_agent_owner()`
+  - Graceful fallback: no subs → API key, decrypt fail → API key, exception → API key
+- **Files**: `db/subscriptions.py`, `database.py`, `services/agent_service/crud.py`
 
 ### 20.4 Subscription Auto-Switch on Rate Limit (SUB-003)
 - **Status**: ✅ Implemented (2026-03-21)

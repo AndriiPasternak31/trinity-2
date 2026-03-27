@@ -116,13 +116,14 @@ export function clearSetupCache() {
 **File**: `/Users/eugene/Dropbox/trinity/trinity/src/frontend/src/views/SetupPassword.vue`
 
 **Key Features**:
+- **Setup Token field** — required, instructions point to `docker compose logs backend`
 - Password + Confirm Password fields with visibility toggle
 - Password strength indicator (Weak/Fair/Good/Strong/Excellent)
-- Client-side validation: min 8 chars, passwords must match
-- Submits to `/api/setup/admin-password`
+- Client-side validation: token non-empty, min 8 chars, passwords must match
+- Submits `setup_token`, `password`, `confirm_password` to `/api/setup/admin-password`
 
 ```javascript
-// Submit handler (lines 209-236)
+// Submit handler
 async function handleSubmit() {
   if (!isValid.value) return
 
@@ -131,19 +132,22 @@ async function handleSubmit() {
 
   try {
     await axios.post('/api/setup/admin-password', {
+      setup_token: setupToken.value,
       password: password.value,
       confirm_password: confirmPassword.value
     })
 
-    // Clear the cache so router knows setup is done
     clearSetupCache()
-
-    // Redirect to login page
     router.push('/login')
   } catch (e) {
     if (e.response?.status === 403) {
-      error.value = 'Setup has already been completed.'
-      setTimeout(() => router.push('/login'), 2000)
+      const detail = e.response?.data?.detail || ''
+      if (detail.toLowerCase().includes('token')) {
+        error.value = 'Invalid setup token. Check server logs for the correct token.'
+      } else {
+        error.value = 'Setup has already been completed.'
+        setTimeout(() => router.push('/login'), 2000)
+      }
     } else {
       error.value = e.response?.data?.detail || 'Failed to set password. Please try again.'
     }
@@ -153,25 +157,10 @@ async function handleSubmit() {
 }
 ```
 
-**Password Strength Calculation** (lines 166-176):
-```javascript
-const passwordStrength = computed(() => {
-  const p = password.value
-  if (!p) return 0
-  let strength = 0
-  if (p.length >= 8) strength++
-  if (p.length >= 12) strength++
-  if (/[A-Z]/.test(p) && /[a-z]/.test(p)) strength++
-  if (/[0-9]/.test(p)) strength++
-  if (/[^A-Za-z0-9]/.test(p)) strength++
-  return Math.min(strength, 4)
-})
-```
-
-**Validation Logic** (lines 205-207):
+**Validation Logic**:
 ```javascript
 const isValid = computed(() => {
-  return password.value.length >= 8 && passwordsMatch.value
+  return setupToken.value.length > 0 && password.value.length >= 8 && passwordsMatch.value
 })
 ```
 
@@ -187,15 +176,41 @@ from routers.setup import router as setup_router
 app.include_router(setup_router)
 ```
 
-**Request Model** (lines 16-19):
+**Setup Token** (module-level, generated at startup):
+```python
+# Single-use setup token generated at startup.
+# Must be provided when calling POST /api/setup/admin-password.
+# Prevents installation hijack: only someone with access to server logs can complete setup.
+_setup_token: str = secrets.token_urlsafe(24)
+
+def get_setup_token() -> str:
+    """Return the setup token for printing during startup."""
+    return _setup_token
+```
+
+**Startup Token Printing** (in `main.py` lifespan handler):
+```python
+if _db.get_setting_value('setup_completed', 'false') != 'true':
+    _setup_token = get_setup_setup_token()
+    print("=" * 60)
+    print("TRINITY FIRST-TIME SETUP REQUIRED")
+    print("=" * 60)
+    print(f"Setup token: {_setup_token}")
+    print("Visit the Trinity UI and enter this token to set the admin password.")
+    print("This token is only valid for this session.")
+    print("=" * 60)
+```
+
+**Request Model**:
 ```python
 class SetAdminPasswordRequest(BaseModel):
     """Request body for setting admin password."""
     password: str
     confirm_password: str
+    setup_token: str  # Must match token printed in server logs at startup
 ```
 
-#### GET /api/setup/status (lines 22-34)
+#### GET /api/setup/status
 ```python
 @router.get("/status")
 async def get_setup_status():
@@ -212,48 +227,40 @@ async def get_setup_status():
     }
 ```
 
-#### POST /api/setup/admin-password (lines 37-81)
+#### POST /api/setup/admin-password
 ```python
 @router.post("/admin-password")
 async def set_admin_password(data: SetAdminPasswordRequest, request: Request):
     """
     Set admin password on first launch. No auth required, only works once.
-
-    This endpoint is only available before setup is completed.
-    Once setup_completed=true is set, this endpoint returns 403.
-
-    Requirements:
-    - Password must be at least 8 characters
-    - Password and confirm_password must match
+    Requires the setup token printed to server logs at startup (prevents installation hijack).
     """
     # 1. Check setup not already completed
     if db.get_setting_value('setup_completed', 'false') == 'true':
+        raise HTTPException(status_code=403, detail="Setup already completed...")
+
+    # 2. Validate setup token (constant-time compare to guard against timing attacks)
+    if not secrets.compare_digest(data.setup_token, _setup_token):
         raise HTTPException(
             status_code=403,
-            detail="Setup already completed. Password cannot be changed through this endpoint."
+            detail="Invalid setup token. Check server logs for the setup token printed at startup."
         )
 
-    # 2. Validate password length
+    # 3. Validate password length
     if len(data.password) < 8:
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 8 characters"
-        )
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
-    # 3. Validate passwords match
+    # 4. Validate passwords match
     if data.password != data.confirm_password:
-        raise HTTPException(
-            status_code=400,
-            detail="Passwords do not match"
-        )
+        raise HTTPException(status_code=400, detail="Passwords do not match")
 
-    # 4. Hash password with bcrypt
+    # 5. Hash password with bcrypt
     hashed_password = hash_password(data.password)
 
-    # 5. Update admin user's password (creates user if doesn't exist)
+    # 6. Update admin user's password (creates user if doesn't exist)
     db.update_user_password('admin', hashed_password)
 
-    # 6. Mark setup as completed
+    # 7. Mark setup as completed
     db.set_setting('setup_completed', 'true')
 
     return {"success": True}
@@ -650,6 +657,8 @@ env_vars = {
 | Error Case | HTTP Status | Message | Handling |
 |------------|-------------|---------|----------|
 | Setup already completed | 403 | "Setup already completed" | Frontend redirects to /login after 2s |
+| Invalid setup token | 403 | "Invalid setup token. Check server logs..." | Frontend shows error, stays on form |
+| Missing setup_token field | 422 | Pydantic validation error | Form prevents submission |
 | Password too short | 400 | "Password must be at least 8 characters" | Form validation |
 | Passwords don't match | 400 | "Passwords do not match" | Form validation |
 | Invalid API key format | 400 | "Invalid API key format. Keys start with 'sk-ant-'" | Inline error |
@@ -674,8 +683,10 @@ env_vars = {
    - Admin-only access to all API key endpoints
    - Fallback to environment variable if not in settings
 
-3. **Setup Endpoint Protection**:
-   - No auth required (must work on fresh install)
+3. **Setup Endpoint Protection** (SEC #177):
+   - No network auth required (must work on fresh install)
+   - **Single-use setup token**: Generated at startup via `secrets.token_urlsafe(24)`, printed ONLY to server logs. An attacker without local server access cannot complete setup.
+   - Constant-time token comparison (`secrets.compare_digest`) prevents timing attacks
    - Self-disabling after first use via `setup_completed` flag
    - Audit logged even on blocked attempts
 
@@ -700,27 +711,33 @@ env_vars = {
    DELETE FROM system_settings WHERE key = 'setup_completed';
    ```
 
-2. **Visit any page** (e.g., `http://localhost:3000/`)
+2. **Restart the backend** and check logs for the setup token:
+   ```bash
+   docker compose logs backend | grep "Setup token"
+   ```
+   - **Expected**: `Setup token: <32-character token>`
+
+3. **Visit any page** (e.g., `http://localhost/`)
    - **Expected**: Redirect to `/setup`
-   - **Verify**: URL shows `/setup`, setup form displayed
+   - **Verify**: URL shows `/setup`, setup form displays token field + password fields
 
-3. **Try weak password** (less than 8 chars)
-   - **Expected**: Submit button disabled
-   - **Verify**: Strength indicator shows "Weak"
+4. **Enter wrong setup token**, valid passwords
+   - **Expected**: 403 error, "Invalid setup token" message shown
 
-4. **Enter mismatched passwords**
-   - **Expected**: "Passwords do not match" indicator
-   - **Verify**: Submit button disabled
+5. **Enter correct token from logs, try weak password** (less than 8 chars)
+   - **Expected**: Submit button disabled (client-side validation)
 
-5. **Enter valid password** (8+ chars, matching)
-   - **Expected**: Submit enabled, strength indicator updates
-   - **Verify**: Click "Set Password & Continue"
+6. **Enter correct token, mismatched passwords**
+   - **Expected**: "Passwords do not match" indicator, submit disabled
 
-6. **After successful setup**
+7. **Enter correct token, valid matching password** (8+ chars)
+   - **Expected**: Submit enabled — click "Set Password & Continue"
+
+8. **After successful setup**
    - **Expected**: Redirect to `/login`
    - **Verify**: Can log in with `admin` / new password
 
-7. **Try accessing /setup again**
+9. **Try accessing /setup again**
    - **Expected**: Redirect to `/login` (setup already done)
 
 **Flow 2: API Key Configuration**
@@ -789,3 +806,4 @@ UPDATE users SET password_hash = 'changeme' WHERE username = 'admin';
 | 2026-01-14 | Bug fix: Admin user upsert | Fixed `update_user_password()` to create admin user if it doesn't exist. Previously, on fresh deployment with empty ADMIN_PASSWORD env var, the UPDATE query affected 0 rows but setup_completed was still set to true, leaving users unable to login. The method now uses an upsert pattern: UPDATE first, then INSERT if no rows affected. See `src/backend/db/users.py:129-162`. |
 | 2026-01-23 | Line number verification | Updated all line numbers to match current codebase. Verified: setup.py endpoints (22-34, 37-81), auth.py login blocks (20-22, 49-78, 153-158, 210-215), dependencies.py password hashing (15-37), db/users.py upsert (129-162), db/settings.py (49-83), router/index.js guards (165-220, 242-245), SetupPassword.vue (166-176, 205-207, 209-236). Added documentation for email auth login blocking and password strength validation. |
 | 2026-02-23 | Security Fix M-003 | Removed plaintext password fallback from `verify_password()` in dependencies.py:24-34. All passwords must now be bcrypt hashed. Invalid hash formats are rejected. Updated Password Hashing section and Security Considerations. |
+| 2026-03-26 | Security Fix SEC #177 | Added single-use setup token to prevent installation hijack. Token generated via `secrets.token_urlsafe(24)` at startup, printed to server logs, required in `POST /api/setup/admin-password`. Frontend adds setup token field with instructions to check `docker compose logs backend`. Constant-time comparison guards against timing attacks. |

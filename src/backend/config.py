@@ -38,7 +38,7 @@ if _redis_password and "://@" not in _redis_base_url and "://:" not in _redis_ba
 else:
     REDIS_URL = _redis_base_url
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost")  # Port 80 default (Docker)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")  # Set in .env or docker-compose for OAuth redirects
 
 # External URL for public chat links (Tailscale Funnel, Cloudflare Tunnel, etc.)
 # When set, enables "Copy External Link" button in PublicLinksPanel
