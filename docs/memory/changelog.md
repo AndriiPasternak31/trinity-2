@@ -1,5 +1,16 @@
 ### 2026-03-27
 
+🔒 **fix(security): SSRF prevention — skills library URL validation (#179)**
+
+`PUT /api/settings/skills_library_url` accepted arbitrary URLs, allowing an admin to point the skills library at an internal address (e.g., `https://127.0.0.1:8000`). When `POST /api/skills/library/sync` was triggered, the backend would connect to itself or other internal services, exhausting worker threads and causing DoS (pentest finding 3.2.2, CVSS 6.7).
+
+- `src/backend/utils/url_validation.py` — New module with `validate_skills_library_url()`: enforces HTTPS, hostname must be exactly `github.com`, rejects non-http schemes, resolves hostname and rejects private/loopback/reserved IPs as defense-in-depth
+- `src/backend/routers/settings.py` — Validates `skills_library_url` via `validate_skills_library_url()` before saving to database; returns HTTP 400 for invalid URLs
+- `src/backend/services/skill_service.py` — Validates URL at sync time before git operations (defense-in-depth in case URL was set before validation was added)
+- `tests/unit/test_ssrf_skills_library.py` — 28 unit tests covering valid github.com URLs, SSRF attack vectors (localhost, RFC 1918 ranges, metadata service, scheme bypass, subdomain bypass, @-sign bypass), and edge cases
+
+---
+
 🔒 **fix(security): WebSocket authentication before accept — reject unauthenticated connections (#178)**
 
 WebSocket endpoint `/ws` accepted TCP upgrade and established connection before any authentication check (pentest finding 3.2.1, CVSS 6.9). An unauthenticated attacker could receive real-time platform activity broadcasts including agent names, task progress, PII (shared_with emails), and process execution details.

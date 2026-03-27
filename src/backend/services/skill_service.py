@@ -24,12 +24,12 @@ from typing import List, Optional, Dict, Any
 from database import db
 from services.settings_service import get_skills_library_url, get_skills_library_branch, get_github_pat
 from services.agent_client import get_agent_client, AgentClientError
+from utils.url_validation import validate_skills_library_url
 
 logger = logging.getLogger(__name__)
 
 # Local path for skills library clone
 SKILLS_LIBRARY_PATH = Path("/data/skills-library")
-
 
 class SkillService:
     """
@@ -64,6 +64,16 @@ class SkillService:
                 "success": False,
                 "error": "Skills library URL not configured",
                 "hint": "Configure skills_library_url in Settings"
+            }
+
+        # Validate URL to prevent SSRF (SEC-179)
+        try:
+            url = validate_skills_library_url(url)
+        except ValueError as e:
+            logger.warning(f"Skills library URL validation failed: {e}")
+            return {
+                "success": False,
+                "error": f"Invalid skills library URL: {e}"
             }
 
         branch = get_skills_library_branch()

@@ -96,6 +96,13 @@
       "added": "2026-03-27",
       "categories": ["backend", "security", "websocket", "integration"],
       "description": "Integration tests for WebSocket authentication: HTTP-level rejection for missing/invalid tokens, valid token acceptance"
+    },
+    {
+      "file": "unit/test_ssrf_skills_library.py",
+      "feature": "Issue #179",
+      "added": "2026-03-27",
+      "categories": ["backend", "security", "ssrf", "unit"],
+      "description": "Tests for SSRF prevention in skills library URL: github.com hostname enforcement, internal IP rejection, scheme validation, bypass attempts (28 tests)"
     }
   ]
 }

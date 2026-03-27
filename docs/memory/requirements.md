@@ -244,6 +244,13 @@ Trinity is autonomous agent orchestration and infrastructure — sovereign infra
 - **Key Features**: Optional full capabilities mode for containers needing system access, base image allowlist validation (SEC-172)
 - **Base Image Allowlist** (SEC-172): Agent creation validates `base_image` against configurable allowlist (`base_image_allowlist` system setting, default `["trinity-agent-base:*"]`). Blocks arbitrary Docker image pulls that could access internal network services. Returns HTTP 403 for disallowed images.
 
+### 8.5a SSRF Prevention — Skills Library URL Validation (SEC-179)
+- **Status**: ✅ Implemented (2026-03-27)
+- **GitHub Issue**: #179
+- **Description**: Skills library URL validated against strict github.com allowlist to prevent SSRF leading to DoS (pentest finding 3.2.2, CVSS 6.7)
+- **Key Features**: Hostname must be exactly `github.com`, HTTPS enforced, DNS resolution checked against private/internal IP ranges, validation at both write time (`PUT /api/settings/skills_library_url`) and sync time (`POST /api/skills/library/sync`)
+- **Tests**: `tests/unit/test_ssrf_skills_library.py` — 28 tests
+
 ### 8.6 GCP Production Deployment
 - **Status**: ✅ Implemented
 - **Description**: SSL/TLS via Let's Encrypt, nginx reverse proxy

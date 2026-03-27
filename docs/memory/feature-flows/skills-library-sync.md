@@ -515,6 +515,9 @@ CREATE TABLE IF NOT EXISTS system_settings (
 | Error Case | HTTP Status | Message |
 |------------|-------------|---------|
 | URL not configured | 400 | "Skills library URL not configured" |
+| Invalid URL (SSRF) | 400 | "Skills library URL must point to github.com" |
+| Non-HTTPS URL | 400 | "Skills library URL must use HTTPS" |
+| URL resolves to internal IP | 400 | "Skills library URL resolved to internal address" |
 | Clone failed | 400 | "Clone failed: {error}" |
 | Pull failed | 400 | "Pull failed: {error}" |
 | Clone timeout | 400 | "Clone timed out after 120 seconds" |
@@ -531,6 +534,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
 3. **Shallow Clone**: Uses `--depth 1` to minimize data transfer and avoid cloning full history
 4. **Timeout Protection**: Clone has 120s timeout, pull has 60s timeout to prevent hanging
 5. **Command Injection**: Uses subprocess with list arguments, not shell=True
+6. **SSRF Prevention (SEC-179)**: URL validated at two layers to prevent Server-Side Request Forgery:
+   - **Write-time** (`routers/settings.py`): When `skills_library_url` is saved via `PUT /api/settings/skills_library_url`, `validate_skills_library_url()` rejects non-github.com URLs with HTTP 400
+   - **Sync-time** (`services/skill_service.py`): Before git operations, URL is validated again as defense-in-depth
+   - **Validation rules** (`utils/url_validation.py`): HTTPS required, hostname must be exactly `github.com` or `www.github.com`, DNS resolution checked against private/loopback/reserved IP ranges, non-http schemes rejected
 
 ---
 
@@ -615,9 +622,10 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 | Date | Changes |
 |------|---------|
+| 2026-03-27 | **SEC-179 SSRF prevention**: Added URL validation at write-time and sync-time. New `utils/url_validation.py` module. Updated error handling and security considerations. |
 | 2026-01-25 | **Initial document creation**: Complete vertical slice from Settings.vue through skill_service.py git operations. Documented URL formats, shallow clone, PAT handling, status endpoint, error cases. |
 
 ---
 
-**Last Updated**: 2026-01-25
-**Status**: Verified - All file paths and line numbers confirmed accurate
+**Last Updated**: 2026-03-27
+**Status**: Verified - Updated for SEC-179 SSRF prevention

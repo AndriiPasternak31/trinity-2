@@ -994,6 +994,14 @@ async def update_setting(
     """
     require_admin(current_user)
 
+    # Validate URL-based settings to prevent SSRF (SEC-179)
+    if key == "skills_library_url" and body.value:
+        from utils.url_validation import validate_skills_library_url
+        try:
+            validate_skills_library_url(body.value)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     try:
         setting = db.set_setting(key, body.value)
 
