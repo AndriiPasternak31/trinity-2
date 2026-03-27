@@ -1,3 +1,16 @@
+### 2026-03-27
+
+**fix: Agent subscription management BOLA — restrict PUT/DELETE to owner/admin (#182)**
+
+Pentest finding 3.2.5 (CVSS 4.8). The PUT and DELETE endpoints for agent subscription
+assignment (`/api/subscriptions/agents/{name}`) used `can_user_access_agent` (owners +
+shared users + admins) instead of `can_user_share_agent` (owners + admins only). This
+allowed shared users to assign/clear Claude subscription credentials on agents they only
+had read access to, enabling credential hot-swapping and DoS.
+
+- `src/backend/routers/subscriptions.py` — Replace `can_user_access_agent` with `can_user_share_agent` on PUT (line 184) and DELETE (line 246)
+- `tests/unit/test_subscription_auth.py` — New unit tests with mocked non-admin user verifying 403 on both endpoints
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**

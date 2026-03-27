@@ -180,8 +180,8 @@ async def assign_subscription_to_agent(
     so the container is recreated with `CLAUDE_CODE_OAUTH_TOKEN` env var
     and `ANTHROPIC_API_KEY` removed.
     """
-    # Check agent access (owner or admin)
-    if not db.can_user_access_agent(current_user.username, agent_name):
+    # Check owner/admin access (shared users cannot manage subscriptions)
+    if not db.can_user_share_agent(current_user.username, agent_name):
         raise HTTPException(status_code=403, detail="Access denied to this agent")
 
     # Get subscription by name
@@ -242,8 +242,8 @@ async def clear_agent_subscription(
 
     Owner access required. Agent will fall back to API key authentication.
     """
-    # Check agent access
-    if not db.can_user_access_agent(current_user.username, agent_name):
+    # Check owner/admin access (shared users cannot manage subscriptions)
+    if not db.can_user_share_agent(current_user.username, agent_name):
         raise HTTPException(status_code=403, detail="Access denied to this agent")
 
     # Get current subscription for logging
