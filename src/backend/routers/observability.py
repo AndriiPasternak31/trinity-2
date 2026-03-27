@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 import httpx
 
 from models import User
-from dependencies import get_current_user
+from dependencies import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/observability", tags=["observability"])
 
@@ -144,13 +144,11 @@ async def get_observability_metrics(
     """
     Get OpenTelemetry metrics from the OTEL Collector.
 
-    Returns structured metrics data including:
-    - Cost breakdown by model
-    - Token usage by model and type
-    - Productivity metrics (lines, sessions, commits, PRs)
-
-    Returns {enabled: false} when OTel is not configured.
+    Admin-only. Returns structured metrics data including cost breakdown,
+    token usage, and productivity metrics.
     """
+    require_admin(current_user)
+
     if not OTEL_ENABLED:
         return {
             "enabled": False,
@@ -225,8 +223,10 @@ async def get_observability_status(
     """
     Get the status of the OpenTelemetry integration.
 
-    Quick check without full metrics parsing.
+    Admin-only. Quick check without full metrics parsing.
     """
+    require_admin(current_user)
+
     if not OTEL_ENABLED:
         return {
             "enabled": False,

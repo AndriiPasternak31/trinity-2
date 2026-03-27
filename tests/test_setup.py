@@ -68,10 +68,11 @@ class TestSetupAdminPassword:
         if not status_data.get("setup_completed"):
             pytest.skip("Setup not completed - cannot test blocked state")
 
-        # Try to set password again - should be blocked
+        # Try to set password again - should be blocked (include setup_token to pass Pydantic validation)
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={
+                "setup_token": "any-token-setup-is-already-done",
                 "password": "newpassword123",
                 "confirm_password": "newpassword123"
             },
@@ -82,53 +83,30 @@ class TestSetupAdminPassword:
         data = response.json()
         assert "already completed" in data.get("detail", "").lower() or "setup" in data.get("detail", "").lower()
 
-    def test_password_validation_short_password(self, unauthenticated_client: TrinityApiClient):
-        """POST /api/setup/admin-password rejects passwords shorter than 8 characters."""
+    def test_invalid_setup_token_rejected(self, unauthenticated_client: TrinityApiClient):
+        """POST /api/setup/admin-password rejects requests with an invalid setup token."""
         # First check if setup is completed
         status_response = unauthenticated_client.get("/api/setup/status", auth=False)
         status_data = status_response.json()
 
         if status_data.get("setup_completed"):
-            pytest.skip("Setup already completed - cannot test validation")
+            pytest.skip("Setup already completed - cannot test token validation")
 
-        # Try to set short password
+        # Try with a wrong token but otherwise valid request
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={
-                "password": "short",
-                "confirm_password": "short"
-            },
-            auth=False
-        )
-
-        # Should reject with 400
-        assert_status(response, 400)
-        data = response.json()
-        assert "8 characters" in data.get("detail", "").lower() or "too short" in data.get("detail", "").lower()
-
-    def test_password_validation_mismatch(self, unauthenticated_client: TrinityApiClient):
-        """POST /api/setup/admin-password rejects mismatched passwords."""
-        # First check if setup is completed
-        status_response = unauthenticated_client.get("/api/setup/status", auth=False)
-        status_data = status_response.json()
-
-        if status_data.get("setup_completed"):
-            pytest.skip("Setup already completed - cannot test validation")
-
-        # Try to set mismatched passwords
-        response = unauthenticated_client.post(
-            "/api/setup/admin-password",
-            json={
+                "setup_token": "invalid-token-that-will-not-match",
                 "password": "validpassword123",
-                "confirm_password": "differentpassword123"
+                "confirm_password": "validpassword123"
             },
             auth=False
         )
 
-        # Should reject with 400
-        assert_status(response, 400)
+        # Should reject with 403 (invalid token)
+        assert_status(response, 403)
         data = response.json()
-        assert "match" in data.get("detail", "").lower() or "mismatch" in data.get("detail", "").lower()
+        assert "token" in data.get("detail", "").lower()
 
     def test_password_validation_missing_fields(self, unauthenticated_client: TrinityApiClient):
         """POST /api/setup/admin-password rejects missing required fields."""
@@ -139,14 +117,14 @@ class TestSetupAdminPassword:
         if status_data.get("setup_completed"):
             pytest.skip("Setup already completed - cannot test validation")
 
-        # Try with empty body
+        # Try with empty body - missing all required fields (password, confirm_password, setup_token)
         response = unauthenticated_client.post(
             "/api/setup/admin-password",
             json={},
             auth=False
         )
 
-        # Should reject with 422 (validation error)
+        # Should reject with 422 (Pydantic validation error for missing required fields)
         assert_status_in(response, [400, 422])
 
 

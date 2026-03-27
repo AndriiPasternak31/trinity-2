@@ -9,6 +9,190 @@ SQLite's `datetime('now', '-60 seconds')` returns space-separated format (`2026-
 - `finalize_orphaned_skipped_executions` now sets `status = 'failed'` (was only setting `completed_at`, leaving `skipped` as a non-terminal status forever)
 - No-session check now matches both `NULL` and empty-string `claude_session_id`
 
+### 2026-03-26
+
+🔒 **fix(security): Broken access control — user-level horizontal privilege escalation (#174)**
+
+Hardened 39 endpoints across 11 routers to enforce proper access control. Previously, any authenticated user could access admin-only operational data, modify other users' agents, and view cross-tenant resources. CVSS 8.5 (High).
+
+- **Admin-only enforcement** (22 endpoints): `routers/ops.py` (fleet status/health, schedules, costs, auth-report, alerts), `routers/observability.py` (metrics, status), `routers/system_agent.py` (status), `routers/alerts.py` (threshold set/delete)
+- **Owner-only enforcement** (10 endpoints): `routers/credentials.py` (inject/export/import — upgraded from `AuthorizedAgent` to `OwnedAgent`), `routers/chat.py` (DELETE history), `routers/agents.py` (queue/clear, queue/release), `routers/skills.py` (PUT skills, assign, unassign, inject)
+- **Access checks added** (7 endpoints): `routers/agents.py` (stats, queue GET — added `AuthorizedAgentByName`), `routers/skills.py` (GET skills — added `AuthorizedAgentByName`), `routers/notifications.py` (list/get/acknowledge/dismiss — filtered by accessible agents), `routers/processes.py` (archive, new-version — added RBAC), `routers/executions.py` (events, step output, costs, analytics — added `can_view_execution`)
+- **Tests**: `tests/test_access_control.py` — 30 tests verifying non-admin users get 403 on admin endpoints, non-owners get 403 on owner endpoints, and regular users retain access to their own resources
+
+🔒 **fix(security): SSH private key no longer transmitted in API response (#175)**
+
+Eliminated server-side SSH keypair generation. The `POST /api/agents/{name}/ssh-access` endpoint for key-based auth now requires clients to supply their own `public_key` — private keys never leave the client machine.
+
+- `src/backend/routers/agent_ssh.py` — Added `public_key` field to `SshAccessRequest` (required for key auth); removed `private_key` from response; enforced owner-only access (`can_user_delete_agent` instead of `can_user_access_agent`) since SSH grants shell access to credentials
+- `src/backend/services/ssh_service.py` — Removed `generate_ssh_keypair()` method and `cryptography` import; server no longer generates or handles private keys
+- `src/mcp-server/src/tools/agents.ts` — Added `public_key` parameter to `get_agent_ssh_access` tool
+- `src/mcp-server/src/client.ts` — Added `publicKey` parameter to `createSshAccess()`
+- `src/mcp-server/src/types.ts` — Removed `private_key` from `SshAccessResponse`
+- `tests/unit/test_ssh_service.py` — Removed keypair generation tests, simplified mocks (no cryptography dependency)
+
+🔒 **fix(security): OTP rate limiting for email verification — prevent brute-force (#176)**
+
+`POST /api/auth/email/verify` now enforces two layers of rate limiting. Previously, a 6-digit OTP (~20 bits of entropy) could be brute-forced in ~8 minutes at 2k req/s — within the 10-minute validity window — yielding a valid 7-day JWT.
+
+- `src/backend/routers/auth.py` — Added `check_otp_rate_limit(email)` and `record_otp_attempt(email, success)`: per-email Redis counter (`otp_attempts:{email}`) that locks out after 5 failed attempts for 10 minutes. Also applied existing `check_login_rate_limit(client_ip)` + `record_login_attempt()` to the verify endpoint (IP-based, was already on admin login).
+- `src/backend/routers/public.py` — Applied IP-based rate limiting to `POST /api/public/verify/confirm` (public link email verification).
+- `tests/unit/test_otp_rate_limiting.py` — 17 unit tests covering lockout at threshold, per-email key isolation, brute-force simulation, counter reset on success, Redis fail-open.
+
+🔒 **fix(security): Base image allowlist — block arbitrary Docker image pull (#172)**
+
+Agent creation now validates `base_image` against a configurable allowlist before any Docker operations. Previously, any authenticated user could deploy a container with an arbitrary Docker image (e.g., `alpine:latest`), gaining network access to internal services (backend, MCP server, Redis).
+
+- `src/backend/services/agent_service/helpers.py` — Added `validate_base_image()` with fnmatch-based allowlist check
+- `src/backend/services/agent_service/crud.py` — Calls `validate_base_image()` before template processing in `create_agent_internal()`
+- `src/backend/services/agent_service/lifecycle.py` — Calls `validate_base_image()` in `recreate_container_with_updated_config()` (defense in depth); fixed default fallback from wrong image name `trinity-agent:latest` to `trinity-agent-base:latest`
+- **Default allowlist**: `["trinity-agent-base:*"]` — only local Trinity base images permitted
+- **Configurable**: Admins can set `base_image_allowlist` in system settings (JSON array of fnmatch patterns)
+- **Blocked requests**: Return HTTP 403 with informative error including rejected image and allowlist
+- **Tests**: 19 unit tests in `tests/unit/test_base_image_allowlist.py`
+
+✨ **feat: Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines (#169)**
+
+Agents can now emit named events and subscribe to events from other agents. When a matching event fires, the subscribing agent receives an async task with the payload interpolated into a message template. Uses existing `agent_permissions` for access control.
+
+- **New MCP tools**: `emit_event`, `subscribe_to_event`, `list_event_subscriptions`, `delete_event_subscription`
+- **New API endpoints**:
+  - `POST /api/agents/{name}/event-subscriptions` — Create subscription
+  - `GET /api/agents/{name}/event-subscriptions` — List subscriptions
+  - `GET/PUT/DELETE /api/event-subscriptions/{id}` — CRUD by ID
+  - `POST /api/events` — Emit event (agent-scoped, from MCP auth context)
+  - `POST /api/agents/{name}/emit-event` — Emit event for specific agent
+  - `GET /api/agents/{name}/events` — Event history
+  - `GET /api/events` — All events
+- **New database tables**: `agent_event_subscriptions`, `agent_events`
+- **New files**: `src/backend/db/event_subscriptions.py`, `src/backend/routers/event_subscriptions.py`, `src/mcp-server/src/tools/events.ts`
+- **Modified**: `database.py` (delegation), `db/schema.py` (tables+indexes), `db_models.py` (models), `main.py` (router registration), `server.ts` (tool registration), `client.ts` (API methods), `routers/agents.py` (cleanup on delete)
+
+**feat: Slack connection management UI + per-agent channel binding (SLACK-002, #64)**
+
+Socket Mode management and per-agent Slack channel binding, decoupled from the public links OAuth flow.
+
+**Bug fixes:**
+- Fix encrypted bot token bug — `routers/slack.py` read raw SQL bypassing `_decrypt_token()`, causing `Illegal header value` errors when calling Slack API
+- Add missing `mark_execution_dispatched` delegation to `DatabaseManager`
+
+**Settings UI — Transport management:**
+- `GET /api/settings/slack/status` — connection state, workspaces, bound agents
+- `POST /api/settings/slack/connect` — save app token, start Socket Mode transport
+- `POST /api/settings/slack/disconnect` — stop transport
+- `POST /api/settings/slack/install` — platform-level OAuth (stores workspace + bot token without agent context)
+- `src/frontend/src/views/Settings.vue` — unified Slack section: OAuth credentials, transport mode, connect/disconnect, Install to Workspace, workspace list with agent badges
+
+**Per-agent channel binding:**
+- `GET /api/agents/{name}/slack/channel` — check channel binding status
+- `POST /api/agents/{name}/slack/channel` — create Slack channel + bind to agent
+- `DELETE /api/agents/{name}/slack/channel` — unbind agent from channel
+- `src/frontend/src/components/SlackChannelPanel.vue` — bound/unbound/access-denied states in Sharing tab
+
+**Tests:** 15 new integration tests (7 transport management + 8 channel binding)
+
+---
+
+### 2026-03-25
+
+**fix: Subscription registration fails silently when CREDENTIAL_ENCRYPTION_KEY is not set (#148)**
+
+Fresh Trinity deployments had no `CREDENTIAL_ENCRYPTION_KEY` configured, causing subscription registration to fail with a 500 error that was not clearly communicated to the user. Three fixes applied:
+
+1. `scripts/deploy/start.sh` now auto-generates `CREDENTIAL_ENCRYPTION_KEY` if missing from `.env`, so new deployments work out of the box.
+2. Backend adds `GET /api/subscriptions/encryption-status` endpoint and returns HTTP 503 with actionable instructions when the key is missing (instead of a generic 500).
+3. Frontend checks encryption status on page load and shows a yellow warning banner with setup instructions when not configured, disabling the Register button.
+
+- `scripts/deploy/start.sh` — Auto-generate CREDENTIAL_ENCRYPTION_KEY on startup if empty
+- `src/backend/routers/subscriptions.py` — Added `/encryption-status` endpoint; early validation in `register_subscription()` returns 503
+- `src/frontend/src/views/Settings.vue` — `encryptionConfigured` ref, warning banner, disabled button
+
+✨ **Auto-assign subscription to new agents via round-robin (#74)**
+
+When creating a new agent, Trinity now automatically assigns a subscription using round-robin distribution (fewest agents first, alphabetical tie-break). Removes the manual step of assigning subscriptions after agent creation. Falls back to platform API key if no subscriptions exist or token decryption fails. System agents are unaffected (separate creation path).
+
+- `src/backend/db/subscriptions.py` — Added `get_least_used_subscription()` method (SQL: COUNT + ORDER BY agent_count ASC, name ASC)
+- `src/backend/database.py` — Added delegation method
+- `src/backend/services/agent_service/crud.py` — Auto-assign logic in `create_agent_internal()`: lookup before container creation, DB persist after `register_agent_owner()`
+- `tests/test_subscriptions.py` — Added `TestSubscriptionAutoAssign` class (4 tests: no-subs fallback, auto-assign, round-robin, alphabetical tie-break)
+
+📝 **docs: Update stale feature flow documentation for execution layer (#100)**
+
+Fixed contradictions between feature flow documents and actual code after the 2026-03-09 EXEC-024 consolidation:
+
+- **scheduling.md**: Fixed execution flow diagram — scheduler dispatches to `POST /api/internal/execute-task` (not direct agent calls). Updated architecture diagram and file references.
+- **execution-queue.md**: Added prominent status enum disambiguation table clarifying `QueueItemStatus` (Redis) vs `TaskExecutionStatus` (DB) vs `ExecutionStatus` (process engine).
+- **parallel-headless-execution.md**: Clarified that async mode on `/api/task` uses inline code, while async mode on `/api/internal/execute-task` (scheduler) uses `TaskExecutionService`.
+- **task-execution-service.md**: Replaced "all paths" claim with execution path coverage matrix showing which callers use the service and which bypass it (notably `/api/chat` and async `/api/task`).
+- **scheduler-service.md**: Fixed architecture diagram to show scheduler → backend → agent flow (not scheduler → agent directly).
+
+### 2026-03-25 02:00:55
+
+🔧 **fix: Startup recovery for regular task executions (#128)**
+
+On backend restart, `schedule_executions` stuck in `running` status are now checked against agent containers and process registries. Orphaned executions (container down or not found in agent's process registry) are immediately marked `failed` with capacity slots released — instead of waiting 2 hours for the cleanup service timeout.
+
+- `src/backend/db/schedules.py` — Added `get_running_executions()` query
+- `src/backend/database.py` — Exposed `get_running_executions()` on `DatabaseManager`
+- `src/backend/services/cleanup_service.py` — Added `recover_orphaned_executions()` with container + HTTP registry checks
+- `src/backend/main.py` — Call recovery in lifespan handler after cleanup service start
+- `tests/unit/test_orphaned_execution_recovery.py` — 6 unit tests covering all recovery scenarios
+
+### 2026-03-25
+
+**feat: MCP Execution Query Tools — agents can poll for async results (MCP-007) (#19)**
+
+Three new MCP tools enabling agents to query execution history and poll for async task results. This closes the async agent-to-agent collaboration loop: `chat_with_agent(async=true)` returns an `execution_id`, then `get_execution_result(id)` polls until complete.
+
+- `list_recent_executions` — List recent executions for an agent across all trigger types (schedule, manual, MCP, chat) with optional status filter
+- `get_execution_result` — Get full execution details including response text, cost, and optionally the full transcript/log
+- `get_agent_activity_summary` — High-level activity summary over a time window with counts by type and state
+
+**MCP Server:**
+- `src/mcp-server/src/tools/executions.ts` — NEW: 3 execution query tools with agent-scoped access control
+- `src/mcp-server/src/tools/index.ts` — Export new tools
+- `src/mcp-server/src/server.ts` — Register 3 new tools (total: 62 tools)
+- `src/mcp-server/src/client.ts` — Added `getExecution()`, `getExecutionLog()`, `getActivityTimeline()` client methods
+- `src/mcp-server/src/types.ts` — Added `ActivityTimelineResponse`, `ActivityEntry` types; extended `ScheduleExecution` with `model_used`, `claude_session_id`, etc.
+
+**No backend changes** — all tools wrap existing REST endpoints (`GET /api/agents/{name}/executions`, `GET /api/agents/{name}/executions/{id}`, `GET /api/activities/timeline`).
+
+---
+
+### 2026-03-23
+
+✨ **feat: Channel adapter abstraction + multi-agent Slack integration (SLACK-002)**
+
+Added pluggable channel adapter architecture for external messaging platforms (Slack, future Telegram/Discord). Single Slack App supports multiple agents, each with a dedicated channel. Messages flow: Transport → Adapter → Router → Agent → Response.
+
+**Channel Adapter Abstraction:**
+- `src/backend/adapters/base.py` — `ChannelAdapter` base class: `parse_message()`, `send_response()`, `get_agent_name()`, `indicate_processing()`, `indicate_done()`, `handle_verification()`, `on_response_sent()`
+- `src/backend/adapters/transports/base.py` — `ChannelTransport` base class: `start()`, `stop()`, `on_event()`
+- `src/backend/adapters/message_router.py` — Channel-agnostic dispatcher with TaskExecutionService integration, rate limiting, configurable allowed tools
+
+**Slack Implementation:**
+- `src/backend/adapters/slack_adapter.py` — DMs, @mentions, thread replies without @mention, agent identity via `chat:write.customize`
+- `src/backend/adapters/transports/slack_socket.py` — Socket Mode transport (no public URL needed)
+- `src/backend/adapters/transports/slack_webhook.py` — HTTP webhook transport (backward compatible fallback)
+- `src/backend/services/slack_service.py` — Channel creation (`conversations.create`), reaction emoji (⏳→✅), `chat:write.customize` params, new OAuth scopes
+- `src/backend/routers/slack.py` — Refactored: multi-agent "Connect Slack" (auto-creates channel per agent), webhook endpoint delegates to transport
+
+**Database & Security:**
+- `src/backend/db/slack_channels.py` — `SlackChannelOperations` with AES-256-GCM encrypted bot tokens
+- `src/backend/db/migrations.py` — New tables: `slack_workspaces`, `slack_channel_agents`, `slack_active_threads`
+- `src/backend/database.py` — Wired `SlackChannelOperations` delegation methods
+- Tool restrictions for public Slack users (`--allowedTools WebSearch,WebFetch`)
+- Rate limiting: 30 msg/min per Slack user (configurable via settings)
+
+**Settings & Config:**
+- `src/backend/services/settings_service.py` — `public_chat_url`, `slack_transport_mode`, `slack_app_token`, `channel_rate_limit_max`, `channel_timeout_seconds`, `channel_allowed_tools`
+- `src/backend/routers/public_links.py` — Uses `get_public_chat_url()` from settings (was env-only)
+- `src/backend/main.py` — Startup/shutdown hooks for Slack transport
+- `docker/backend/Dockerfile` — Added `slack_sdk[socket-mode]` dependency
+- `src/frontend/src/components/PublicLinksPanel.vue` — Handle new Connect Slack response format
+
+---
+
 ### 2026-03-23
 
 **feat: Voice Chat — real-time voice conversations with agents via Gemini Live API (VOICE-001)**

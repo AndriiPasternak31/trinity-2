@@ -3,23 +3,24 @@
 > **Requirement**: 12.1 - Parallel Headless Execution
 > **Status**: Implemented
 > **Created**: 2025-12-22
-> **Updated**: 2026-03-11 (Default model for headless tasks)
+> **Updated**: 2026-03-26 (Line number refresh)
 > **Verified**: 2026-02-05
 
 ## Revision History
 
 | Date | Changes |
 |------|---------|
-| 2026-03-11 | **Issue #81 - Default Model for Headless Tasks**: Fixed misleading "token expired" error when agent's `~/.claude/settings.json` contains a model incompatible with the assigned subscription. `execute_headless_task()` now defaults to `model="sonnet"` when model is None (`claude_code.py:732-735`). Added `_is_model_access_error()` helper (`claude_code.py:623-637`) to detect subscription/model access errors. Enhanced `_diagnose_exit_failure()` (`claude_code.py:657-663`) to provide actionable error messages when model access fails. Terminal WebSocket sessions always passed `model=sonnet` via URL param, but headless tasks didn't specify `--model` flag, causing Claude Code to use agent settings which might be incompatible. |
-| 2026-03-07 | **ExecutionMetadata Error Fields**: Added `error_type` and `error_message` fields to `ExecutionMetadata` model (`models.py:89-90`). Populated during stream parsing in `claude_code.py` from two sources: `result` messages with `is_error=true` (line 294-301, classifies as `rate_limit` or `execution_error`) and `assistant` messages with `error` field (line 331-339, uses Claude Code's classification directly). Enables the platform to distinguish rate limits from other failures for better error handling (429 vs 503). |
-| 2026-03-08 | **Session ID UUID Fix**: Fixed `--session-id` validation failure. Claude Code requires `--session-id` to be a valid UUID but `execution_id` (from `secrets.token_urlsafe(16)`) is a base64url string. Changed `claude_code.py:725` to always generate `uuid.uuid4()` for `--session-id` instead of reusing `execution_id`. The `execution_id` still tracks the task internally. |
+| 2026-03-26 | **Line number refresh**: Updated all file/line references to match current codebase after upstream shifts (~92 lines in backend `chat.py`, model extraction in `models.py`, agent server reorganisation). |
+| 2026-03-11 | **Issue #81 - Default Model for Headless Tasks**: Fixed misleading "token expired" error when agent's `~/.claude/settings.json` contains a model incompatible with the assigned subscription. `execute_headless_task()` now defaults to `model="sonnet"` when model is None (`claude_code.py:768-770`). Added `_is_model_access_error()` helper (`claude_code.py:657-674`) to detect subscription/model access errors. Enhanced `_diagnose_exit_failure()` (`claude_code.py:685-700`) to provide actionable error messages when model access fails. Terminal WebSocket sessions always passed `model=sonnet` via URL param, but headless tasks didn't specify `--model` flag, causing Claude Code to use agent settings which might be incompatible. |
+| 2026-03-07 | **ExecutionMetadata Error Fields**: Added `error_type` and `error_message` fields to `ExecutionMetadata` model (`models.py:91-92`). Populated during stream parsing in `claude_code.py` from two sources: `result` messages with `is_error=true` (line 304-311, classifies as `rate_limit` or `execution_error`) and `assistant` messages with `error` field (line 341-349, uses Claude Code's classification directly). Enables the platform to distinguish rate limits from other failures for better error handling (429 vs 503). |
+| 2026-03-08 | **Session ID UUID Fix**: Fixed `--session-id` validation failure. Claude Code requires `--session-id` to be a valid UUID but `execution_id` (from `secrets.token_urlsafe(16)`) is a base64url string. Changed `claude_code.py:799` to always generate `uuid.uuid4()` for `--session-id` instead of reusing `execution_id`. The `execution_id` still tracks the task internally. |
 | 2026-03-06 | **Session Isolation + Permission Validation**: Fixed bug where headless tasks could run with `permissionMode: "default"` instead of `bypassPermissions`, causing all tool calls to be silently denied. Added `--no-session-persistence` and unique `--session-id` per headless task to prevent session file collision with interactive `/api/chat` sessions. Added `permissionMode` validation on the `init` stream-json message — kills process immediately and returns HTTP 503 if bypass not active. Flags skipped when `resume_session_id` is provided (EXEC-023 needs persistence). |
-| 2026-03-04 | **EXEC-024 Service Extraction**: Sync path of `POST /api/agents/{name}/task` refactored. The ~250 lines of inline execution logic (slot acquisition, activity tracking, agent call with retry, sanitization, execution record updates, error handling, slot release) extracted into `TaskExecutionService.execute_task()` in `src/backend/services/task_execution_service.py`. Sync path in `chat.py:713-730` now delegates to the service. `agent_post_with_retry()` moved to the service module and imported back into `chat.py` for use by `/chat` and `_execute_task_background`. Async mode path unchanged (still uses `_execute_task_background` inline). |
-| 2026-03-02 | **MODEL-001 Model Selection**: `model_used` field now recorded on every execution record via `db.create_task_execution(model_used=request.model)`. Backend `chat.py:593` passes model to execution record. TasksPanel sends `model` in POST body. See [model-selection.md](model-selection.md). |
+| 2026-03-04 | **EXEC-024 Service Extraction**: Sync path of `POST /api/agents/{name}/task` refactored. The ~250 lines of inline execution logic (slot acquisition, activity tracking, agent call with retry, sanitization, execution record updates, error handling, slot release) extracted into `TaskExecutionService.execute_task()` in `src/backend/services/task_execution_service.py`. Sync path in `chat.py:810-827` now delegates to the service. `agent_post_with_retry()` moved to the service module and imported back into `chat.py` for use by `/chat` and `_execute_task_background`. Async mode path unchanged (still uses `_execute_task_background` inline). |
+| 2026-03-02 | **MODEL-001 Model Selection**: `model_used` field now recorded on every execution record via `db.create_task_execution(model_used=request.model)`. Backend `chat.py` passes model to execution record. TasksPanel sends `model` in POST body. See [model-selection.md](model-selection.md). |
 | 2026-02-17 | **Added PUB-003 use case**: Public Chat Agent Introduction uses `/api/task` to fetch agent intro. Cross-reference to public-agent-links.md added. |
 | 2026-02-21 | **Bug Fix (EXEC-023)**: Fixed `DatabaseManager.update_execution_status()` wrapper in `src/backend/database.py:1295-1299` - was missing `claude_session_id` parameter, causing task executions to fail storing session IDs for the "Continue Execution as Chat" feature. The underlying `db/schedules.py:update_execution_status()` (lines 559-610) already supported the parameter. |
 | 2026-02-20 | **Chat Session Persistence (CHAT-001)**: `/task` endpoint now supports `save_to_session`, `user_message`, `create_new_session` parameters for authenticated Chat tab. When `save_to_session=true`, messages persist to `chat_sessions` and `chat_messages` tables. Response includes `chat_session_id`. New `db.create_new_chat_session()` method closes existing sessions before creating new one. |
-| 2026-02-16 | **Security Fix (Credential Leakage Prevention)**: Agent-side and backend-side credential sanitization now prevents secrets from appearing in execution logs. Agent sanitizes subprocess output via `sanitize_subprocess_line()` and response text via `sanitize_text()` (claude_code.py:491-529, 693-747). Backend provides defense-in-depth via `sanitize_execution_log()` and `sanitize_response()` (now called from `TaskExecutionService` in `services/task_execution_service.py:241-247` for sync path, and from `_execute_task_background` in `chat.py:419-426` for async path). |
+| 2026-02-16 | **Security Fix (Credential Leakage Prevention)**: Agent-side and backend-side credential sanitization now prevents secrets from appearing in execution logs. Agent sanitizes subprocess output via `sanitize_subprocess_line()` and response text via `sanitize_text()` (claude_code.py:563, 611, 922, 996). Backend provides defense-in-depth via `sanitize_execution_log()` and `sanitize_response()` (now called from `TaskExecutionService` in `services/task_execution_service.py:272-278` for sync path, and from `_execute_task_background` in `chat.py:489-499` for async path). |
 | 2026-02-15 | **Claude Max subscription support**: Headless task execution now supports Claude Max subscription authentication. If user ran `/login` in web terminal, the OAuth session stored in `~/.claude.json` is used instead of requiring `ANTHROPIC_API_KEY`. The mandatory API key check was removed from `execute_headless_task()` in `docker/base-image/agent_server/services/claude_code.py`. |
 | 2026-02-12 | **Test fix**: `test_parallel_task_does_not_show_in_queue` (in `tests/test_execution_queue.py`) now uses `async_mode: True` to avoid 30s timeout. The test verifies that parallel tasks bypass the execution queue. |
 | 2026-02-05 | **SSE streaming fix**: Documented nginx configuration required for live execution streaming. Added `proxy_buffering off`, `proxy_cache off`, `chunked_transfer_encoding on` directives. Added frontend implementation details using fetch with ReadableStream. |
@@ -99,7 +100,7 @@ POST /api/agents/{name}/task
        |
        v
 +---------------------------------------------+
-| Router (chat.py:560-812)                    |
+| Router (chat.py:652-917)                    |
 | 1. Validate agent exists and is running     |
 | 2. Create execution record (early, for     |
 |    async mode and tracking)                 |
@@ -179,37 +180,37 @@ POST /api/task
 
 | File | Line | Purpose |
 |------|------|---------|
-| `models.py` | 75-91 | ExecutionMetadata model (includes `error_type`, `error_message` fields) |
-| `models.py` | 215-232 | ParallelTaskRequest, ParallelTaskResponse models |
-| `services/claude_code.py` | 553-739 | execute_headless_task() — always generates UUID for `--session-id` |
-| `services/gemini_runtime.py` | 489-642 | execute_headless() for Gemini CLI |
-| `services/runtime_adapter.py` | 99-129 | AgentRuntime.execute_headless() interface |
-| `routers/chat.py` | 96-137 | POST /api/task endpoint |
+| `models.py` | 77-93 | ExecutionMetadata model (includes `error_type`, `error_message` fields) |
+| `models.py` | 199-218 | ParallelTaskRequest, ParallelTaskResponse models |
+| `services/claude_code.py` | 729-1030 | execute_headless_task() — always generates UUID for `--session-id` |
+| `services/gemini_runtime.py` | 500-642 | execute_headless() for Gemini CLI |
+| `services/runtime_adapter.py` | 103-129 | AgentRuntime.execute_headless() interface |
+| `routers/chat.py` | 98-146 | POST /api/task endpoint |
 
 ### Backend (src/backend/)
 
 | File | Line | Purpose |
 |------|------|---------|
-| `models.py` | 109-117 | ParallelTaskRequest model with max_turns and async_mode |
-| `services/task_execution_service.py` | 42-53 | `TaskExecutionResult` dataclass (status, response, cost, etc.) |
-| `services/task_execution_service.py` | 60-96 | `agent_post_with_retry()` HTTP helper with exponential backoff |
-| `services/task_execution_service.py` | 103-376 | `TaskExecutionService.execute_task()` — full sync execution lifecycle |
+| `models.py` | 83-96 | ParallelTaskRequest model with max_turns and async_mode |
+| `services/task_execution_service.py` | 43-54 | `TaskExecutionResult` dataclass (status, response, cost, etc.) |
+| `services/task_execution_service.py` | 61-97 | `agent_post_with_retry()` HTTP helper with exponential backoff |
+| `services/task_execution_service.py` | 104-417 | `TaskExecutionService.execute_task()` — full sync execution lifecycle |
 | `routers/chat.py` | 21-24 | Imports `get_task_execution_service` and `agent_post_with_retry` from service |
-| `routers/chat.py` | 370-557 | `_execute_task_background()` helper for async mode (still inline) |
-| `routers/chat.py` | 560-812 | POST /api/agents/{name}/task endpoint |
-| `routers/chat.py` | 713-730 | Sync path delegation to `TaskExecutionService.execute_task()` |
-| `routers/chat.py` | 744-760 | Translates `TaskExecutionResult.status == "failed"` to HTTP errors |
-| `routers/schedules.py` | 323-336 | GET /api/agents/{name}/executions/{id} endpoint (polling) |
-| `routers/schedules.py` | 339-379 | GET /api/agents/{name}/executions/{id}/log endpoint |
-| `services/agent_client.py` | 194-287 | AgentClient.task() method |
+| `routers/chat.py` | 438-650 | `_execute_task_background()` helper for async mode (still inline) |
+| `routers/chat.py` | 652-917 | POST /api/agents/{name}/task endpoint |
+| `routers/chat.py` | 810-827 | Sync path delegation to `TaskExecutionService.execute_task()` |
+| `routers/chat.py` | 842-857 | Translates `TaskExecutionResult.status == "failed"` to HTTP errors |
+| `routers/schedules.py` | 464-477 | GET /api/agents/{name}/executions/{id} endpoint (polling) |
+| `routers/schedules.py` | 480-520 | GET /api/agents/{name}/executions/{id}/log endpoint |
+| `services/agent_client.py` | 201-287 | AgentClient.task() method |
 
 ### MCP Server (src/mcp-server/)
 
 | File | Line | Purpose |
 |------|------|---------|
-| `src/client.ts` | 399-454 | task() method with async_mode option |
+| `src/client.ts` | 499-560 | task() method with async_mode option |
 | `src/tools/chat.ts` | 132-284 | chat_with_agent tool with parallel and async parameters |
-| `src/tools/chat.ts` | 187-194 | async parameter definition |
+| `src/tools/chat.ts` | 187-195 | async parameter definition |
 
 ### Sync vs Async Code Paths (EXEC-024)
 
@@ -217,13 +218,13 @@ As of EXEC-024, the sync and async execution paths diverge:
 
 | Aspect | Sync (`async_mode=false`) | Async (`async_mode=true`) |
 |--------|---------------------------|---------------------------|
-| Execution logic | `TaskExecutionService.execute_task()` in `services/task_execution_service.py` | `_execute_task_background()` inline in `routers/chat.py:370-557` |
+| Execution logic | `TaskExecutionService.execute_task()` in `services/task_execution_service.py` | `_execute_task_background()` inline in `routers/chat.py:438-650` |
 | Slot management | Service acquires/releases slots internally | Router acquires slot before spawning; background task releases in `finally` |
 | Activity tracking | Service tracks start/completion internally | Router tracks start; background task completes activities |
 | Result handling | Returns `TaskExecutionResult`; router translates to HTTP | Background task updates DB directly |
 | HTTP helper | `agent_post_with_retry()` defined in service, called internally | Same function imported from service into `chat.py` |
 
-The router (`chat.py:560-812`) still handles: container validation, execution record creation (early), collaboration tracking (WebSocket events), async mode branching, session persistence (`save_to_session`), and translating `TaskExecutionResult.status == "failed"` to HTTP error codes (429/504/503).
+The router (`chat.py:652-917`) still handles: container validation, execution record creation (early), collaboration tracking (WebSocket events), async mode branching, session persistence (`save_to_session`), and translating `TaskExecutionResult.status == "failed"` to HTTP error codes (429/504/503).
 
 ## API Specifications
 
@@ -268,7 +269,7 @@ The router (`chat.py:560-812`) still handles: container validation, execution re
 
 Same request/response as agent server, with additional parameters:
 
-**Backend-Only Request Parameters** (`src/backend/models.py:81-92`):
+**Backend-Only Request Parameters** (`src/backend/models.py:83-96`):
 | Parameter | Type | Default | Purpose |
 |-----------|------|---------|---------|
 | `async_mode` | bool | false | If true, return immediately with execution_id (fire-and-forget) |
@@ -292,7 +293,7 @@ Same request/response as agent server, with additional parameters:
 
 Retrieve the full execution log for any task execution.
 
-**File**: `src/backend/routers/schedules.py:339-379`
+**File**: `src/backend/routers/schedules.py:480-520`
 
 **Response**:
 ```json
@@ -330,7 +331,7 @@ Retrieve the full execution log for any task execution.
 
 **Added**: 2026-03-07
 
-The `ExecutionMetadata` model (`docker/base-image/agent_server/models.py:75-91`) includes two fields for error classification:
+The `ExecutionMetadata` model (`docker/base-image/agent_server/models.py:77-93`) includes two fields for error classification:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -341,7 +342,7 @@ The `ExecutionMetadata` model (`docker/base-image/agent_server/models.py:75-91`)
 
 Errors are detected during stream-json parsing in `docker/base-image/agent_server/services/claude_code.py`:
 
-**Source 1 -- `result` message with `is_error=true`** (line 294-301):
+**Source 1 -- `result` message with `is_error=true`** (line 304-311):
 ```python
 if msg.get("is_error") and not metadata.error_type:
     metadata.error_message = result_text
@@ -351,7 +352,7 @@ if msg.get("is_error") and not metadata.error_type:
         metadata.error_type = "execution_error"
 ```
 
-**Source 2 -- `assistant` message with `error` field** (line 331-339):
+**Source 2 -- `assistant` message with `error` field** (line 341-349):
 ```python
 if msg_type == "assistant" and msg.get("error"):
     metadata.error_type = msg["error"]  # e.g., "rate_limit"
@@ -367,11 +368,11 @@ After execution completes, `error_type` determines the HTTP response:
 
 | `error_type` | HTTP Status | Handler Location |
 |--------------|-------------|------------------|
-| `"rate_limit"` | 429 | `claude_code.py:549-555` (chat), `claude_code.py:892-898` (headless) |
+| `"rate_limit"` | 429 | `claude_code.py:583-589` (chat), `claude_code.py:967-973` (headless) |
 | `"execution_error"` | 503 | Falls through to non-zero return code handling |
 | `null` | 200 | Normal success path |
 
-The `_format_rate_limit_error()` helper (`claude_code.py:623-631`) uses `metadata.error_message` to build an actionable error detail string that suggests resolution steps (wait for reset, set API key, or reassign subscription).
+The `_format_rate_limit_error()` helper (`claude_code.py:674-683`) uses `metadata.error_message` to build an actionable error detail string that suggests resolution steps (wait for reset, set API key, or reassign subscription).
 
 ## Key Differences: Chat vs Task
 
@@ -403,14 +404,14 @@ When `max_turns` is specified:
 
 ### Implementation Details
 
-**Claude Code** (`docker/base-image/agent_server/services/claude_code.py:622-625`):
+**Claude Code** (`docker/base-image/agent_server/services/claude_code.py:823-825`):
 ```python
 if max_turns is not None:
     cmd.extend(["--max-turns", str(max_turns)])
     logger.info(f"[Headless Task] Limiting to {max_turns} agentic turns")
 ```
 
-**Gemini CLI** (`docker/base-image/agent_server/services/gemini_runtime.py:542-544`):
+**Gemini CLI** (`docker/base-image/agent_server/services/gemini_runtime.py:558-560`):
 ```python
 if max_turns is not None:
     cmd.extend(["--max-turns", str(max_turns)])
@@ -501,7 +502,7 @@ When `async_mode=true` is specified:
 8. **Completes activities** asynchronously
 9. **Releases slot** in `finally` block
 
-Note: Async mode does **not** use `TaskExecutionService`. It uses the inline `_execute_task_background()` function because it needs to manage its own activity IDs, collaboration tracking, and slot release timing.
+Note: Async mode on the `/api/agents/{name}/task` endpoint does **not** use `TaskExecutionService`. It uses the inline `_execute_task_background()` function because it needs to manage its own activity IDs, collaboration tracking, and slot release timing. However, async mode on `/api/internal/execute-task` (used by the scheduler) **does** use `TaskExecutionService` inside its background coroutine — see [scheduler-service.md](scheduler-service.md).
 
 ### Architecture Diagram
 
@@ -546,14 +547,14 @@ Note: Async mode does **not** use `TaskExecutionService`. It uses the inline `_e
 
 ### Implementation Details
 
-**Backend Model** (`src/backend/models.py:117`):
+**Backend Model** (`src/backend/models.py:91`):
 ```python
 class ParallelTaskRequest(BaseModel):
     # ... existing fields ...
     async_mode: Optional[bool] = False  # If true, return immediately with execution_id
 ```
 
-**Background Task Handler** (`src/backend/routers/chat.py:370-557`):
+**Background Task Handler** (`src/backend/routers/chat.py:438-650`):
 ```python
 async def _execute_task_background(
     agent_name: str,
@@ -596,7 +597,7 @@ async def _execute_task_background(
             await slot_service.release_slot(agent_name, execution_id)
 ```
 
-**Endpoint Logic — Async branch** (`src/backend/routers/chat.py:643-711`):
+**Endpoint Logic — Async branch** (`src/backend/routers/chat.py:735-808`):
 ```python
 # Async mode: acquire slot here, spawn background task which releases it
 if request.async_mode:
@@ -650,7 +651,7 @@ if result.status == "failed":
         raise HTTPException(status_code=503, ...)
 ```
 
-**MCP Client** (`src/mcp-server/src/client.ts:399-454`):
+**MCP Client** (`src/mcp-server/src/client.ts:499-560`):
 ```typescript
 async task(name: string, message: string, options?: {
   // ... existing options ...
@@ -662,7 +663,7 @@ async task(name: string, message: string, options?: {
 }
 ```
 
-**MCP Tool** (`src/mcp-server/src/tools/chat.ts:187-194`):
+**MCP Tool** (`src/mcp-server/src/tools/chat.ts:187-195`):
 ```typescript
 async: z
   .boolean()
@@ -816,10 +817,10 @@ Task executions can be monitored in real-time via Server-Sent Events (SSE).
 ### Endpoint
 
 **Backend**: `GET /api/agents/{name}/executions/{execution_id}/stream`
-**File**: `src/backend/routers/chat.py:1382-1443`
+**File**: `src/backend/routers/chat.py:1496-1563`
 
 **Agent Server**: `GET /api/executions/{execution_id}/stream`
-**File**: `docker/base-image/agent_server/routers/chat.py:295-369`
+**File**: `docker/base-image/agent_server/routers/chat.py:302-369`
 
 ### nginx Configuration (Required for Production)
 
@@ -856,7 +857,7 @@ location /api/ {
 
 ### Frontend Implementation
 
-**File**: `src/frontend/src/views/ExecutionDetail.vue:446-519`
+**File**: `src/frontend/src/views/ExecutionDetail.vue:519-578`
 
 The frontend uses `fetch` with `ReadableStream` instead of `EventSource` because:
 1. `EventSource` doesn't support custom headers (needed for JWT auth)

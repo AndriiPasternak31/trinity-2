@@ -1,12 +1,15 @@
 """
-SSH Service for ephemeral SSH credential generation and management.
+SSH Service for ephemeral SSH credential management.
 
 Provides functionality to:
-1. Generate ED25519 key pairs
+1. Accept client-supplied public keys for SSH access
 2. Generate ephemeral passwords
 3. Inject credentials into agent containers
 4. Clean up expired credentials from containers
 5. Track credentials in Redis with TTL for auto-expiry
+
+Security: Private keys are NEVER generated or handled server-side.
+Clients generate their own keypairs and supply only the public key.
 """
 
 import os
@@ -19,8 +22,6 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, Literal
 
 import redis
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from services.docker_service import docker_client, get_agent_container
 from services.docker_utils import container_exec_run
@@ -41,46 +42,6 @@ class SshService:
 
     def __init__(self, redis_url: str = "redis://redis:6379"):
         self.redis_client = redis.from_url(redis_url, decode_responses=True)
-
-    def generate_ssh_keypair(self, agent_name: str) -> Dict[str, str]:
-        """
-        Generate an ED25519 SSH key pair.
-
-        Returns:
-            Dictionary with:
-            - private_key: OpenSSH format private key
-            - public_key: OpenSSH format public key (one line)
-            - comment: Key comment for identification
-        """
-        # Generate key pair
-        private_key = Ed25519PrivateKey.generate()
-        public_key = private_key.public_key()
-
-        # Create unique comment for tracking
-        timestamp = int(time.time())
-        comment = f"trinity-ephemeral-{agent_name}-{timestamp}"
-
-        # Serialize private key in OpenSSH format
-        private_key_bytes = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.OpenSSH,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-
-        # Serialize public key in OpenSSH format
-        public_key_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.OpenSSH,
-            format=serialization.PublicFormat.OpenSSH
-        )
-
-        # Add comment to public key
-        public_key_line = f"{public_key_bytes.decode('utf-8')} {comment}"
-
-        return {
-            "private_key": private_key_bytes.decode('utf-8'),
-            "public_key": public_key_line,
-            "comment": comment
-        }
 
     async def inject_ssh_key(self, agent_name: str, public_key: str) -> bool:
         """

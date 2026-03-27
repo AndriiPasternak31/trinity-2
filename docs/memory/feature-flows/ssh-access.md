@@ -9,6 +9,7 @@ As an agent operator, I want to generate temporary SSH credentials for my agent 
 ## Revision History
 | Date | Change |
 |------|--------|
+| 2026-03-26 | **SEC: Removed server-side keypair generation (#175)**: Key auth now requires client-supplied `public_key`. Private keys never leave the client. Enforced owner-only access (admin/owner, not shared users). Removed `generate_ssh_keypair()` and `cryptography` dependency. |
 | 2026-02-24 | **Async Docker Operations**: All SshService methods now async (DOCKER-001). Uses `container_exec_run` wrapper to prevent event loop blocking. |
 | 2026-02-13 | **Fixed localhost bug**: Added FRONTEND_URL domain extraction as priority #2 in host detection. Production deployments now correctly return domain instead of localhost. |
 | 2026-01-23 | Updated line numbers: ssh_service.py, agents.py, agents.ts, client.ts, types.ts |
@@ -36,10 +37,10 @@ getAgentSshAccess: {
   name: "get_agent_ssh_access",
   description:
     "Generate ephemeral SSH credentials for direct terminal access to an agent container. " +
-    "Supports two auth methods: 'key' (save private key locally) or 'password' (one-liner with sshpass). " +
+    "Supports two auth methods: 'key' (provide your public key) or 'password' (one-liner with sshpass). " +
     "Credentials expire automatically (default: 4 hours). Agent must be running. " +
-    "Ideal for Tailscale/VPN environments where you need direct SSH access. " +
-    "IMPORTANT: For key auth, save the private key immediately - it cannot be retrieved again.",
+    "For key auth: generate a keypair locally (ssh-keygen -t ed25519) and provide the PUBLIC key. " +
+    "The server never generates or handles private keys. Only agent owner or admin can use this.",
   parameters: z.object({
     agent_name: z.string().describe("Name of the agent to access"),
     ttl_hours: z
@@ -51,15 +52,19 @@ getAgentSshAccess: {
       .enum(["key", "password"])
       .optional()
       .default("key")
-      .describe("Authentication method: 'key' for SSH key pair (more secure, requires saving key file), 'password' for one-liner with sshpass (convenient, requires sshpass installed)"),
+      .describe("Authentication method: 'key' for SSH public key injection (more secure), 'password' for one-liner with sshpass (convenient, requires sshpass installed)"),
+    public_key: z
+      .string()
+      .optional()
+      .describe("Your SSH public key (required for 'key' auth method). Generate with: ssh-keygen -t ed25519. Provide the contents of ~/.ssh/id_ed25519.pub"),
   }),
   execute: async (
-    { agent_name, ttl_hours = 4, auth_method = "key" }: { agent_name: string; ttl_hours?: number; auth_method?: "key" | "password" },
+    { agent_name, ttl_hours = 4, auth_method = "key", public_key }: { ... },
     context?: { session?: McpAuthContext }
   ) => {
     const authContext = context?.session;
     const apiClient = getClient(authContext);
-    const response = await apiClient.createSshAccess(agent_name, ttl_hours, auth_method);
+    const response = await apiClient.createSshAccess(agent_name, ttl_hours, auth_method, public_key);
     return JSON.stringify(response, null, 2);
   },
 }
@@ -73,12 +78,15 @@ getAgentSshAccess: {
 async createSshAccess(
   name: string,
   ttlHours: number = 4,
-  authMethod: "key" | "password" = "key"
+  authMethod: "key" | "password" = "key",
+  publicKey?: string
 ): Promise<SshAccessResponse> {
+  const body: Record<string, unknown> = { ttl_hours: ttlHours, auth_method: authMethod };
+  if (publicKey) body.public_key = publicKey;
   return this.request<SshAccessResponse>(
     "POST",
     `/api/agents/${encodeURIComponent(name)}/ssh-access`,
-    { ttl_hours: ttlHours, auth_method: authMethod }
+    body
   );
 }
 ```
@@ -101,10 +109,10 @@ export interface SshAccessResponse {
   agent: string;            // Agent name
   auth_method: "key" | "password";
   connection: SshConnectionInfo;
-  private_key?: string;     // Only for key auth - one-time display!
   expires_at: string;       // ISO timestamp
   expires_in_hours: number; // TTL value used
   instructions: string[];   // Step-by-step usage instructions
+  // NOTE: private_key field removed in #175 — server never generates or returns private keys
 }
 ```
 
@@ -116,13 +124,14 @@ export interface SshAccessResponse {
 
 **agent_ssh.py** (`src/backend/routers/agent_ssh.py`)
 
-#### Request Model (Line 999)
+#### Request Model
 
 ```python
 class SshAccessRequest(BaseModel):
     """Request body for SSH access."""
     ttl_hours: float = 4.0
     auth_method: str = "key"  # "key" for SSH key, "password" for ephemeral password
+    public_key: Optional[str] = None  # Required for key auth — client-supplied OpenSSH public key
 ```
 
 #### POST /{agent_name}/ssh-access (Line 1005)
@@ -141,9 +150,10 @@ async def create_ssh_access(
             detail="SSH access is disabled. Enable it in Settings -> Ops Settings -> ssh_access_enabled"
         )
 
-    # 2. Check user has access to agent
-    if not db.can_user_access_agent(current_user.username, agent_name):
-        raise HTTPException(status_code=403, detail="Access denied")
+    # 2. Enforce owner-only access (owner or admin, not shared users)
+    # SSH grants shell access to credentials — stricter than normal agent access
+    if not db.can_user_delete_agent(current_user.username, agent_name):
+        raise HTTPException(status_code=403, detail="Access denied. Only the agent owner or admin can generate SSH credentials.")
 
     # 3. Verify agent exists and is running
     container = get_agent_container(agent_name)
@@ -168,11 +178,11 @@ async def create_ssh_access(
         ssh_service.store_credential_metadata(...)
         return { password response }
     else:
-        # Key flow
-        keypair = ssh_service.generate_ssh_keypair(agent_name)
-        ssh_service.inject_ssh_key(agent_name, keypair["public_key"])
+        # Key flow — client supplies public key, server injects it
+        public_key = body.public_key  # Required, validated
+        ssh_service.inject_ssh_key(agent_name, public_key_with_comment)
         ssh_service.store_key_metadata(...)
-        return { key response }
+        return { key response — no private_key field }
 ```
 
 ### SSH Service
@@ -188,37 +198,11 @@ SSH_ACCESS_CLEANUP_INTERVAL = int(os.getenv("SSH_ACCESS_CLEANUP_INTERVAL", "900"
 SSH_ACCESS_PREFIX = "ssh_access:"  # Redis key prefix
 ```
 
-#### Key Generation (Lines 44-82) - SshService.generate_ssh_keypair()
+#### Key Injection - SshService.inject_ssh_key()
 
-```python
-def generate_ssh_keypair(self, agent_name: str) -> Dict[str, str]:
-    """Generate an ED25519 SSH key pair."""
-    private_key = Ed25519PrivateKey.generate()
-    public_key = private_key.public_key()
+> **Note (SEC #175)**: `generate_ssh_keypair()` has been removed. The server no longer generates keypairs.
+> Clients generate their own keypairs locally and supply only the public key.
 
-    # Unique comment for tracking/cleanup
-    timestamp = int(time.time())
-    comment = f"trinity-ephemeral-{agent_name}-{timestamp}"
-
-    # Serialize in OpenSSH format
-    private_key_bytes = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.OpenSSH,
-        encryption_algorithm=serialization.NoEncryption()
-    )
-    public_key_bytes = public_key.public_bytes(
-        encoding=serialization.Encoding.OpenSSH,
-        format=serialization.PublicFormat.OpenSSH
-    )
-
-    return {
-        "private_key": private_key_bytes.decode('utf-8'),
-        "public_key": f"{public_key_bytes.decode('utf-8')} {comment}",
-        "comment": comment
-    }
-```
-
-#### Key Injection (Lines 85-134) - SshService.inject_ssh_key()
 
 ```python
 async def inject_ssh_key(self, agent_name: str, public_key: str) -> bool:
@@ -592,55 +576,51 @@ security_opt=['apparmor:docker-default'],  # no-new-privileges removed for SSH s
 ### Key-Based Authentication
 
 ```
-1. MCP Client calls get_agent_ssh_access(agent_name, ttl_hours=4, auth_method="key")
+1. Client generates keypair locally: ssh-keygen -t ed25519
    |
-2. MCP Tool (agents.ts:406-419) -> apiClient.createSshAccess()
+2. MCP Client calls get_agent_ssh_access(agent_name, ttl_hours=4, auth_method="key", public_key="ssh-ed25519 AAAA...")
    |
-3. POST /api/agents/{name}/ssh-access (agents.py:1005)
-   |-- Check ssh_access_enabled ops setting (lines 1031-1036)
+3. MCP Tool (agents.ts) -> apiClient.createSshAccess()
+   |
+4. POST /api/agents/{name}/ssh-access (agent_ssh.py)
+   |-- Check ssh_access_enabled ops setting
    |   └── 403 if disabled
-   |-- Check can_user_access_agent (line 1039)
-   |   └── 403 if no access
-   |-- Get container, verify running (lines 1042-1052)
+   |-- Check can_user_delete_agent (owner or admin only)
+   |   └── 403 if not owner/admin
+   |-- Get container, verify running
    |   └── 404 if not found, 400 if not running
-   |-- Validate TTL (0.1-24 hours) (lines 1054-1059)
-   |-- Get SSH port from container labels (lines 1066-1068)
-   |-- Get host (SSH_HOST env or Tailscale or localhost) (line 1071)
+   |-- Validate TTL (0.1-24 hours)
+   |-- Validate public_key format (must start with ssh-ed25519, ssh-rsa, etc.)
+   |   └── 400 if missing or invalid
+   |-- Get SSH port from container labels
+   |-- Get host (SSH_HOST env or Tailscale or localhost)
    |
-4. Key Generation (ssh_service.py:44-82)
-   |-- Generate ED25519 private key
-   |-- Extract public key
-   |-- Create unique comment: trinity-ephemeral-{agent}-{timestamp}
-   |-- Return { private_key, public_key, comment }
-   |
-5. Key Injection (ssh_service.py:84-130)
+5. Key Injection (ssh_service.py)
+   |-- Append tracking comment: trinity-ephemeral-{agent}-{timestamp}
    |-- docker exec: mkdir -p /home/developer/.ssh, chmod 700
    |-- docker exec: printf >> /home/developer/.ssh/authorized_keys
    |-- docker exec: chmod 600 authorized_keys
    |
-6. Store Metadata in Redis (ssh_service.py:273-318)
+6. Store Metadata in Redis (ssh_service.py)
    |-- Key: ssh_access:{agent_name}:{comment}
    |-- TTL: ttl_hours * 3600 seconds
    |-- Value: { agent_name, credential_id, auth_type, created_at, expires_at, created_by, public_key }
    |
-7. Return Response to Client
+7. Return Response to Client (NO private key)
    {
      "status": "success",
      "agent": "my-agent",
      "auth_method": "key",
      "connection": {
-       "command": "ssh -p 2222 -i ~/.trinity/keys/my-agent.key developer@100.x.x.x",
+       "command": "ssh -p 2222 developer@100.x.x.x",
        "host": "100.x.x.x",
        "port": 2222,
        "user": "developer"
      },
-     "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----...",
      "expires_at": "2026-01-02T20:00:00Z",
      "expires_in_hours": 4,
      "instructions": [
-       "Save the private key to a file: ~/.trinity/keys/my-agent.key",
-       "Set permissions: chmod 600 ~/.trinity/keys/my-agent.key",
-       "Connect: ssh -p 2222 -i ~/.trinity/keys/my-agent.key developer@100.x.x.x",
+       "Connect: ssh -p 2222 developer@100.x.x.x",
        "Key expires in 4 hours"
      ]
    }
@@ -693,10 +673,12 @@ security_opt=['apparmor:docker-default'],  # no-new-privileges removed for SSH s
 | Error Case | HTTP Status | Message |
 |------------|-------------|---------|
 | SSH access disabled globally | 403 | "SSH access is disabled. Enable it in Settings -> Ops Settings -> ssh_access_enabled" |
-| User cannot access agent | 403 | "Access denied" |
+| User is not owner or admin | 403 | "Access denied. Only the agent owner or admin can generate SSH credentials." |
 | Agent container not found | 404 | "Agent not found" |
 | Agent not running | 400 | "Agent must be running to generate SSH access. Start the agent first." |
 | Invalid auth_method | 400 | "auth_method must be 'key' or 'password'" |
+| Missing public_key for key auth | 400 | "public_key is required for key-based authentication..." |
+| Invalid public_key format | 400 | "Invalid public key format. Must be an OpenSSH public key..." |
 | Key injection failed | 500 | "Failed to inject SSH key into agent container" |
 | Password setting failed | 500 | "Failed to set SSH password in agent container" |
 
@@ -706,11 +688,11 @@ security_opt=['apparmor:docker-default'],  # no-new-privileges removed for SSH s
 
 1. **System-Level Control**: SSH access is disabled by default (`ssh_access_enabled = false`). Admin must explicitly enable.
 
-2. **Access Control**: Endpoint requires authenticated user with `can_user_access_agent` permission.
+2. **Owner-Only Access**: Endpoint requires agent owner or admin (`can_user_delete_agent`). Shared users cannot generate SSH credentials — SSH grants shell access to injected credentials inside the container.
 
 3. **Ephemeral Credentials**: All credentials auto-expire via Redis TTL. Maximum TTL is 24 hours.
 
-4. **One-Time Private Key**: Private keys are returned only once and never stored on server.
+4. **No Server-Side Key Generation**: Private keys are never generated, transmitted, or stored server-side. Clients generate their own keypairs locally and supply only the public key (SEC #175).
 
 5. **Password Security**:
    - 24-char alphanumeric passwords (144+ bits of entropy)

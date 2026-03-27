@@ -12,9 +12,13 @@
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
 | 2026-03-27 | #137 | Fix cleanup service: SQLite datetime format mismatch, skipped terminal state, empty session ID | [cleanup-service.md](feature-flows/cleanup-service.md) |
+| 2026-03-26 | EVT-001 | Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines | [agent-event-subscriptions.md](feature-flows/agent-event-subscriptions.md) |
+| 2026-03-25 | #148 | Fix silent subscription registration failure — encryption key auto-generation, status endpoint, frontend warning | [subscription-management.md](feature-flows/subscription-management.md) |
+| 2026-03-25 | #74 | Auto-assign subscription to new agents (round-robin, rate-limit aware) | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-23 | VOICE-001 | Voice Chat — real-time voice conversations with agents via Gemini Live API | [voice-chat.md](feature-flows/voice-chat.md) |
 | 2026-03-21 | SUB-003 | Auto-switch subscriptions on repeated rate-limit errors — setting, tracking, orchestration | [subscription-auto-switch.md](feature-flows/subscription-auto-switch.md) |
 | 2026-03-19 | CHAT-AC | Playbook autocomplete in chat input — slash-command dropdown, ghost text, arg hints | [playbook-autocomplete.md](feature-flows/playbook-autocomplete.md) |
+| 2026-03-23 | SLACK-002 | Channel adapter abstraction + multi-agent Slack routing | [slack-channel-routing.md](feature-flows/slack-channel-routing.md) |
 | 2026-03-14 | MOB-001 | Mobile Admin — agent chat, autonomy toggle, task sending | [mobile-admin-pwa.md](feature-flows/mobile-admin-pwa.md) |
 | 2026-03-14 | MOB-001 | Mobile Admin PWA — standalone `/m` page with Agents/Ops/System tabs, installable PWA | [mobile-admin-pwa.md](feature-flows/mobile-admin-pwa.md) |
 | 2026-03-12 | TIMEOUT-001 | Per-agent configurable execution timeout (default 15 min), dynamic slot TTL | [task-execution-service.md](feature-flows/task-execution-service.md), [parallel-capacity.md](feature-flows/parallel-capacity.md) |
@@ -133,6 +137,7 @@
 | Flow | Document | Description |
 |------|----------|-------------|
 | Agent-to-Agent Collaboration | [agent-to-agent-collaboration.md](feature-flows/agent-to-agent-collaboration.md) | Inter-agent communication via MCP |
+| Agent Event Subscriptions | [agent-event-subscriptions.md](feature-flows/agent-event-subscriptions.md) | Lightweight pub/sub for inter-agent event pipelines |
 | Agent Permissions | [agent-permissions.md](feature-flows/agent-permissions.md) | Agent communication permissions |
 | Agent Sharing | [agent-sharing.md](feature-flows/agent-sharing.md) | Email-based sharing with access levels |
 | Agent Shared Folders | [agent-shared-folders.md](feature-flows/agent-shared-folders.md) | File collaboration via shared volumes |
@@ -155,6 +160,7 @@
 |------|----------|-------------|
 | Public Agent Links | [public-agent-links.md](feature-flows/public-agent-links.md) | Shareable public links with optional email verification |
 | Slack Integration | [slack-integration.md](feature-flows/slack-integration.md) | Slack as delivery channel for public links (SLACK-001) |
+| Slack Channel Routing | [slack-channel-routing.md](feature-flows/slack-channel-routing.md) | Channel adapter abstraction + multi-agent Slack routing (SLACK-002) |
 | Nevermined x402 Payments | [nevermined-payments.md](feature-flows/nevermined-payments.md) | Per-agent paid API via x402 payment protocol (NVM-001) |
 
 ### Mobile & PWA
@@ -173,7 +179,7 @@
 
 | Flow | Document | Description |
 |------|----------|-------------|
-| MCP Orchestration | [mcp-orchestration.md](feature-flows/mcp-orchestration.md) | 45+ MCP tools for agent orchestration |
+| MCP Orchestration | [mcp-orchestration.md](feature-flows/mcp-orchestration.md) | 62 MCP tools for agent orchestration |
 | Trinity Connect | [trinity-connect.md](feature-flows/trinity-connect.md) | Local-remote agent sync via WebSocket |
 
 ### GitHub Integration
