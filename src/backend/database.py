@@ -81,6 +81,13 @@ from db_models import (
     SubscriptionCredential,
     SubscriptionWithAgents,
     AgentAuthStatus,
+    # Agent Event Subscriptions (EVT-001)
+    EventSubscriptionCreate,
+    EventSubscriptionUpdate,
+    EventSubscription,
+    EventSubscriptionList,
+    AgentEvent,
+    AgentEventList,
     # Monitoring Models (MON-001)
     AgentHealthStatus,
     HealthCheckType,
@@ -123,8 +130,10 @@ from db.subscriptions import SubscriptionOperations
 from db.monitoring import MonitoringOperations
 from db.dashboard_history import DashboardHistoryOperations
 from db.slack import SlackOperations
+from db.slack_channels import SlackChannelOperations
 from db.nevermined import NeverminedOperations
 from db.operator_queue import OperatorQueueOperations
+from db.event_subscriptions import EventSubscriptionOperations
 
 
 def init_database():
@@ -250,8 +259,10 @@ class DatabaseManager:
         self._monitoring_ops = MonitoringOperations()
         self._dashboard_history_ops = DashboardHistoryOperations()
         self._slack_ops = SlackOperations()
+        self._slack_channel_ops = SlackChannelOperations()
         self._nevermined_ops = NeverminedOperations()
         self._operator_queue_ops = OperatorQueueOperations()
+        self._event_subscription_ops = EventSubscriptionOperations()
 
     # =========================================================================
     # User Management (delegated to db/users.py)
@@ -566,6 +577,9 @@ class DatabaseManager:
         return self._schedule_ops.update_execution_status(execution_id, status, response, error,
                                                           context_used, context_max, cost, tool_calls, execution_log, claude_session_id)
 
+    def mark_execution_dispatched(self, execution_id: str) -> bool:
+        return self._schedule_ops.mark_execution_dispatched(execution_id)
+
     def get_schedule_executions(self, schedule_id: str, limit: int = 50):
         return self._schedule_ops.get_schedule_executions(schedule_id, limit)
 
@@ -689,6 +703,10 @@ class DatabaseManager:
     # =========================================================================
     # Cleanup Operations (for CleanupService)
     # =========================================================================
+
+    def get_running_executions(self):
+        """Get all schedule executions currently in 'running' status."""
+        return self._schedule_ops.get_running_executions()
 
     def mark_stale_executions_failed(self, timeout_minutes: int = 30):
         """Mark executions stuck in 'running' past threshold as failed."""
@@ -1072,6 +1090,9 @@ class DatabaseManager:
     def get_agent_subscription_id(self, agent_name: str):
         return self._subscription_ops.get_agent_subscription_id(agent_name)
 
+    def get_least_used_subscription(self):
+        return self._subscription_ops.get_least_used_subscription()
+
     # --- SUB-003: Rate-Limit Tracking ---
 
     def record_rate_limit_event(self, agent_name: str, subscription_id: str, error_message: str = ""):
@@ -1223,6 +1244,55 @@ class DatabaseManager:
         return self._slack_ops.cleanup_expired_pending_verifications()
 
     # =========================================================================
+    # Slack Multi-Agent Channels (delegated to db/slack_channels.py)
+    # =========================================================================
+
+    def create_slack_workspace(self, team_id, team_name, bot_token, connected_by=None):
+        return self._slack_channel_ops.create_workspace(team_id, team_name, bot_token, connected_by)
+
+    def get_slack_workspace(self, team_id):
+        return self._slack_channel_ops.get_workspace_by_team(team_id)
+
+    def get_slack_workspace_bot_token(self, team_id):
+        return self._slack_channel_ops.get_workspace_bot_token(team_id)
+
+    def get_all_slack_workspaces(self):
+        return self._slack_channel_ops.get_all_workspaces()
+
+    def delete_slack_workspace(self, team_id):
+        return self._slack_channel_ops.delete_workspace(team_id)
+
+    def bind_slack_channel_to_agent(self, team_id, slack_channel_id, slack_channel_name,
+                                     agent_name, created_by=None, is_dm_default=False):
+        return self._slack_channel_ops.bind_channel_to_agent(
+            team_id, slack_channel_id, slack_channel_name, agent_name, created_by, is_dm_default
+        )
+
+    def get_slack_channel_agent(self, team_id, slack_channel_id):
+        return self._slack_channel_ops.get_channel_agent(team_id, slack_channel_id)
+
+    def get_slack_agent_name_for_channel(self, team_id, slack_channel_id):
+        return self._slack_channel_ops.get_agent_name_for_channel(team_id, slack_channel_id)
+
+    def get_slack_dm_default_agent(self, team_id):
+        return self._slack_channel_ops.get_dm_default_agent(team_id)
+
+    def get_slack_agents_for_workspace(self, team_id):
+        return self._slack_channel_ops.get_agents_for_workspace(team_id)
+
+    def get_slack_channel_for_agent(self, team_id, agent_name):
+        return self._slack_channel_ops.get_channel_for_agent(team_id, agent_name)
+
+    def unbind_slack_agent(self, team_id, agent_name):
+        return self._slack_channel_ops.unbind_agent(team_id, agent_name)
+
+    def register_slack_active_thread(self, team_id, channel_id, thread_ts, agent_name):
+        return self._slack_channel_ops.register_active_thread(team_id, channel_id, thread_ts, agent_name)
+
+    def is_slack_active_thread(self, team_id, channel_id, thread_ts):
+        return self._slack_channel_ops.is_active_thread(team_id, channel_id, thread_ts)
+
+    # =========================================================================
     # Nevermined Payment Integration (delegated to db/nevermined.py) - NVM-001
     # =========================================================================
 
@@ -1295,6 +1365,37 @@ class DatabaseManager:
 
     def operator_queue_item_exists(self, item_id):
         return self._operator_queue_ops.item_exists(item_id)
+
+    # =========================================================================
+    # Agent Event Subscriptions (delegated to db/event_subscriptions.py) - EVT-001
+    # =========================================================================
+
+    def create_event_subscription(self, subscriber_agent, data, created_by):
+        return self._event_subscription_ops.create_subscription(subscriber_agent, data, created_by)
+
+    def get_event_subscription(self, subscription_id):
+        return self._event_subscription_ops.get_subscription(subscription_id)
+
+    def list_event_subscriptions(self, subscriber_agent=None, source_agent=None, enabled_only=False, limit=100):
+        return self._event_subscription_ops.list_subscriptions(subscriber_agent, source_agent, enabled_only, limit)
+
+    def update_event_subscription(self, subscription_id, event_type=None, target_message=None, enabled=None):
+        return self._event_subscription_ops.update_subscription(subscription_id, event_type, target_message, enabled)
+
+    def delete_event_subscription(self, subscription_id):
+        return self._event_subscription_ops.delete_subscription(subscription_id)
+
+    def delete_agent_event_subscriptions(self, agent_name):
+        return self._event_subscription_ops.delete_agent_subscriptions(agent_name)
+
+    def find_matching_event_subscriptions(self, source_agent, event_type):
+        return self._event_subscription_ops.find_matching_subscriptions(source_agent, event_type)
+
+    def create_agent_event(self, source_agent, event_type, payload=None, subscriptions_triggered=0):
+        return self._event_subscription_ops.create_event(source_agent, event_type, payload, subscriptions_triggered)
+
+    def list_agent_events(self, source_agent=None, event_type=None, limit=50):
+        return self._event_subscription_ops.list_events(source_agent, event_type, limit)
 
 
 # Global database manager instance

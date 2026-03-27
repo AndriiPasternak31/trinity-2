@@ -13,7 +13,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from dependencies import get_current_user, CurrentUser
+from dependencies import get_current_user, require_admin, CurrentUser
 from services.process_engine.services.alerts import (
     CostAlertService,
     ThresholdType,
@@ -182,7 +182,11 @@ async def set_process_threshold(
 ):
     """
     Set or update a threshold for a process.
+
+    Admin-only.
     """
+    require_admin(current_user)
+
     service = get_alert_service()
 
     try:
@@ -216,7 +220,11 @@ async def delete_process_threshold(
 ):
     """
     Delete a threshold for a process.
+
+    Admin-only.
     """
+    require_admin(current_user)
+
     service = get_alert_service()
 
     try:

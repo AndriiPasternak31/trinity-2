@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Optional
 
 from models import User, ChatMessageRequest, ModelChangeRequest, ParallelTaskRequest, ActivityType, ActivityState, TaskExecutionStatus, ExecutionSource
-from dependencies import get_current_user, get_authorized_agent
+from dependencies import get_current_user, get_authorized_agent, get_owned_agent
 from services.docker_service import get_agent_container
 from services.activity_service import activity_service
 from services.execution_queue import get_execution_queue, QueueFullError, AgentBusyError
@@ -952,7 +952,7 @@ async def get_agent_chat_history(
 
 @router.delete("/{name}/chat/history")
 async def reset_agent_chat_history(
-    name: str = Depends(get_authorized_agent),
+    name: str = Depends(get_owned_agent),
     current_user: User = Depends(get_current_user)
 ):
     """Reset/clear agent's conversation history (start a new session)."""

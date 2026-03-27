@@ -17,6 +17,7 @@ The Dedicated Scheduler Service is a standalone Python service that executes sch
 - **Independent deployment** - Can be scaled/monitored separately from API workers
 - **Event publishing** - Redis pub/sub for WebSocket compatibility
 - **Health endpoints** - Kubernetes-ready health checks
+- **Process schedules** - Cron-triggered process execution alongside agent schedules
 
 ---
 
@@ -35,29 +36,30 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 |                                                                    |
 |  +------------------+    +------------------+    +--------------+  |
 |  |     Backend      |    |    Scheduler     |    |    Agent     |  |
-|  |   (API only)     |    |   (singleton)    |    |  Containers  |  |
-|  |   N workers      |    |   1 replica      |    |              |  |
+|  |  (API + Task     |    |   (singleton)    |    |  Containers  |  |
+|  |   Execution)     |    |   1 replica      |    |              |  |
 |  +--------+---------+    +--------+---------+    +------+-------+  |
 |           |                       |                     ^          |
-|           |   CRUD operations     |                     |          |
+|           |   CRUD operations     | POST /api/internal/ |          |
+|           |                       | execute-task        |          |
 |           v                       v                     |          |
 |  +------------------+    +------------------+           |          |
-|  |     SQLite       |    |      Redis       |           |          |
-|  |  - Schedules     |<---|  - Locks         |           |          |
-|  |  - Executions    |    |  - Events        |           |          |
-|  +------------------+    |  - Heartbeats    |-----------+          |
-|                          +------------------+    HTTP POST         |
-|                                                  /api/task         |
+|  |     SQLite       |    |      Redis       |    Backend calls     |
+|  |  - Schedules     |<---|  - Locks         |    agent /api/task   |
+|  |  - Executions    |    |  - Events        |    via TaskExec-     |
+|  +------------------+    |  - Heartbeats    |    utionService      |
+|                          +------------------+                      |
 +------------------------------------------------------------------+
 ```
 
 **Data Flow**:
-1. Backend writes schedule CRUD to SQLite (`agent_schedules` table)
+1. Backend writes schedule CRUD to SQLite (`agent_schedules` / `process_schedules` tables)
 2. Scheduler reads schedules from SQLite on startup
 3. APScheduler triggers jobs at cron times
 4. Scheduler acquires Redis lock before execution
-5. Scheduler calls backend's `POST /api/internal/execute-task` which routes through `TaskExecutionService` for slot management, activity tracking, agent HTTP call, and credential sanitization
-6. Scheduler publishes events to Redis for WebSocket relay
+5. For **agent schedules**: Scheduler calls backend's `POST /api/internal/execute-task` which routes through `TaskExecutionService` for slot management, activity tracking, agent HTTP call, and credential sanitization
+6. For **process schedules**: Scheduler calls backend's `POST /api/processes/{id}/execute` to start a process execution
+7. Scheduler publishes events to Redis for WebSocket relay
 
 ---
 
@@ -66,6 +68,7 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 - **Service Startup**: `python -m scheduler.main`
 - **Health Check**: `GET http://localhost:8001/health`
 - **Status Endpoint**: `GET http://localhost:8001/status`
+- **Manual Trigger**: `POST http://localhost:8001/api/schedules/{schedule_id}/trigger`
 - **Docker**: `docker-compose up scheduler`
 
 ---
@@ -74,12 +77,12 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 
 | Category | File | Purpose |
 |----------|------|---------|
-| Entry | `src/scheduler/main.py` | SchedulerApp, signal handlers, health server |
+| Entry | `src/scheduler/main.py` | SchedulerApp, signal handlers, health server, manual trigger endpoint |
 | Core | `src/scheduler/service.py` | SchedulerService with APScheduler integration |
 | Config | `src/scheduler/config.py` | Environment-based configuration |
-| Models | `src/scheduler/models.py` | Schedule, ScheduleExecution, AgentTaskResponse |
+| Models | `src/scheduler/models.py` | Schedule, ScheduleExecution, ProcessSchedule, ProcessScheduleExecution |
 | Database | `src/scheduler/database.py` | SQLite read/write operations |
-| HTTP | `src/scheduler/agent_client.py` | Agent container communication |
+| HTTP | `src/scheduler/agent_client.py` | Agent container communication (legacy, unused in main path) |
 | Locking | `src/scheduler/locking.py` | Redis distributed locks |
 | Docker | `docker/scheduler/Dockerfile` | Container definition |
 | Docker | `docker/scheduler/requirements.txt` | Python dependencies |
@@ -90,7 +93,7 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 
 ## Configuration
 
-**Location**: `src/scheduler/config.py:13-68`
+**Location**: `src/scheduler/config.py:13-94`
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -101,12 +104,14 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 | `HEALTH_PORT` | `8001` | Health check server port |
 | `HEALTH_HOST` | `0.0.0.0` | Health check server bind address |
 | `DEFAULT_TIMEZONE` | `UTC` | Default timezone for schedules |
-| `AGENT_TIMEOUT` | `900` | Default agent request timeout (15 min) - can be overridden per-schedule |
+| `SCHEDULE_RELOAD_INTERVAL` | `60` | Seconds between schedule sync checks |
+| `AGENT_TIMEOUT` | `900` | Default agent request timeout (15 min) |
+| `POLL_INTERVAL` | `10` | Seconds between DB polls for async task completion (SCHED-ASYNC-001) |
+| `MISFIRE_GRACE_TIME` | `3600` | Seconds after a missed trigger that APScheduler will still execute (Issue #145) |
+| `BACKEND_URL` | `http://backend:8000` | Backend API URL for process executions and task delegation |
+| `INTERNAL_API_SECRET` | _(empty)_ | Shared secret for backend internal API auth (C-003) |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
 | `PUBLISH_EVENTS` | `true` | Enable Redis event publishing |
-| `INTERNAL_API_SECRET` | _(empty)_ | Shared secret for backend internal API auth (C-003). Must match backend's `INTERNAL_API_SECRET` or `SECRET_KEY`. |
-| `POLL_INTERVAL` | `10` | Seconds between DB polls while waiting for async task completion (SCHED-ASYNC-001) |
-| `MISFIRE_GRACE_TIME` | `3600` | Seconds after a missed trigger that APScheduler will still execute the job (Issue #145). Also used as the window for startup catch-up sweep. |
 
 ---
 
@@ -115,62 +120,76 @@ As a **platform administrator**, I want **scheduled tasks to execute exactly onc
 **Trigger**: Container starts or `python -m scheduler.main`
 
 ```
-main.py:170                     main.py:51                      service.py:71
+main.py:265                     main.py:51                      service.py:80
 asyncio.run(main())   -->       SchedulerApp.start()   -->      SchedulerService.initialize()
                                 |                               |
                                 v                               v
-                                Start health server             Load enabled schedules from DB
+                                Start health server             Ensure process_schedules table
                                 (aiohttp on :8001)              |
                                 |                               v
-                                v                               Create APScheduler
-                                Setup signal handlers           (AsyncIOScheduler + MemoryJobStore)
-                                |                               |
-                                v                               v
-                                Run heartbeat loop              Add CronTrigger jobs
-                                (30s interval)                  |
-                                                                v
+                                v                               Load enabled agent schedules
+                                main.py:68                      Detect missed schedules (Issue #145)
+                                initialize()                    |
+                                |                               v
+                                v                               Load enabled process schedules
+                                main.py:71                      |
+                                fire_missed_schedules()         v
+                                |                               Add CronTrigger jobs
+                                v                               Add EVENT_JOB_MAX_INSTANCES listener
+                                Run heartbeat/sync loop         |
+                                (30s heartbeat, 60s sync)       v
                                                                 scheduler.start()
 ```
 
-**Key Code** (`service.py:71-98`):
+**Key Code** (`service.py:80-141`):
 ```python
 def initialize(self):
     """Initialize the scheduler and load all enabled schedules."""
     if self._initialized:
-        logger.warning("Scheduler already initialized")
         return
 
+    # Ensure process schedules table exists
+    self.db.ensure_process_schedules_table()
+
     # Create scheduler with memory job store
-    jobstores = {
-        'default': MemoryJobStore()
-    }
+    jobstores = {'default': MemoryJobStore()}
+    self.scheduler = AsyncIOScheduler(jobstores=jobstores, timezone=pytz.UTC)
 
-    self.scheduler = AsyncIOScheduler(
-        jobstores=jobstores,
-        timezone=pytz.UTC
-    )
-
-    # Load all enabled schedules from database
+    # Load all enabled agent schedules from database
     schedules = self.db.list_all_enabled_schedules()
+
+    # Detect missed schedules BEFORE _add_job overwrites next_run_at (Issue #145)
+    self._missed_schedules = self._get_missed_schedules(schedules)
+
     for schedule in schedules:
         self._add_job(schedule)
+        self._schedule_snapshot[schedule.id] = (schedule.enabled, ...)
 
-    # Start the scheduler
+    # Load all enabled process schedules from database
+    process_schedules = self.db.list_all_enabled_process_schedules()
+    for process_schedule in process_schedules:
+        self._add_process_job(process_schedule)
+        self._process_schedule_snapshot[process_schedule.id] = (...)
+
+    # Add listener for skipped executions (max_instances reached)
+    self.scheduler.add_listener(self._on_job_max_instances, EVENT_JOB_MAX_INSTANCES)
+
     self.scheduler.start()
     self._initialized = True
     self._start_time = datetime.utcnow()
-
-    logger.info(f"Scheduler initialized with {len(schedules)} enabled schedules")
 ```
+
+**Missed Schedule Recovery** (`service.py:142-194`, `service.py:209-222`):
+On startup, `_get_missed_schedules()` detects schedules whose `next_run_at` is in the past but within the `misfire_grace_time` window. After initialization, `fire_missed_schedules()` fires catch-up executions for each.
 
 ---
 
-## Flow 2: Schedule Execution (Cron Trigger)
+## Flow 2: Agent Schedule Execution (Cron Trigger)
 
 **Trigger**: APScheduler CronTrigger fires at scheduled time
 
 ```
-APScheduler                     service.py:219                  locking.py:221
+APScheduler                     service.py:597                  locking.py:221
 CronTrigger fires   -->         _execute_schedule()   -->       try_acquire_schedule_lock()
                                 |                               |
                                 v                               v (if acquired)
@@ -181,7 +200,7 @@ CronTrigger fires   -->         _execute_schedule()   -->       try_acquire_sche
                                 Skip execution                  _execute_schedule_with_lock()
                                 Log "already running"           |
                                                                 v
-                                                                database.py:167
+                                                                database.py:196
                                                                 create_execution()
                                                                 INSERT schedule_executions
                                                                 |
@@ -189,33 +208,30 @@ CronTrigger fires   -->         _execute_schedule()   -->       try_acquire_sche
                                                                 Publish "started" event
                                                                 |
                                                                 v
+                                                                _call_backend_execute_task()
                                                                 POST /api/internal/execute-task
                                                                 (backend TaskExecutionService)
-                                                                → slot acquire, activity track,
-                                                                  agent HTTP call, sanitize,
-                                                                  slot release
                                                                 |
                                                                 v
-                                                                database.py:205
-                                                                update_execution_status()
+                                                                _poll_execution_completion()
+                                                                (polls DB every 10s)
                                                                 |
                                                                 v
+                                                                Update schedule run times
                                                                 Publish "completed" event
                                                                 |
                                                                 v
                                                                 lock.release()
 ```
 
-**Lock Acquisition** (`service.py:219-235`):
+**Lock Acquisition** (`service.py:597-613`):
 ```python
 async def _execute_schedule(self, schedule_id: str):
     """
     Execute a scheduled task.
-
     This is called by APScheduler when a schedule is due.
     Uses distributed locking to prevent duplicate executions.
     """
-    # Try to acquire lock - if failed, another instance is executing
     lock = self.lock_manager.try_acquire_schedule_lock(schedule_id)
     if not lock:
         logger.info(f"Schedule {schedule_id} already being executed by another instance")
@@ -227,107 +243,149 @@ async def _execute_schedule(self, schedule_id: str):
         lock.release()
 ```
 
-**Execution Logic** (`service.py:237-345`):
+**Execution Logic** (`service.py:615-758`):
 ```python
-async def _execute_schedule_with_lock(self, schedule_id: str):
+async def _execute_schedule_with_lock(self, schedule_id: str, triggered_by: str = "schedule"):
     """Execute schedule after acquiring lock."""
     schedule = self.db.get_schedule(schedule_id)
     if not schedule:
-        logger.error(f"Schedule {schedule_id} not found")
         return
 
-    if not schedule.enabled:
-        logger.info(f"Schedule {schedule_id} is disabled, skipping")
+    if not schedule.enabled and triggered_by == "schedule":
         return
 
-    # Check if agent has autonomy enabled
-    if not self.db.get_autonomy_enabled(schedule.agent_name):
-        logger.info(f"Schedule {schedule_id} skipped: agent {schedule.agent_name} autonomy is disabled")
+    # Check if agent has autonomy enabled (only for cron-triggered)
+    if triggered_by == "schedule" and not self.db.get_autonomy_enabled(schedule.agent_name):
         return
 
-    logger.info(f"Executing schedule: {schedule.name} for agent {schedule.agent_name}")
-
-    # Create execution record (MODEL-001: record model_used)
-    execution = self.db.create_execution(
-        schedule_id=schedule.id,
-        agent_name=schedule.agent_name,
-        message=schedule.message,
-        triggered_by="schedule",
-        model_used=schedule.model
-    )
+    # Create execution record
+    execution = self.db.create_execution(...)
 
     # Broadcast execution started
-    await self._publish_event({
-        "type": "schedule_execution_started",
-        "agent": schedule.agent_name,
-        "schedule_id": schedule.id,
-        "execution_id": execution.id,
-        "schedule_name": schedule.name
-    })
+    await self._publish_event({...})
 
     try:
-        # Execute task via backend's unified TaskExecutionService
-        # This handles: slot acquire, activity tracking, agent HTTP call,
-        # credential sanitization, and slot release
-        result = await self._call_backend_execute_task(
-            agent_name=schedule.agent_name,
-            message=schedule.message,
-            triggered_by="schedule",
-            model=schedule.model,
-            timeout_seconds=schedule.timeout_seconds or config.agent_timeout,
-            allowed_tools=schedule.allowed_tools,
-            execution_id=execution.id,
-        )
+        # Delegate to backend's TaskExecutionService
+        result = await self._call_backend_execute_task(...)
 
-        # Update execution status from backend response
-        self.db.update_execution_status(
-            execution_id=execution.id,
-            status="success",
-            response=result.get("response", ""),
-            context_used=result.get("context_used"),
-            context_max=result.get("context_max"),
-            cost=result.get("cost"),
-        )
-
-        # Update schedule last run time
-        now = datetime.utcnow()
-        next_run = self._get_next_run_time(schedule.cron_expression, schedule.timezone)
-        self.db.update_schedule_run_times(schedule.id, last_run_at=now, next_run_at=next_run)
-
-        logger.info(f"Schedule {schedule.name} executed successfully")
-
-        # Broadcast execution completed
-        await self._publish_event({
-            "type": "schedule_execution_completed",
-            "agent": schedule.agent_name,
-            "schedule_id": schedule.id,
-            "execution_id": execution.id,
-            "status": "success"
-        })
+        status = result.get("status", ExecutionStatus.FAILED)
+        if status == ExecutionStatus.SUCCESS:
+            # Update schedule last run time
+            ...
+        else:
+            # Log error, detect auth failures
+            ...
 
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Schedule {schedule.name} execution failed: {error_msg}")
+        # SCHED-ASYNC-001: Check DB before overwriting — if backend already
+        # finalized, preserve status instead of marking as 'failed'
+        current = self.db.get_execution(execution.id)
+        if current and current.status != ExecutionStatus.RUNNING:
+            pass  # Don't overwrite
+        else:
+            self.db.update_execution_status(execution_id=execution.id, status=ExecutionStatus.FAILED, ...)
+```
 
-        self.db.update_execution_status(
-            execution_id=execution.id,
-            status="failed",
-            error=error_msg
-        )
+**Backend Task Delegation** (`service.py:760-833`):
 
-        await self._publish_event({
-            "type": "schedule_execution_completed",
-            "agent": schedule.agent_name,
-            "schedule_id": schedule.id,
-            "execution_id": execution.id,
-            "status": "failed",
-            "error": error_msg
-        })
+Uses async fire-and-forget dispatch (SCHED-ASYNC-001):
+1. `POST /api/internal/execute-task` with `async_mode=True` and 30s HTTP timeout
+2. If backend accepts (`{"status": "accepted", "async_mode": true}`), poll DB
+3. Backward compatible: if backend returns sync result, use directly
+
+**DB Polling** (`service.py:835-887`):
+```python
+async def _poll_execution_completion(self, execution_id, timeout_seconds):
+    """Poll DB every config.poll_interval seconds until status != 'running'."""
+    deadline = time.monotonic() + float(timeout_seconds) + 60
+    while time.monotonic() < deadline:
+        await asyncio.sleep(config.poll_interval)
+        execution = self.db.get_execution(execution_id)
+        if execution and execution.status != ExecutionStatus.RUNNING:
+            return {
+                "execution_id": execution.id,
+                "status": execution.status,
+                "response": execution.response,
+                ...
+            }
+    raise Exception(f"Polling deadline exceeded for execution {execution_id}")
 ```
 
 ---
 
-## Flow 3: Distributed Locking
+## Flow 3: Process Schedule Execution
+
+**Trigger**: APScheduler CronTrigger fires for a process schedule
+
+```
+APScheduler                     service.py:987                  locking.py:221
+CronTrigger fires   -->         _execute_process_schedule() --> try_acquire_schedule_lock()
+                                |                               key: "process_{schedule_id}"
+                                v (if acquired)                 |
+                                _execute_process_schedule_with_lock()
+                                service.py:1005                 |
+                                |                               v
+                                v                               database.py:602
+                                Get process schedule            create_process_schedule_execution()
+                                from DB                         INSERT process_schedule_executions
+                                |                               |
+                                v                               v
+                                Publish "started" event         POST /api/processes/{id}/execute
+                                |                               (backend process execution API)
+                                v                               |
+                                On success:                     v
+                                - Update execution status       Update process schedule run times
+                                - Publish "completed" event     |
+                                                                v
+                                On failure:                     lock.release()
+                                - Update execution as failed
+                                - Publish "completed" with error
+```
+
+**Process Execution** (`service.py:987-1145`):
+```python
+async def _execute_process_schedule(self, schedule_id: str):
+    """Execute a scheduled process. Uses distributed locking."""
+    lock = self.lock_manager.try_acquire_schedule_lock(f"process_{schedule_id}")
+    if not lock:
+        return
+    try:
+        await self._execute_process_schedule_with_lock(schedule_id)
+    finally:
+        lock.release()
+
+async def _execute_process_schedule_with_lock(self, schedule_id: str):
+    """Execute process schedule after acquiring lock."""
+    schedule = self.db.get_process_schedule(schedule_id)
+    # ... validation ...
+
+    execution = self.db.create_process_schedule_execution(...)
+    await self._publish_event({"type": "process_schedule_execution_started", ...})
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{config.backend_url}/api/processes/{schedule.process_id}/execute",
+            json={"triggered_by": "schedule", "input_data": {"trigger": {...}}},
+            timeout=60.0
+        )
+        # Handle success/failure, update execution status, publish events
+```
+
+**Key Differences from Agent Schedules**:
+- Uses `process_schedules` / `process_schedule_executions` tables (separate from agent schedules)
+- Calls `POST /api/processes/{id}/execute` instead of `/api/internal/execute-task`
+- No autonomy check (process-level, not agent-level)
+- No async polling -- uses synchronous HTTP call with 60s timeout
+- Lock key prefixed with `process_` to avoid collision with agent schedule locks
+
+**Process Schedule Job Management** (`service.py:934-985`):
+- `_get_process_job_id()` (line 934): Returns `process_schedule_{schedule_id}`
+- `_add_process_job()` (line 938): Adds CronTrigger job for process schedule
+- `_remove_process_job()` (line 975): Removes process schedule job from APScheduler
+
+---
+
+## Flow 4: Distributed Locking
 
 **Purpose**: Prevent duplicate executions across multiple scheduler instances or restarts
 
@@ -357,16 +415,6 @@ release()           -->         Lua script:
 **Lock Implementation** (`locking.py:55-90`):
 ```python
 def acquire(self, blocking: bool = False, blocking_timeout: float = None) -> bool:
-    """
-    Attempt to acquire the lock.
-
-    Args:
-        blocking: If True, wait for lock to become available
-        blocking_timeout: Max time to wait if blocking
-
-    Returns:
-        True if lock was acquired, False otherwise
-    """
     import secrets
     self._lock_token = secrets.token_hex(16)
 
@@ -385,74 +433,26 @@ def acquire(self, blocking: bool = False, blocking_timeout: float = None) -> boo
         return False
 
 def _try_acquire(self) -> bool:
-    """Try to acquire the lock once."""
-    return self.redis.set(
-        self.name,
-        self._lock_token,
-        nx=True,  # Only if not exists
-        ex=self.timeout  # Expiration in seconds
-    )
+    return self.redis.set(self.name, self._lock_token, nx=True, ex=self.timeout)
 ```
 
 **Auto-Renewal** (`locking.py:129-154`):
 ```python
 def _renewal_loop(self):
     """Background thread that renews the lock."""
-    # Renew at 50% of timeout to be safe
     renewal_interval = self.timeout / 2
-
     while not self._stop_renewal.wait(renewal_interval):
-        try:
-            # Only extend if we still own the lock
-            script = """
-            if redis.call("get", KEYS[1]) == ARGV[1] then
-                return redis.call("expire", KEYS[1], ARGV[2])
-            else
-                return 0
-            end
-            """
-            result = self.redis.eval(
-                script, 1, self.name, self._lock_token, self.timeout
-            )
-            if not result:
-                logger.warning(f"Lock {self.name} renewal failed - lock lost")
-                break
-            else:
-                logger.debug(f"Lock {self.name} renewed for {self.timeout}s")
-        except Exception as e:
-            logger.error(f"Error renewing lock {self.name}: {e}")
+        script = """
+        if redis.call("get", KEYS[1]) == ARGV[1] then
+            return redis.call("expire", KEYS[1], ARGV[2])
+        else
+            return 0
+        end
+        """
+        result = self.redis.eval(script, 1, self.name, self._lock_token, self.timeout)
+        if not result:
             break
 ```
-
----
-
-## Flow 4: Agent Communication (via Backend Internal API)
-
-**Purpose**: Send scheduled task to backend's `TaskExecutionService`, which handles the full execution lifecycle (slot management, activity tracking, agent HTTP call, credential sanitization).
-
-> **Note (2026-03-11, SCHED-ASYNC-001)**: The scheduler now uses **async fire-and-forget dispatch** to avoid TCP connection drops on long-running tasks. The HTTP call returns immediately with `{"status": "accepted"}`, and the scheduler polls the shared SQLite DB for completion.
-
-```
-service.py                      Backend Internal API             TaskExecutionService
-_call_backend_execute_task()     POST /api/internal/              execute_task()
-  --> httpx.post()      -->     execute-task           -->       (spawned as background task)
-      {agent_name,               async_mode=True                  +-- acquire slot
-       message,                  internal.py                      +-- track activity
-       triggered_by,                                              +-- POST agent /api/task
-       model?,           <--    200 OK (immediate)                +-- sanitize credentials
-       timeout_seconds,          {status: "accepted"}             +-- update execution in DB
-       allowed_tools?,                                            +-- release slot
-       execution_id?,
-       async_mode: true}
-                                                                 v
-  _poll_execution_completion()                          DB updated: status → success/failed
-  --> db.get_execution(id)  -->  SQLite poll (every 10s)
-  --> returns when status != "running"
-```
-
-**Backward Compatibility**: If the backend returns a non-`accepted` response (old backend without `async_mode` support), the scheduler treats it as a sync result and returns directly.
-
-The `agent_client.py` module still exists for reference but is no longer used in the main execution path. The `TaskExecutionService` in the backend handles the actual agent HTTP calls via `agent_post_with_retry()`.
 
 ---
 
@@ -461,7 +461,7 @@ The `agent_client.py` module still exists for reference but is no longer used in
 **Purpose**: Broadcast execution events to Redis for backend WebSocket relay
 
 ```
-service.py:387                  Redis                           Backend
+service.py:1166                 Redis                           Backend
 _publish_event()    -->         PUBLISH scheduler:events  -->   (subscriber)
 |                               {type, agent, ...}              |
 v                                                               v
@@ -473,26 +473,199 @@ redis.publish()                                                 clients
 
 | Event | Fields | Description |
 |-------|--------|-------------|
-| `schedule_execution_started` | agent, schedule_id, execution_id, schedule_name | Execution begins |
-| `schedule_execution_completed` | agent, schedule_id, execution_id, status, error? | Execution ends |
+| `schedule_execution_started` | agent, schedule_id, execution_id, schedule_name, triggered_by | Agent execution begins |
+| `schedule_execution_completed` | agent, schedule_id, execution_id, status, error? | Agent execution ends |
+| `schedule_execution_skipped` | agent, schedule_id, execution_id, schedule_name, reason | Agent execution skipped (max_instances) |
+| `process_schedule_execution_started` | process_id, process_name, schedule_id, trigger_id, execution_id | Process execution begins |
+| `process_schedule_execution_completed` | process_id, process_name, schedule_id, execution_id, process_execution_id?, status, error? | Process execution ends |
+| `process_schedule_execution_skipped` | process_id, process_name, schedule_id, trigger_id, execution_id, reason | Process execution skipped (max_instances) |
 
-**Publishing Code** (`service.py:387-401`):
+**Publishing Code** (`service.py:1166-1180`):
 ```python
 async def _publish_event(self, event: dict):
-    """
-    Publish an event to Redis for WebSocket compatibility.
-
-    Events are published to a channel that the backend can subscribe to.
-    """
     if not config.publish_events:
         return
-
     try:
         event_json = json.dumps(event)
         self.redis.publish("scheduler:events", event_json)
-        logger.debug(f"Published event: {event['type']}")
     except Exception as e:
         logger.error(f"Failed to publish event: {e}")
+```
+
+---
+
+## Flow 6: Periodic Schedule Sync
+
+**Purpose**: Detect new/updated/deleted schedules without container restart
+
+**Trigger**: Every 60 seconds (configurable via `SCHEDULE_RELOAD_INTERVAL`)
+
+```
+main.py:211                   service.py:345                  service.py:362
+_run_until_shutdown() -->     _sync_schedules()      -->      _sync_agent_schedules()
+(main loop)                   |                                |
+|                             v                                v
+v                             _sync_agent_schedules()          Compare DB with _schedule_snapshot
+heartbeat (30s)               _sync_process_schedules()        Build current_state from list_all_schedules()
+|                             service.py:426                   Detect: new / deleted / updated
+v                                                              Update APScheduler jobs
+check sync_interval                                            Update snapshot
+(>= 60s since last?)
+```
+
+**Agent Schedule Sync** (`service.py:362-424`):
+```python
+async def _sync_agent_schedules(self):
+    """Sync agent schedules with database."""
+    all_schedules = self.db.list_all_schedules()
+
+    # Build current state map: schedule_id -> (enabled, updated_at_iso)
+    current_state = {}
+    for schedule in all_schedules:
+        current_state[schedule.id] = (schedule.enabled, schedule.updated_at.isoformat())
+
+    # Detect changes
+    snapshot_ids = set(self._schedule_snapshot.keys())
+    current_ids = set(current_state.keys())
+
+    # New schedules (add jobs)
+    for schedule_id in (current_ids - snapshot_ids):
+        if schedule.enabled:
+            self._add_job(schedule)
+        self._schedule_snapshot[schedule_id] = current_state[schedule_id]
+
+    # Deleted schedules (remove jobs)
+    for schedule_id in (snapshot_ids - current_ids):
+        self._remove_job(schedule_id)
+        del self._schedule_snapshot[schedule_id]
+
+    # Updated schedules (enabled/disabled or cron changed)
+    for schedule_id in (snapshot_ids & current_ids):
+        if old_state != new_state:
+            # Re-add job with updated config
+```
+
+**Process Schedule Sync** (`service.py:426-483`):
+
+Identical pattern to agent schedule sync but operates on `_process_schedule_snapshot` and uses `_add_process_job()` / `_remove_process_job()`. Reads from `process_schedules` table via `db.list_all_process_schedules()`.
+
+---
+
+## Flow 7: Manual Trigger (via Dedicated Scheduler)
+
+**Purpose**: Manual schedule triggers are routed through the dedicated scheduler for consistent locking and activity tracking.
+
+**Trigger**: User clicks "Run Now" button in UI or API call
+
+```
+Backend API                      Scheduler Service              Backend Internal API
+POST /api/agents/{name}/         POST /api/schedules/           POST /api/internal/
+    schedules/{id}/trigger       {id}/trigger                   execute-task
+|                                |                               |
+v                                v                               v
+schedules.py:trigger_schedule    main.py:136                     TaskExecutionService
+  -> httpx.post to scheduler       _trigger_handler()              execute_task()
+                                   -> validate schedule
+                                   -> create_task(_execute_manual_trigger)
+                                   -> return immediately
+
+                                   main.py:191
+                                   _execute_manual_trigger()
+                                     -> acquire lock
+                                     -> _execute_schedule_with_lock(triggered_by="manual")
+                                       -> POST /api/internal/execute-task
+```
+
+**Endpoint**: `POST /api/schedules/{schedule_id}/trigger` (scheduler service port 8001)
+
+**Response**:
+```json
+{
+  "status": "triggered",
+  "schedule_id": "abc123",
+  "schedule_name": "Daily Report",
+  "agent_name": "my-agent",
+  "message": "Execution started in background"
+}
+```
+
+---
+
+## Flow 8: Activity Tracking (via TaskExecutionService)
+
+**Purpose**: Create `agent_activities` records for Timeline dashboard visibility
+
+**Trigger**: Both cron-triggered and manual schedule executions
+
+> **Note**: Activity tracking for scheduled executions is handled automatically by `TaskExecutionService` when the scheduler calls `POST /api/internal/execute-task`. The scheduler no longer calls activity tracking endpoints directly.
+
+```
+Scheduler Service                     Backend Internal API
+_execute_schedule_with_lock()   -->   POST /api/internal/execute-task
+|                                     {agent_name, message, ..., async_mode: true}
+v                                     |
+<-- 200 accepted (immediate) <---     Backend spawns background task:
+|                                       TaskExecutionService.execute_task()
+v                                         -> activity_service.track_activity(CHAT_START)
+_poll_execution_completion()              -> POST to agent /api/task
+  polls DB every 10s                      -> activity_service.complete_activity()
+  until status != "running"               -> slot_service.release_slot()
+|                                         -> update execution status in DB
+v
+Returns result from DB
+```
+
+---
+
+## Flow 9: Skipped Execution Recording (Issue #46)
+
+**Purpose**: Record executions dropped due to APScheduler's max_instances=1 constraint
+
+**Trigger**: APScheduler fires `EVENT_JOB_MAX_INSTANCES` when a job is skipped
+
+```
+APScheduler                     service.py:488                  database.py:237
+EVENT_JOB_MAX_INSTANCES  -->    _on_job_max_instances()  -->    create_skipped_execution()
+|                               |                               or create_skipped_process_
+v                               v                               schedule_execution()
+Job skipped because             Parse job_id prefix:            |
+max_instances=1 reached         "schedule_" -> agent            v
+                                "process_schedule_" -> process  INSERT with status='skipped'
+                                |                               duration_ms=0
+                                v                               error=skip_reason
+                                _record_skipped_agent_schedule()
+                                service.py:512
+                                or _record_skipped_process_schedule()
+                                service.py:552
+                                |
+                                v
+                                Publish event
+                                "schedule_execution_skipped"
+                                or "process_schedule_execution_skipped"
+```
+
+**Handler** (`service.py:488-511`):
+```python
+def _on_job_max_instances(self, event: JobExecutionEvent):
+    job_id = event.job_id
+    if job_id.startswith("schedule_"):
+        schedule_id = job_id[len("schedule_"):]
+        self._record_skipped_agent_schedule(schedule_id)
+    elif job_id.startswith("process_schedule_"):
+        schedule_id = job_id[len("process_schedule_"):]
+        self._record_skipped_process_schedule(schedule_id)
+```
+
+**WebSocket Event**:
+```json
+{
+  "type": "schedule_execution_skipped",
+  "agent": "my-agent",
+  "schedule_id": "abc123",
+  "execution_id": "exec-456",
+  "schedule_name": "Daily Report",
+  "reason": "Previous execution still running"
+}
 ```
 
 ---
@@ -501,37 +674,100 @@ async def _publish_event(self, event: dict):
 
 **Location**: `src/scheduler/database.py`
 
-### Read Operations (Schedules)
+### Agent Schedule Read Operations
 
 | Method | Line | SQL | Purpose |
 |--------|------|-----|---------|
-| `get_schedule(id)` | 95-101 | `SELECT * FROM agent_schedules WHERE id = ?` | Get single schedule |
-| `list_all_enabled_schedules()` | 103-111 | `SELECT * FROM agent_schedules WHERE enabled = 1` | Load on startup |
-| `list_agent_schedules(name)` | 113-121 | `SELECT * FROM agent_schedules WHERE agent_name = ?` | Per-agent list |
-| `get_autonomy_enabled(name)` | 123-131 | `SELECT autonomy_enabled FROM agent_ownership` | Check autonomy |
+| `get_schedule(id)` | 114-120 | `SELECT * FROM agent_schedules WHERE id = ?` | Get single schedule |
+| `list_all_enabled_schedules()` | 122-130 | `SELECT * FROM agent_schedules WHERE enabled = 1` | Load on startup |
+| `list_all_schedules()` | 132-140 | `SELECT * FROM agent_schedules` | Sync detection (all states) |
+| `list_agent_schedules(name)` | 142-150 | `SELECT * FROM agent_schedules WHERE agent_name = ?` | Per-agent list |
+| `get_autonomy_enabled(name)` | 152-160 | `SELECT autonomy_enabled FROM agent_ownership` | Check autonomy |
 
-### Write Operations (Schedules)
-
-| Method | Line | SQL | Purpose |
-|--------|------|-----|---------|
-| `update_schedule_run_times()` | 137-161 | `UPDATE agent_schedules SET last_run_at, next_run_at` | Track execution times |
-
-### Execution Operations
+### Agent Schedule Write Operations
 
 | Method | Line | SQL | Purpose |
 |--------|------|-----|---------|
-| `create_execution()` | 167-203 | `INSERT INTO schedule_executions` | Create execution record (MODEL-001: includes `model_used`) |
-| `update_execution_status()` | 233-284 | `UPDATE schedule_executions SET status, response, ..., claude_session_id` | Complete execution (EXEC-023: added `claude_session_id` param) |
-| `get_execution(id)` | 252-258 | `SELECT * FROM schedule_executions WHERE id = ?` | Get execution |
-| `get_recent_executions()` | 260-269 | `SELECT * FROM schedule_executions ORDER BY started_at DESC` | List recent |
+| `update_schedule_run_times()` | 166-190 | `UPDATE agent_schedules SET last_run_at, next_run_at` | Track execution times |
 
-**Session ID Storage (EXEC-023)**: `update_execution_status()` now accepts optional `claude_session_id` parameter (line 244) which stores the Claude Code session ID for `--resume` support. This enables the "Continue Execution as Chat" feature for scheduled executions.
+### Agent Execution Operations
+
+| Method | Line | SQL | Purpose |
+|--------|------|-----|---------|
+| `create_execution()` | 196-235 | `INSERT INTO schedule_executions` | Create execution record |
+| `create_skipped_execution()` | 237-297 | `INSERT ... status='skipped'` | Record skipped execution (Issue #46) |
+| `update_execution_status()` | 299-351 | `UPDATE schedule_executions SET status, response, ..., claude_session_id` | Complete execution (EXEC-023) |
+| `get_execution(id)` | 353-359 | `SELECT * FROM schedule_executions WHERE id = ?` | Get execution |
+| `get_recent_executions()` | 361-370 | `SELECT ... ORDER BY started_at DESC LIMIT ?` | List recent |
+
+### Process Schedule Operations
+
+| Method | Line | SQL | Purpose |
+|--------|------|-----|---------|
+| `ensure_process_schedules_table()` | 376-422 | `CREATE TABLE IF NOT EXISTS process_schedules / process_schedule_executions` | Create tables on startup |
+| `get_process_schedule(id)` | 459-465 | `SELECT * FROM process_schedules WHERE id = ?` | Get single process schedule |
+| `get_process_schedule_by_trigger()` | 467-476 | `SELECT ... WHERE process_id = ? AND trigger_id = ?` | Look up by process+trigger |
+| `list_all_enabled_process_schedules()` | 478-486 | `SELECT * FROM process_schedules WHERE enabled = 1` | Load on startup |
+| `list_all_process_schedules()` | 488-496 | `SELECT * FROM process_schedules` | Sync detection |
+| `list_process_schedules(process_id)` | 498-506 | `SELECT ... WHERE process_id = ?` | Per-process list |
+| `create_process_schedule()` | 508-558 | `INSERT INTO process_schedules` | Create schedule |
+| `update_process_schedule_run_times()` | 560-584 | `UPDATE process_schedules SET last_run_at, next_run_at` | Track run times |
+| `delete_process_schedule()` | 586-592 | `DELETE FROM process_schedules WHERE id = ?` | Delete single |
+| `delete_process_schedules_for_process()` | 594-600 | `DELETE ... WHERE process_id = ?` | Delete all for process |
+| `create_process_schedule_execution()` | 602-639 | `INSERT INTO process_schedule_executions` | Create execution record |
+| `create_skipped_process_schedule_execution()` | 641-702 | `INSERT ... status='skipped'` | Record skipped (Issue #46) |
+| `update_process_schedule_execution()` | 704-741 | `UPDATE process_schedule_executions SET status, ...` | Complete execution |
+
+---
+
+## Service Method Reference
+
+**Location**: `src/scheduler/service.py`
+
+| Method | Line | Purpose |
+|--------|------|---------|
+| `__init__()` | 44-71 | Initialize service with DB, lock manager, Redis, snapshots |
+| `initialize()` | 80-141 | Load schedules, detect missed, start APScheduler |
+| `_get_missed_schedules()` | 142-194 | Detect schedules missed while container was down (Issue #145) |
+| `shutdown()` | 196-207 | Stop APScheduler, close Redis, close lock manager |
+| `fire_missed_schedules()` | 209-222 | Execute missed schedules on startup |
+| `run_forever()` | 224-248 | Main loop (heartbeat + sync) |
+| `_get_job_id()` | 254-256 | Generate APScheduler job ID: `schedule_{id}` |
+| `_parse_cron()` | 258-278 | Parse 5-field cron expression |
+| `_add_job()` | 280-315 | Add agent schedule as APScheduler CronTrigger job |
+| `_remove_job()` | 317-327 | Remove agent schedule job |
+| `_get_next_run_time()` | 329-339 | Calculate next run time via croniter |
+| `_sync_schedules()` | 345-360 | Top-level sync: calls agent + process sync |
+| `_sync_agent_schedules()` | 362-424 | Sync agent schedule snapshot with DB |
+| `_sync_process_schedules()` | 426-483 | Sync process schedule snapshot with DB |
+| `_on_job_max_instances()` | 488-510 | APScheduler event handler for skipped jobs |
+| `_record_skipped_agent_schedule()` | 512-550 | Record skipped agent execution |
+| `_record_skipped_process_schedule()` | 552-591 | Record skipped process execution |
+| `_execute_schedule()` | 597-613 | Agent execution entry point (lock + delegate) |
+| `_execute_schedule_with_lock()` | 615-758 | Agent execution with lock held |
+| `_call_backend_execute_task()` | 760-833 | HTTP dispatch to backend + async handoff |
+| `_poll_execution_completion()` | 835-887 | Poll DB for execution completion (SCHED-ASYNC-001) |
+| `add_schedule()` | 893-896 | Runtime: add new agent schedule |
+| `remove_schedule()` | 898-900 | Runtime: remove agent schedule |
+| `update_schedule()` | 902-906 | Runtime: update agent schedule |
+| `reload_schedules()` | 908-928 | Reload all schedules from DB |
+| `_get_process_job_id()` | 934-936 | Generate process job ID: `process_schedule_{id}` |
+| `_add_process_job()` | 938-973 | Add process schedule as APScheduler job |
+| `_remove_process_job()` | 975-985 | Remove process schedule job |
+| `_execute_process_schedule()` | 987-1003 | Process execution entry point (lock + delegate) |
+| `_execute_process_schedule_with_lock()` | 1005-1145 | Process execution with lock held |
+| `add_process_schedule()` | 1147-1150 | Runtime: add new process schedule |
+| `remove_process_schedule()` | 1152-1154 | Runtime: remove process schedule |
+| `update_process_schedule()` | 1156-1160 | Runtime: update process schedule |
+| `_publish_event()` | 1166-1180 | Publish event to Redis pub/sub |
+| `get_status()` | 1186-1212 | Get scheduler status |
+| `is_healthy()` | 1214-1220 | Health check |
 
 ---
 
 ## Health & Status Endpoints
 
-**Location**: `src/scheduler/main.py:73-128`
+**Location**: `src/scheduler/main.py:76-134`
 
 ### GET /health
 
@@ -571,7 +807,8 @@ Service information.
   "version": "1.0.0",
   "endpoints": {
     "/health": "Health check",
-    "/status": "Detailed status"
+    "/status": "Detailed status",
+    "/api/schedules/{schedule_id}/trigger": "Manual trigger (POST)"
   }
 }
 ```
@@ -656,28 +893,6 @@ pytest tests/scheduler_tests/ --cov=src/scheduler --cov-report=html
 docker compose -f docker/scheduler/docker-compose.test.yml up
 ```
 
-### Key Test Cases (`test_service.py`)
-
-```python
-async def test_initialization(self, db_with_data, mock_lock_manager):
-    """Test scheduler initialization."""
-    service = SchedulerService(database=db_with_data, lock_manager=mock_lock_manager)
-    service.initialize()
-    assert service._initialized is True
-    assert service.scheduler.running is True
-    service.shutdown()
-
-async def test_execute_schedule_skips_if_locked(self, db_with_data, mock_lock_manager):
-    """Test that execution is skipped if lock cannot be acquired."""
-    service = SchedulerService(database=db_with_data, lock_manager=mock_lock_manager)
-    mock_lock_manager.try_acquire_schedule_lock = MagicMock(return_value=None)
-
-    with patch('scheduler.service.get_agent_client') as mock_get_client:
-        await service._execute_schedule("schedule-1")
-
-    mock_get_client.assert_not_called()  # Should not attempt execution
-```
-
 ---
 
 ## Error Handling
@@ -686,104 +901,17 @@ async def test_execute_schedule_skips_if_locked(self, db_with_data, mock_lock_ma
 |------------|----------|--------|
 | Schedule not found | Log error, return | Execution skipped |
 | Schedule disabled | Log info, return | Execution skipped |
-| Autonomy disabled | Log info, return | Execution skipped |
+| Autonomy disabled | Log info, return (cron only, not manual) | Execution skipped |
 | Lock not acquired | Log info, return | Execution skipped (another running) |
 | **Max instances reached** | Create skipped execution, publish event | **Recorded with status='skipped'** (Issue #46) |
 | Agent not reachable | Update status=failed (with overwrite guard), publish event | Error recorded |
 | Agent timeout | Update status=failed (with overwrite guard), publish event | Error recorded |
-| Agent error response | Update status=failed (with overwrite guard), publish event | Error recorded |
-| **TCP disconnect (SCHED-ASYNC-001)** | **Check DB before overwriting — if backend already finalized, preserve status** | **No false failures** |
+| Auth failure detected | Log auth-specific error, publish event | Error recorded with auth context |
+| **TCP disconnect (SCHED-ASYNC-001)** | **Check DB before overwriting -- if backend already finalized, preserve status** | **No false failures** |
 | **Polling deadline exceeded** | Raise exception, overwrite guard checks DB status | Error recorded (if genuinely stale) |
+| Process backend HTTP error | Update process execution as failed, publish event | Error recorded |
+| Process backend timeout | Update process execution as failed, publish event | Error recorded |
 | Redis publish fails | Log error, continue | Execution still succeeds |
-
----
-
-## Flow 9: Skipped Execution Recording (Issue #46)
-
-**Purpose**: Record executions that are dropped due to APScheduler's max_instances=1 constraint
-
-**Trigger**: APScheduler fires `EVENT_JOB_MAX_INSTANCES` when a scheduled job is skipped because the previous execution is still running
-
-```
-APScheduler                     service.py:408                  database.py:233
-EVENT_JOB_MAX_INSTANCES  -->    _on_job_max_instances()  -->    create_skipped_execution()
-|                               |                               |
-v                               v                               v
-Job skipped because             Parse job_id to get             INSERT schedule_executions
-max_instances=1 reached         schedule_id                     status='skipped'
-                                |                               duration_ms=0
-                                v                               error=skip_reason
-                                _record_skipped_agent_schedule()
-                                or _record_skipped_process_schedule()
-                                |
-                                v
-                                Publish event
-                                "schedule_execution_skipped"
-```
-
-**Event Listener Setup** (`service.py:initialize()`):
-```python
-# Add listener for skipped executions (max_instances reached)
-self.scheduler.add_listener(
-    self._on_job_max_instances,
-    EVENT_JOB_MAX_INSTANCES
-)
-```
-
-**Handler Implementation** (`service.py:408-471`):
-```python
-def _on_job_max_instances(self, event: JobExecutionEvent):
-    """
-    Handle EVENT_JOB_MAX_INSTANCES - triggered when a job is skipped because
-    the previous execution is still running (max_instances=1 reached).
-    """
-    job_id = event.job_id
-    logger.warning(f"Job {job_id} skipped: previous execution still running")
-
-    # Extract schedule_id from job_id
-    if job_id.startswith("schedule_"):
-        schedule_id = job_id[len("schedule_"):]
-        self._record_skipped_agent_schedule(schedule_id)
-    elif job_id.startswith("process_schedule_"):
-        schedule_id = job_id[len("process_schedule_"):]
-        self._record_skipped_process_schedule(schedule_id)
-```
-
-**Database Record** (`database.py:233-290`):
-```python
-def create_skipped_execution(
-    self,
-    schedule_id: str,
-    agent_name: str,
-    message: str,
-    triggered_by: str = "schedule",
-    skip_reason: str = None
-) -> Optional[ScheduleExecution]:
-    """Create a skipped execution record for audit trail."""
-    now = datetime.utcnow().isoformat()
-    execution_id = self.generate_id()
-
-    cursor.execute("""
-        INSERT INTO schedule_executions (
-            id, schedule_id, agent_name, status, started_at, completed_at,
-            duration_ms, message, triggered_by, error
-        ) VALUES (?, ?, ?, 'skipped', ?, ?, 0, ?, ?, ?)
-    """, (execution_id, schedule_id, agent_name, now, now, message, triggered_by, skip_reason))
-```
-
-**WebSocket Event**:
-```json
-{
-  "type": "schedule_execution_skipped",
-  "agent": "my-agent",
-  "schedule_id": "abc123",
-  "execution_id": "exec-456",
-  "schedule_name": "Daily Report",
-  "reason": "Previous execution still running"
-}
-```
-
-**UI Display**: Skipped executions appear in execution history with purple status badge and can be filtered in ExecutionList view.
 
 ---
 
@@ -792,43 +920,31 @@ def create_skipped_execution(
 1. **Database Access**: Read-only access to schedules; write access only to executions
 2. **Lock Tokens**: Random 16-byte hex tokens prevent lock hijacking
 3. **Agent Communication**: Internal Docker network, no external exposure
-4. **Internal API Auth**: Calls to backend `/api/internal/` endpoints include `X-Internal-Secret` header (C-003, 2026-03-09). Health endpoints remain unauthenticated (internal use only).
+4. **Internal API Auth**: Calls to backend `/api/internal/` endpoints include `X-Internal-Secret` header (C-003). Health endpoints remain unauthenticated (internal use only).
 5. **Credential Isolation**: Scheduler has no access to agent credentials
 
 ---
 
 ## Graceful Shutdown
 
-**Signal Handling** (`main.py:156-167`):
+**Signal Handling** (`main.py:251-262`):
 ```python
 def setup_signal_handlers(self, loop: asyncio.AbstractEventLoop):
-    """Setup signal handlers for graceful shutdown."""
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(
-            sig,
-            lambda s=sig: asyncio.create_task(self._signal_handler(s))
-        )
+        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(self._signal_handler(s)))
 
 async def _signal_handler(self, sig):
-    """Handle shutdown signals."""
-    logger.info(f"Received signal {sig.name}, shutting down...")
     await self.shutdown()
 ```
 
-**Shutdown Sequence** (`main.py:143-154`):
+**Shutdown Sequence** (`main.py:238-249`):
 ```python
 async def shutdown(self):
-    """Graceful shutdown."""
-    logger.info("Initiating graceful shutdown...")
     self._shutdown_event.set()
-
     if self.scheduler_service:
         self.scheduler_service.shutdown()
-
     if self.health_runner:
         await self.health_runner.cleanup()
-
-    logger.info("Scheduler service stopped")
 ```
 
 ---
@@ -836,23 +952,6 @@ async def shutdown(self):
 ## Trinity Connect Integration (Added 2026-02-05)
 
 The dedicated scheduler service publishes events to Redis, which the backend relays to both the main WebSocket and the filtered Trinity Connect WebSocket.
-
-### Event Publishing via Redis
-
-**Location**: `src/scheduler/service.py:387-401`
-
-The dedicated scheduler publishes events to the `scheduler:events` Redis channel:
-
-```python
-async def _publish_event(self, event: dict):
-    """Publish an event to Redis for WebSocket compatibility."""
-    event_json = json.dumps(event)
-    self.redis.publish("scheduler:events", event_json)
-```
-
-The backend subscribes to this channel and relays events to both WebSocket managers:
-- Main WebSocket Manager: All UI clients
-- Filtered WebSocket Manager: Trinity Connect clients (server-side agent filtering)
 
 ### Events Broadcast to Trinity Connect
 
@@ -862,19 +961,6 @@ Schedule execution events are forwarded to external listeners:
 |------------|------------------|-------------|
 | `schedule_execution_started` | `agent` | Execution begins |
 | `schedule_execution_completed` | `agent` | Execution ends (success or failure) |
-
-### Use Case: External Coordination
-
-Local Claude Code instances can wait for scheduled task completion:
-
-```bash
-# Wait for report-agent's scheduled task to complete
-export TRINITY_API_KEY="trinity_mcp_xxx"
-./trinity-listen.sh report-agent completed
-
-# Event received: {"type": "schedule_execution_completed", "agent": "report-agent", "status": "success", ...}
-# Claude Code can now fetch results and continue processing
-```
 
 ### Related Documentation
 
@@ -893,7 +979,7 @@ export TRINITY_API_KEY="trinity_mcp_xxx"
 - **Related**:
   - [execution-queue.md](execution-queue.md) - Queue system (not used by scheduler)
   - [activity-stream.md](activity-stream.md) - Activity tracking (not yet integrated)
-  - [trinity-connect.md](trinity-connect.md) - Filtered event broadcast for external listeners (Added 2026-02-05)
+  - [trinity-connect.md](trinity-connect.md) - Filtered event broadcast for external listeners
 
 ---
 
@@ -909,254 +995,22 @@ The embedded scheduler (`src/backend/services/scheduler_service.py`) has been co
 3. All triggers (cron and manual) are executed by dedicated scheduler
 4. Activity tracking via internal API ensures Timeline visibility
 
-**For Rollback** (if needed, restore from git):
-1. Restore `src/backend/services/scheduler_service.py` from git history
-2. Re-add imports in affected files
-3. Stop dedicated scheduler container
-4. Run backend with single worker (`--workers 1`)
-
-**Note**: Rollback is not recommended as the consolidated architecture provides:
-- Cleaner separation of concerns
-- Consistent activity tracking
-- Single source of truth for schedule state
-
----
-
-## Flow 6: Periodic Schedule Sync
-
-**Purpose**: Detect new/updated/deleted schedules without container restart
-
-**Trigger**: Every 60 seconds (configurable via `SCHEDULE_RELOAD_INTERVAL`)
-
-```
-run_forever()                 _sync_schedules()             _sync_agent_schedules()
-(main loop)      -->          (every 60s)      -->          Compare DB with snapshot
-|                             |                              |
-v                             v                              v
-heartbeat (30s)               _sync_agent_schedules()        Build current_state map
-|                             _sync_process_schedules()      from list_all_schedules()
-v                                                            |
-check sync_interval                                          v
-(>= 60s since last?)                                         Detect changes:
-|                                                            - new_ids (add jobs)
-v                                                            - deleted_ids (remove jobs)
-_sync_schedules()                                            - updated (cron/tz/enabled)
-last_sync = now                                              |
-                                                             v
-                                                             Update _schedule_snapshot
-```
-
-**Key Implementation** (`service.py:224-316`):
-
-```python
-async def _sync_agent_schedules(self):
-    """Sync agent schedules with database."""
-    all_schedules = self.db.list_all_schedules()
-
-    # Build current state map: schedule_id -> (enabled, updated_at_iso)
-    current_state: Dict[str, tuple] = {}
-    for schedule in all_schedules:
-        current_state[schedule.id] = (schedule.enabled, schedule.updated_at.isoformat())
-
-    # Detect changes
-    snapshot_ids = set(self._schedule_snapshot.keys())
-    current_ids = set(current_state.keys())
-
-    # New schedules
-    for schedule_id in (current_ids - snapshot_ids):
-        schedule = schedule_map[schedule_id]
-        if schedule.enabled:
-            self._add_job(schedule)  # Add to APScheduler
-        self._schedule_snapshot[schedule_id] = current_state[schedule_id]
-
-    # Deleted schedules
-    for schedule_id in (snapshot_ids - current_ids):
-        self._remove_job(schedule_id)  # Remove from APScheduler
-        del self._schedule_snapshot[schedule_id]
-
-    # Updated schedules (enabled/disabled or cron changed)
-    for schedule_id in (snapshot_ids & current_ids):
-        if self._schedule_snapshot[schedule_id] != current_state[schedule_id]:
-            # Re-add job with updated config
-            self._remove_job(schedule_id)
-            if schedule.enabled:
-                self._add_job(schedule)
-            self._schedule_snapshot[schedule_id] = current_state[schedule_id]
-```
-
-**Configuration** (`config.py:46-48`):
-```python
-schedule_reload_interval: int = field(default_factory=lambda: int(os.getenv(
-    "SCHEDULE_RELOAD_INTERVAL", "60"
-)))  # seconds
-```
-
-**Log Examples**:
-```
-INFO - Sync: Adding new schedule Daily Report for agent my-agent
-INFO - Sync: Disabling schedule Weekly Digest
-INFO - Sync: Updating schedule Hourly Check
-INFO - Sync complete: 2 added, 1 removed
-```
-
----
-
-## Flow 7: Manual Trigger (via Dedicated Scheduler)
-
-**Purpose**: Manual schedule triggers are now routed through the dedicated scheduler to ensure consistent activity tracking and locking.
-
-**Trigger**: User clicks "Run Now" button in UI or API call
-
-```
-Backend API                      Scheduler Service              Backend Internal API
-POST /api/agents/{name}/         POST /api/schedules/           POST /api/internal/
-    schedules/{id}/trigger       {id}/trigger                   activities/track
-|                                |                               |
-v                                v                               v
-schedules.py:trigger_schedule    main.py:_trigger_handler        internal.py:track_activity
-  → httpx.post to scheduler        → validate schedule              → activity_service.track_activity
-                                   → create_task(_execute_manual)   → WebSocket broadcast
-                                   → return immediately             |
-                                                                    v
-                                   _execute_manual_trigger()
-                                     → acquire lock
-                                     → _execute_schedule_with_lock
-                                       → POST /api/internal/execute-task
-                                         (TaskExecutionService handles
-                                          slots, activity, agent call)
-```
-
-**Endpoint**: `POST /api/schedules/{schedule_id}/trigger` (scheduler service port 8001)
-
-**Response**:
-```json
-{
-  "status": "triggered",
-  "schedule_id": "abc123",
-  "schedule_name": "Daily Report",
-  "agent_name": "my-agent",
-  "message": "Execution started in background"
-}
-```
-
----
-
-## Flow 8: Activity Tracking (via TaskExecutionService)
-
-**Purpose**: Create `agent_activities` records for Timeline dashboard visibility
-
-**Trigger**: Both cron-triggered and manual schedule executions
-
-> **Note**: As of 2026-03-09, activity tracking for scheduled executions is handled automatically by `TaskExecutionService` when the scheduler calls `POST /api/internal/execute-task`. The scheduler no longer calls the activity tracking endpoints directly. The activity endpoints (`/api/internal/activities/track` and `/api/internal/activities/{id}/complete`) still exist for other internal callers.
-
-```
-Scheduler Service                     Backend Internal API
-_execute_schedule_with_lock()   -->   POST /api/internal/execute-task
-|                                     {agent_name, message, ..., async_mode: true}
-v                                     |
-<-- 200 accepted (immediate) <---     Backend spawns background task:
-|                                       TaskExecutionService.execute_task()
-v                                         → activity_service.track_activity(CHAT_START)
-_poll_execution_completion()              → POST to agent /api/task
-  polls DB every 10s                      → activity_service.complete_activity()
-  until status != "running"               → slot_service.release_slot()
-|                                         → update execution status in DB
-v
-Returns result from DB
-```
-
-**Slot management + activity tracking** are now unified with all other execution paths (sync, async, public) through the `TaskExecutionService`. This ensures scheduled executions appear on the Dashboard timeline capacity meter.
-
----
-
-## Scheduler Consolidation (2026-02-11)
-
-### What Changed
-
-The scheduler architecture was consolidated to make the dedicated scheduler the **single source of truth** for all schedule execution:
-
-1. **Embedded Scheduler Removed**: `src/backend/services/scheduler_service.py` was deleted
-2. **Manual Triggers Delegated**: Backend API now routes manual triggers to dedicated scheduler
-3. **Activity Tracking Added**: Dedicated scheduler creates `agent_activities` records via internal API
-4. **CRUD Simplified**: Backend only updates database; scheduler syncs automatically
-5. **Nullable Field Updates**: Schedule update endpoint uses `model_dump(exclude_unset=True)` to distinguish "field not provided" from "field explicitly set to null" (e.g., clearing the `model` field)
-
-### Before vs After
-
-| Operation | Before (Dual Schedulers) | After (Consolidated) |
-|-----------|--------------------------|----------------------|
-| Cron triggers | Dedicated scheduler | Dedicated scheduler |
-| Manual triggers | Embedded scheduler | Dedicated scheduler (via API) |
-| Activity tracking | Only manual triggers | Both cron and manual |
-| Schedule CRUD | Backend updates APScheduler directly | Backend updates DB; scheduler syncs |
-| APScheduler jobs | Managed by both | Managed by dedicated scheduler only |
-
-### Timeline Dashboard Fix
-
-The consolidation fixes the bug where cron-triggered executions didn't appear on the Timeline dashboard:
-
-**Root Cause**: The dedicated scheduler created `schedule_executions` records but not `agent_activities` records.
-
-**Fix**: Added internal API endpoints for activity tracking. The dedicated scheduler now calls:
-- `POST /api/internal/activities/track` - on execution start
-- `POST /api/internal/activities/{id}/complete` - on execution end
-
-### Configuration
-
-Backend connects to dedicated scheduler via:
-```python
-# src/backend/routers/schedules.py
-SCHEDULER_URL = os.getenv("SCHEDULER_URL", "http://scheduler:8001")
-```
-
-### Schedule Update Serialization
-
-The update endpoint (`src/backend/routers/schedules.py:270`) uses `model_dump(exclude_unset=True)` to build the update dict. This correctly distinguishes between fields that were not included in the request payload vs. fields explicitly set to `null`:
-
-```python
-# Line 270 — allows nullable fields (e.g., model) to be cleared
-update_dict = updates.model_dump(exclude_unset=True)
-```
-
-**Previous behavior** (bug): Used `{k: v for k, v in updates.model_dump().items() if v is not None}`, which silently dropped any field set to `null`. Sending `{"model": null}` had no effect -- the old model value remained.
-
-**Current behavior**: Sending `{"model": null}` correctly clears the model field in the database. Only truly omitted fields are excluded from the update.
-
-### Database Sync
-
-The dedicated scheduler automatically syncs with the database every 60 seconds:
-- New schedules are detected and added to APScheduler
-- Deleted schedules are removed from APScheduler
-- Updated schedules (cron, timezone, enabled) are re-added
-
-No immediate notification is needed from the backend.
-
----
-
-## Future Enhancements
-
-1. **APScheduler 4.0 Migration**: When stable, migrate to native distributed scheduling
-2. ~~**Activity Stream Integration**: Track executions in unified activity stream~~ ✅ Completed 2026-02-11
-3. **Redis Job Store**: Persist jobs across restarts
-4. **PostgreSQL Support**: Shared data store for multi-instance coordination
-5. **Metrics Export**: Prometheus metrics for monitoring
-6. **Force-Sync Endpoint**: Trigger immediate schedule sync without waiting for interval
-
 ---
 
 ## Revision History
 
 | Date | Change |
 |------|--------|
-| 2026-03-13 | **Schedule Update Nullable Field Fix**: Changed `schedules.py:270` from `if v is not None` filter to `model_dump(exclude_unset=True)`. Fixes bug where sending `{"model": null}` silently dropped the null value instead of clearing the field. |
-| 2026-03-11 | **Async Fire-and-Forget with DB Polling (SCHED-ASYNC-001, Issue #101)**: Replaced blocking HTTP call with async dispatch + DB polling to prevent TCP connection drops on long-running tasks (10-60+ min). Backend accepts `async_mode=True`, spawns background task, returns immediately. Scheduler polls DB every `poll_interval` seconds. Added status overwrite guard in exception handler. Cleanup service timeouts increased from 30 to 120 min. Added `POLL_INTERVAL` config. 11 new tests in `test_async_dispatch.py`. |
-| 2026-03-09 | **Unified Execution via TaskExecutionService**: Scheduler now calls `POST /api/internal/execute-task` instead of agent containers directly. This routes through `TaskExecutionService` for slot management, activity tracking, credential sanitization, and Dashboard capacity meter visibility. Removed direct `AgentClient` usage and manual activity tracking methods. See [parallel-capacity.md](parallel-capacity.md) and [task-execution-service.md](task-execution-service.md). |
-| 2026-03-02 | **MODEL-001 Model Selection**: `Schedule` dataclass has `model` field. `AgentClient.task()` accepts `model` parameter. `create_execution()` records `model_used`. `service.py` passes `schedule.model` to both execution record and agent client. See [model-selection.md](model-selection.md). |
-| 2026-03-01 | **Skipped Execution Recording (Issue #46)**: Added APScheduler event listener for `EVENT_JOB_MAX_INSTANCES`. Skipped executions are now recorded in database with `status='skipped'` instead of being silently dropped. Added `create_skipped_execution()` and `create_skipped_process_schedule_execution()` database methods. WebSocket event `schedule_execution_skipped` broadcast for real-time UI. Frontend displays skipped status with purple styling. |
-| 2026-02-21 | **Session ID Capture (EXEC-023)**: Added `claude_session_id` capture for "Continue as Chat" support. `AgentTaskMetrics` now includes `session_id` field. `_parse_task_response()` extracts from agent response. `update_execution_status()` stores in database. Scheduled executions now support "Continue as Chat" like manual executions. |
-| 2026-02-20 | **Per-Schedule Execution Configuration**: AgentClient.task() now accepts `allowed_tools` parameter. Schedules can specify custom timeout (5m-2h) and tool restrictions. See scheduling.md for full documentation. |
-| 2026-02-11 | **Scheduler Consolidation**: Removed embedded scheduler, routed manual triggers through dedicated scheduler, added activity tracking via internal API. Fixes Timeline dashboard missing cron executions. |
-| 2026-02-05 | **Trinity Connect Integration**: Added section documenting filtered broadcast callback for external event listeners. Schedule events forwarded to `/ws/events` endpoint. |
+| 2026-03-26 | **Line number refresh + Process Schedules documentation**: Updated all line numbers to match current code. Added Flow 3 (Process Schedule Execution), process schedule sync documentation, process schedule database operations, and full service method reference table. |
+| 2026-03-13 | **Schedule Update Nullable Field Fix**: Changed `schedules.py:270` from `if v is not None` filter to `model_dump(exclude_unset=True)`. |
+| 2026-03-11 | **Async Fire-and-Forget with DB Polling (SCHED-ASYNC-001, Issue #101)**: Replaced blocking HTTP call with async dispatch + DB polling. |
+| 2026-03-09 | **Unified Execution via TaskExecutionService**: Scheduler now calls `POST /api/internal/execute-task` instead of agent containers directly. |
+| 2026-03-02 | **MODEL-001 Model Selection**: `Schedule` has `model` field, passed to execution. |
+| 2026-03-01 | **Skipped Execution Recording (Issue #46)**: APScheduler event listener for `EVENT_JOB_MAX_INSTANCES`. |
+| 2026-02-21 | **Session ID Capture (EXEC-023)**: `claude_session_id` for "Continue as Chat" support. |
+| 2026-02-20 | **Per-Schedule Execution Configuration**: Custom timeout and tool restrictions. |
+| 2026-02-11 | **Scheduler Consolidation**: Removed embedded scheduler, manual triggers via dedicated scheduler. |
+| 2026-02-05 | **Trinity Connect Integration**: Filtered broadcast for external event listeners. |
 | 2026-01-29 | Added periodic schedule sync - new schedules work without restart |
 | 2026-01-13 | Initial documentation - standalone scheduler service |
 

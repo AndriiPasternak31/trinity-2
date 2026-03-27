@@ -24,6 +24,7 @@ from database import (
     PublicChatResponse,
     PublicChatMessage
 )
+from routers.auth import check_login_rate_limit, record_login_attempt
 from services.docker_service import get_agent_container
 from services.email_service import email_service
 from services.task_execution_service import get_task_execution_service
@@ -232,7 +233,12 @@ async def confirm_verification_code(
     Confirm an email verification code.
 
     Returns a session token if the code is valid.
+    Rate limited: 5 attempts per 10 minutes per IP (pentest 3.1.5).
     """
+    # Check IP-based rate limit (pentest 3.1.5)
+    client_ip = request.client.host if request.client else "unknown"
+    check_login_rate_limit(client_ip)
+
     # Validate link token
     is_valid, reason, link = db.is_public_link_valid(confirmation.token)
     if not is_valid:
@@ -247,11 +253,13 @@ async def confirm_verification_code(
     )
 
     if not success:
+        record_login_attempt(client_ip, success=False)
         return VerificationResponse(
             verified=False,
             error=error
         )
 
+    record_login_attempt(client_ip, success=True)
     return VerificationResponse(
         verified=True,
         session_token=session_data["session_token"],

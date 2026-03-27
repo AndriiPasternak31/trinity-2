@@ -53,6 +53,8 @@ services:
       - OTEL_METRIC_EXPORT_INTERVAL=${OTEL_METRIC_EXPORT_INTERVAL:-60000}
       # Public external access URL (Tailscale Funnel, Cloudflare Tunnel, etc.)
       - PUBLIC_CHAT_URL=${PUBLIC_CHAT_URL:-}
+      # Frontend URL for post-OAuth redirects
+      - FRONTEND_URL=${FRONTEND_URL:-}
       # Internal API shared secret (C-003) - for scheduler/agent communication
       - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
     volumes:

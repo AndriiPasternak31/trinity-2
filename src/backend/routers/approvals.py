@@ -11,6 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
+from dependencies import get_current_user, CurrentUser
+from models import User
 from services.process_engine.engine import get_approval_store
 from services.process_engine.domain import ApprovalRequest, ApprovalStatus
 
@@ -61,6 +63,7 @@ class RejectRequest(BaseModel):
 
 @router.get("", response_model=list[ApprovalSummary])
 async def list_approvals(
+    current_user: CurrentUser,
     status: Optional[str] = None,
     user: Optional[str] = None,
 ):
@@ -90,7 +93,7 @@ async def list_approvals(
 
 
 @router.get("/{approval_id}", response_model=ApprovalDetail)
-async def get_approval(approval_id: str):
+async def get_approval(approval_id: str, current_user: CurrentUser):
     """Get approval request details."""
     store = get_approval_store()
     request = store.get(approval_id)
@@ -102,7 +105,7 @@ async def get_approval(approval_id: str):
 
 
 @router.get("/execution/{execution_id}/step/{step_id}", response_model=ApprovalDetail)
-async def get_approval_by_step(execution_id: str, step_id: str):
+async def get_approval_by_step(execution_id: str, step_id: str, current_user: CurrentUser):
     """Get approval request for a specific execution step."""
     store = get_approval_store()
     request = store.get_by_execution_step(execution_id, step_id)
@@ -114,30 +117,29 @@ async def get_approval_by_step(execution_id: str, step_id: str):
 
 
 @router.post("/{approval_id}/approve", response_model=ApprovalDetail)
-async def approve(approval_id: str, body: ApproveRequest):
+async def approve(approval_id: str, body: ApproveRequest, current_user: CurrentUser):
     """
     Approve a request.
-    
+
     This will mark the approval as approved and resume
     the paused execution.
     """
     from routers.executions import get_execution_engine, get_execution_repo
     from routers.processes import get_repository as get_process_repo
-    
+
     store = get_approval_store()
     request = store.get(approval_id)
-    
+
     if not request:
         raise HTTPException(status_code=404, detail="Approval not found")
-    
+
     if not request.is_pending():
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Approval already decided: {request.status.value}"
         )
-    
-    # TODO: Get actual user from auth context
-    decided_by = "admin"
+
+    decided_by = current_user.email or current_user.username
     
     request.approve(decided_by=decided_by, comment=body.comment)
     store.save(request)
@@ -166,30 +168,29 @@ async def approve(approval_id: str, body: ApproveRequest):
 
 
 @router.post("/{approval_id}/reject", response_model=ApprovalDetail)
-async def reject(approval_id: str, body: RejectRequest):
+async def reject(approval_id: str, body: RejectRequest, current_user: CurrentUser):
     """
     Reject a request.
-    
+
     This will mark the approval as rejected and resume
     the execution (which will fail the step).
     """
     from routers.executions import get_execution_engine, get_execution_repo
     from routers.processes import get_repository as get_process_repo
-    
+
     store = get_approval_store()
     request = store.get(approval_id)
-    
+
     if not request:
         raise HTTPException(status_code=404, detail="Approval not found")
-    
+
     if not request.is_pending():
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Approval already decided: {request.status.value}"
         )
-    
-    # TODO: Get actual user from auth context
-    decided_by = "admin"
+
+    decided_by = current_user.email or current_user.username
     
     request.reject(decided_by=decided_by, comment=body.comment)
     store.save(request)
