@@ -1,3 +1,14 @@
+### 2026-03-28
+
+**fix: GitHub template clone fails silently when PAT lacks repo access (#218)**
+
+Agent creation via MCP `create_agent` with `template: "github:owner/repo"` silently failed to clone the repository when the GitHub PAT didn't have access. The agent started with an empty workspace and no error was reported.
+
+- `src/backend/services/agent_service/crud.py` — Added pre-creation validation: checks repo exists and PAT has access via GitHub API before creating the container. Also validates that the specified `source_branch` exists. Returns clear 400 error on failure instead of creating an agent with an empty workspace.
+- `docker/base-image/startup.sh` — Improved clone error reporting: captures git clone output, sanitizes PAT from logs, writes `.git-clone-status` file for backend diagnostics, and prints clear error messages with possible causes.
+
+---
+
 ### 2026-03-27
 
 **fix: MCP schedule deletion error on empty 204 response**

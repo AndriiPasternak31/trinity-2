@@ -30,6 +30,7 @@ from services.template_service import (
 )
 from services import git_service
 from services.settings_service import get_anthropic_api_key, get_github_pat, get_agent_full_capabilities
+from services.github_service import GitHubService, GitHubError
 from utils.helpers import sanitize_agent_name
 from .helpers import validate_base_image
 from .lifecycle import RESTRICTED_CAPABILITIES, FULL_CAPABILITIES
@@ -159,6 +160,48 @@ async def create_agent_internal(
                 github_repo_for_agent = repo_path
                 github_pat_for_agent = github_pat
                 logger.info(f"Using dynamic GitHub template: {repo_path} (branch: {config.source_branch})")
+
+            # Validate PAT has access to the repository before creating container
+            # This prevents silent clone failures in startup.sh (#218)
+            try:
+                gh_service = GitHubService(github_pat_for_agent)
+                repo_parts = github_repo_for_agent.split("/", 1)
+                if len(repo_parts) == 2:
+                    repo_info = await gh_service.check_repo_exists(repo_parts[0], repo_parts[1])
+                    if not repo_info.exists:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"GitHub repository '{github_repo_for_agent}' not found or PAT does not have access. "
+                                   f"Verify the repository exists and the configured GitHub PAT has read access."
+                        )
+                    logger.info(f"Validated GitHub repo access: {github_repo_for_agent} (private={repo_info.private})")
+
+                    # If source_branch specified, validate branch exists
+                    if config.source_branch and config.source_branch != repo_info.default_branch:
+                        try:
+                            branch_resp = await gh_service._request(
+                                "GET", f"/repos/{github_repo_for_agent}/branches/{config.source_branch}"
+                            )
+                            if branch_resp.status_code == 404:
+                                raise HTTPException(
+                                    status_code=400,
+                                    detail=f"Branch '{config.source_branch}' not found in repository '{github_repo_for_agent}'. "
+                                           f"Available default branch: '{repo_info.default_branch}'."
+                                )
+                        except HTTPException:
+                            raise
+                        except Exception as e:
+                            logger.warning(f"Could not validate branch '{config.source_branch}': {e}")
+            except HTTPException:
+                raise
+            except GitHubError as e:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to validate GitHub repository access: {e}"
+                )
+            except Exception as e:
+                # Log but don't block creation for transient network errors
+                logger.warning(f"GitHub repo validation failed (non-blocking): {e}")
 
             # Generate git sync instance ID and branch for Phase 7
             git_instance_id = git_service.generate_instance_id()
@@ -346,8 +389,18 @@ async def create_agent_internal(
         if config.source_mode:
             env_vars['GIT_SOURCE_MODE'] = 'true'
             env_vars['GIT_SOURCE_BRANCH'] = config.source_branch or 'main'
+            logger.info(
+                f"GitHub template env vars set for {config.name}: "
+                f"repo={github_repo_for_agent}, branch={config.source_branch or 'main'}, "
+                f"source_mode=true, sync=true"
+            )
         else:
             env_vars['GIT_WORKING_BRANCH'] = git_working_branch
+            logger.info(
+                f"GitHub template env vars set for {config.name}: "
+                f"repo={github_repo_for_agent}, working_branch={git_working_branch}, "
+                f"source_mode=false, sync=true"
+            )
 
     # CRED-002: Legacy credential injection loop removed.
     # Credentials are now injected after agent creation via:

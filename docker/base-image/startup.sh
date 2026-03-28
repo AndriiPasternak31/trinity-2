@@ -48,7 +48,10 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
                 CLONE_CMD="git clone ${CLONE_URL} /home/developer"
             fi
 
-            if eval "${CLONE_CMD}" 2>&1; then
+            # Capture clone output for error reporting (#218)
+            CLONE_OUTPUT=$(eval "${CLONE_CMD}" 2>&1)
+            CLONE_EXIT=$?
+            if [ $CLONE_EXIT -eq 0 ]; then
             echo "Repository cloned successfully with git history"
             cd /home/developer
 
@@ -102,7 +105,22 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
 
             echo "Git sync initialization complete"
             else
+                echo "=========================================="
                 echo "ERROR: Failed to clone GitHub repository: ${GITHUB_REPO}"
+                echo "Exit code: ${CLONE_EXIT}"
+                # Sanitize output to avoid leaking PAT in logs
+                echo "Clone output: $(echo "${CLONE_OUTPUT}" | sed "s|oauth2:[^@]*@|oauth2:***@|g")"
+                echo "=========================================="
+                echo "Possible causes:"
+                echo "  - GitHub PAT does not have access to this repository"
+                echo "  - Repository does not exist"
+                echo "  - Branch '${CLONE_BRANCH}' does not exist"
+                echo "  - Network connectivity issue"
+                echo "=========================================="
+                # Write status file for backend to check
+                echo "{\"status\":\"failed\",\"error\":\"clone_failed\",\"repo\":\"${GITHUB_REPO}\",\"branch\":\"${CLONE_BRANCH}\"}" > /home/developer/.git-clone-status
+                # Restore Python packages so agent server can still start
+                cp -r /tmp/.local.bak /home/developer/.local 2>/dev/null || true
             fi
         fi
     else
@@ -123,7 +141,9 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
             SHALLOW_CLONE_CMD="git clone --depth 1 ${CLONE_URL} /tmp/repo-clone"
         fi
 
-        if eval "${SHALLOW_CLONE_CMD}" 2>&1; then
+        SHALLOW_OUTPUT=$(eval "${SHALLOW_CLONE_CMD}" 2>&1)
+        SHALLOW_EXIT=$?
+        if [ $SHALLOW_EXIT -eq 0 ]; then
             echo "Repository cloned successfully"
 
             # Copy all files from the cloned repo to the working directory
@@ -146,7 +166,17 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
 
             echo "GitHub repository initialization complete"
         else
+            echo "=========================================="
             echo "ERROR: Failed to clone GitHub repository: ${GITHUB_REPO}"
+            echo "Exit code: ${SHALLOW_EXIT}"
+            echo "Clone output: $(echo "${SHALLOW_OUTPUT}" | sed "s|oauth2:[^@]*@|oauth2:***@|g")"
+            echo "=========================================="
+            echo "Possible causes:"
+            echo "  - GitHub PAT does not have access to this repository"
+            echo "  - Repository does not exist"
+            echo "  - Branch '${CLONE_BRANCH}' does not exist"
+            echo "=========================================="
+            echo "{\"status\":\"failed\",\"error\":\"clone_failed\",\"repo\":\"${GITHUB_REPO}\",\"branch\":\"${CLONE_BRANCH}\"}" > /home/developer/.git-clone-status
         fi
         fi
     fi
