@@ -8,7 +8,7 @@ import json
 import logging
 import secrets
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 
 import pytz
@@ -1018,16 +1018,18 @@ class ScheduleOperations:
             Number of executions marked as failed.
         """
         now = utc_now_iso()
+        # Compute threshold in ISO 8601 format to match stored started_at
+        # (SQLite's datetime() returns space-separated format which breaks string comparison)
+        threshold = (datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)).strftime('%Y-%m-%dT%H:%M:%S')
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
             # Find stale executions for duration calculation
-            # SQL literal matches TaskExecutionStatus.RUNNING
             cursor.execute("""
                 SELECT id, started_at FROM schedule_executions
                 WHERE status = ?
-                AND started_at < datetime('now', ? || ' minutes')
-            """, (TaskExecutionStatus.RUNNING, f"-{timeout_minutes}"))
+                AND started_at < ?
+            """, (TaskExecutionStatus.RUNNING, threshold))
             stale_rows = cursor.fetchall()
 
             if not stale_rows:
@@ -1065,15 +1067,18 @@ class ScheduleOperations:
             Number of executions marked as failed.
         """
         now = utc_now_iso()
+        # Compute threshold in ISO 8601 format to match stored started_at
+        # (SQLite's datetime() returns space-separated format which breaks string comparison)
+        threshold = (datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)).strftime('%Y-%m-%dT%H:%M:%S')
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
             cursor.execute("""
                 SELECT id, started_at FROM schedule_executions
                 WHERE status = ?
-                AND claude_session_id IS NULL
-                AND started_at < datetime('now', ? || ' seconds')
-            """, (TaskExecutionStatus.RUNNING, f"-{timeout_seconds}"))
+                AND (claude_session_id IS NULL OR claude_session_id = '')
+                AND started_at < ?
+            """, (TaskExecutionStatus.RUNNING, threshold))
             no_session_rows = cursor.fetchall()
 
             if not no_session_rows:
@@ -1110,11 +1115,13 @@ class ScheduleOperations:
 
             cursor.execute("""
                 UPDATE schedule_executions
-                SET completed_at = COALESCE(started_at, ?),
-                    duration_ms = 0
+                SET status = ?,
+                    completed_at = COALESCE(started_at, ?),
+                    duration_ms = 0,
+                    error = 'Finalized by cleanup: skipped execution'
                 WHERE status = ?
                 AND completed_at IS NULL
-            """, (now, TaskExecutionStatus.SKIPPED))
+            """, (TaskExecutionStatus.FAILED, now, TaskExecutionStatus.SKIPPED))
 
             conn.commit()
             return cursor.rowcount
