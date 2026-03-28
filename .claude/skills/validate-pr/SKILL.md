@@ -16,7 +16,6 @@ Validate a pull request against the Trinity development methodology and generate
 | Source | Location | Read | Write | Description |
 |--------|----------|------|-------|-------------|
 | PR Details | GitHub API | ✅ | | PR metadata and diff |
-| Changelog | `docs/memory/changelog.md` | ✅ | | Entry check |
 | Requirements | `docs/memory/requirements.md` | ✅ | | Req updates |
 | Architecture | `docs/memory/architecture.md` | ✅ | | API changes |
 | Feature Flows | `docs/memory/feature-flows/` | ✅ | | Flow updates |
@@ -54,17 +53,14 @@ Store this information for validation:
 
 ### Step 2: Validate Documentation Updates
 
-#### 2.1 Changelog Entry (REQUIRED)
-Check if `docs/memory/changelog.md` is in the changed files list.
+#### 2.1 Commit Messages (REQUIRED)
+Check that commits on the branch have descriptive messages:
+```bash
+gh pr view $PR_NUMBER --json commits --jq '.commits[].messageHeadline'
+```
 
-**If present**, read the diff and verify:
-- [ ] Entry is at the TOP of recent changes (newest first)
-- [ ] Has timestamp format: `### YYYY-MM-DD HH:MM:SS`
-- [ ] Has emoji prefix (🎉✨🔧🔄📝🔒🚀💾🐳)
-- [ ] Includes summary of what changed and why
-- [ ] Lists key files modified
-
-**If missing**: Flag as ❌ FAIL - "Changelog not updated"
+- [ ] Commit messages describe what changed and why
+- [ ] Commit messages follow conventional format (feat/fix/refactor/docs prefix)
 
 #### 2.2 GitHub Issues Update (CONDITIONAL)
 Check if PR references a GitHub Issue (e.g., "Closes #17", "Fixes #23").
@@ -230,7 +226,7 @@ Create the report in this format:
 
 | Category | Status | Notes |
 |----------|--------|-------|
-| Changelog | ✅/❌ | [details] |
+| Commit Messages | ✅/❌ | [details] |
 | Roadmap | ✅/❌/➖ | [details or N/A] |
 | Requirements | ✅/❌/➖ | [details or N/A] |
 | Architecture | ✅/❌/➖ | [details or N/A] |
@@ -242,7 +238,7 @@ Create the report in this format:
 
 ### Documentation Checklist
 
-- [x/] Changelog entry with timestamp and emoji
+- [x/] Commit messages are descriptive
 - [x/] Roadmap updated (if applicable)
 - [x/] Requirements updated (if applicable)
 - [x/] Architecture updated (if applicable)
@@ -301,11 +297,11 @@ Please address these items and request re-review.
 
 | Change Type | Required Docs |
 |-------------|---------------|
-| Bug fix | Changelog only |
-| Feature / API change | Changelog + architecture or feature-flow as needed |
-| New capability | Changelog + requirements + feature-flow |
-| Refactor | Changelog only (unless it changes architecture) |
-| Docs only | Changelog |
+| Bug fix | Descriptive commit message only |
+| Feature / API change | Architecture or feature-flow as needed |
+| New capability | Requirements + feature-flow |
+| Refactor | Descriptive commit message only (unless it changes architecture) |
+| Docs only | No additional docs needed |
 
 ## Related
 
@@ -317,7 +313,7 @@ Please address these items and request re-review.
 ## Completion Checklist
 
 - [ ] PR information fetched
-- [ ] Changelog validated
+- [ ] Commit messages validated
 - [ ] GitHub Issues checked
 - [ ] Requirements checked
 - [ ] Architecture checked

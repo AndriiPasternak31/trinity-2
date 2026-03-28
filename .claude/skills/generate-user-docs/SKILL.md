@@ -31,7 +31,7 @@ Read backend routers, frontend views, feature flows, and recent changes to produ
 | Feature flow index | `docs/memory/feature-flows.md` | Yes | No |
 | Requirements | `docs/memory/requirements.md` | Yes | No |
 | Architecture | `docs/memory/architecture.md` | Yes | No |
-| Changelog | `docs/memory/changelog.md` (last 200 lines) | Yes | No |
+| Git history | `git log --since` | Yes | No |
 | Existing user docs | `docs/user-docs/**/*.md` | Yes | Yes |
 | Git history | `git log --since` | Yes | No |
 
@@ -118,7 +118,7 @@ Read these sources to extract current feature state. Use parallel agents where p
 
 **2c. Architecture** — Read `docs/memory/architecture.md` for system design context, component relationships, and data flow.
 
-**2d. Recent changes** — Read the last 200 lines of `docs/memory/changelog.md` and run:
+**2d. Recent changes** — Get recent changes from git history:
 ```bash
 git log --oneline --since="2 weeks ago" | head -30
 ```

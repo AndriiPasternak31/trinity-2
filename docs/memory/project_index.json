@@ -139,7 +139,6 @@
     "requirements": "docs/memory/requirements.md",
     "architecture": "docs/memory/architecture.md",
     "roadmap": "https://github.com/abilityai/trinity/issues (GitHub Issues + Trinity Roadmap project board)",
-    "changelog": "docs/memory/changelog.md",
     "feature_flows": "docs/memory/feature-flows.md"
   },
   "phases": {

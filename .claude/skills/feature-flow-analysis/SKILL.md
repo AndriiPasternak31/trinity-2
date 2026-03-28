@@ -93,7 +93,7 @@ Write to: `docs/memory/feature-flows/{feature-name}.md`
 
 **For UPDATED flows**:
 - Only update the flow document itself
-- Do NOT add entries to Recent Updates (use changelog.md for that)
+- Do NOT add entries to Recent Updates for minor changes
 - Only update the index row if name/description changed
 
 **WRONG** (too verbose):

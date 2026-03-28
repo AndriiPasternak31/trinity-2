@@ -26,7 +26,6 @@ Keep feature flow documentation in sync with code changes by:
 | Feature Flows Index | `docs/memory/feature-flows.md` | ✅ | ✅ | Flow index (keep minimal) |
 | Feature Flow Docs | `docs/memory/feature-flows/*.md` | ✅ | ✅ | Individual flow documents |
 | Git History | `.git` | ✅ | | Recent changes |
-| Changelog | `docs/memory/changelog.md` | ✅ | | Recent feature work |
 | Frontend Code | `src/frontend/src/` | ✅ | | Vue components, stores |
 | Backend Code | `src/backend/` | ✅ | | FastAPI routers, services |
 | Agent Code | `docker/base-image/` | ✅ | | Agent server |
@@ -218,7 +217,7 @@ When triggered by another agent (via MCP or scheduled task):
 
 | Error | Recovery |
 |-------|----------|
-| Git not available | Fall back to file list from changelog |
+| Git not available | Ask user for file list manually |
 | Flow document locked | Skip and report, try again later |
 | Index too large | Run condensation pass before proceeding |
 | Agent spawn fails | Log error, continue with remaining flows |

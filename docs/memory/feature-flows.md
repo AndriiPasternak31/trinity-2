@@ -3,7 +3,7 @@
 > **Purpose**: Maps features to detailed vertical slice documentation.
 > Each flow documents the complete path from UI → API → Database → Side Effects.
 >
-> For detailed change history, see `changelog.md`.
+> For detailed change history, see `git log`.
 
 ---
 

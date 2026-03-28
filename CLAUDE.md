@@ -86,10 +86,10 @@ All work follows a 4-stage lifecycle tracked via the **Trinity Roadmap** GitHub 
 - Close issues when complete
 
 ### 4. Tiered Documentation Updates
-Documentation requirements scale with change type:
-- **Bug fix**: `changelog.md` only
-- **Feature / API change**: `changelog.md` + `architecture.md` or `feature-flows/` as needed
-- **New capability**: `changelog.md` + `requirements.md` + `feature-flows/`
+Documentation requirements scale with change type (change history is tracked via git commits):
+- **Bug fix**: Descriptive commit message only
+- **Feature / API change**: `architecture.md` or `feature-flows/` as needed
+- **New capability**: `requirements.md` + `feature-flows/`
 
 ### 5. Security First (PUBLIC REPO)
 - **This is a public repository** - assume all commits are visible worldwide
@@ -118,7 +118,6 @@ Follow methodology guides in `.claude/skills/`:
 |------|---------|
 | `docs/memory/requirements.md` | **SINGLE SOURCE OF TRUTH** - All features |
 | `docs/memory/architecture.md` | Current system design (~1000 lines max) |
-| `docs/memory/changelog.md` | Timestamped history (~500 lines) |
 | `docs/memory/feature-flows.md` | Index of vertical slice docs |
 | GitHub Issues + Project Board | Prioritized task queue — **Trinity Roadmap** board (Todo/In Progress/Done), priority labels (P0-P3), Tier sub-priority (P1a/P1b/P1c) |
 
@@ -307,7 +306,7 @@ The `abilities` repo contains **all Trinity skills** bundled in the `trinity-onb
 - **Full Architecture**: `.claude/memory/architecture.md`
 - **All Requirements**: `.claude/memory/requirements.md`
 - **Current Roadmap**: https://github.com/abilityai/trinity/issues
-- **Recent Changes**: `.claude/memory/changelog.md`
+- **Recent Changes**: `git log --oneline --since="2 weeks ago"`
 - **Agent Guide**: `docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md`
 - **Agent Network Demo**: `docs/AGENT_NETWORK_DEMO.md`
 - **Claude Code Plugins**: https://github.com/abilityai/abilities

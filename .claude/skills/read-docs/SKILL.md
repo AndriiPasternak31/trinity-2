@@ -21,7 +21,7 @@ Load all project documentation into context for this session.
 | Testing | `docs/TESTING_GUIDE.md` | ✅ | | Test standards |
 | GitHub Issues | `abilityai/trinity` | ✅ | | P0 issues |
 | GitHub Project | `abilityai project #6` | ✅ | | Ranked P1 pipeline |
-| Changelog | `docs/memory/changelog.md` | ✅ | | Recent changes |
+| Git History | `git log` | ✅ | | Recent changes |
 
 ## Process
 
@@ -71,11 +71,16 @@ The project includes Rank (1-N) and Tier (P1a/P1b/P1c) fields:
 - **P1b** — Important (user-facing features)
 - **P1c** — Backlog (architecture + future)
 
-### Step 3: Read Recent Changelog
+### Step 3: Read Recent Changes from Git History
 
-Read changelog using Bash (file is 1200+ lines, only need recent entries):
+Get recent changes from git log (the single source of truth for what changed):
 ```bash
-head -150 docs/memory/changelog.md
+git log --oneline --since="2 weeks ago" -30
+```
+
+For more detail on specific changes:
+```bash
+git log --since="2 weeks ago" --format="%h %s (%an, %ar)" -30
 ```
 
 Note: `CLAUDE.md` is loaded automatically at session start - no need to read it again.
@@ -98,7 +103,7 @@ Pipeline (from Trinity Roadmap project, ranked):
   P1b: #[rank5] [title], #[rank6] [title], ...
   P1c: [count] issues in backlog
 
-Recent: [most recent changelog entry]
+Recent: [most recent git commits]
 ```
 
 ## When to Use
@@ -121,5 +126,5 @@ Load context first, then act. Never modify code without understanding the curren
 - [ ] Testing guide read
 - [ ] P0 issues queried
 - [ ] Ranked P1 pipeline queried from Project #6
-- [ ] Recent changelog reviewed
+- [ ] Recent git history reviewed
 - [ ] Summary reported with ranked pipeline

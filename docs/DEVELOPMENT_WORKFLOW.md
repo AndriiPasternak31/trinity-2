@@ -135,7 +135,7 @@ Always start by loading context.
 /read-docs
 ```
 
-This loads requirements, architecture, and changelog. For targeted work, read the relevant feature flow directly:
+This loads requirements, architecture, and recent git history. For targeted work, read the relevant feature flow directly:
 
 ```
 @docs/memory/feature-flows/user-login.md
@@ -168,9 +168,9 @@ After tests pass, update documentation:
 
 | Change Type | Required Docs |
 |-------------|---------------|
-| Bug fix | `changelog.md` only |
-| Feature / API change | `changelog.md` + `architecture.md` or `feature-flows/*.md` as needed |
-| New capability | `changelog.md` + `requirements.md` + `feature-flows/*.md` |
+| Bug fix | Descriptive commit message only |
+| Feature / API change | `architecture.md` or `feature-flows/*.md` as needed |
+| New capability | `requirements.md` + `feature-flows/*.md` |
 
 ### 3. Review
 
@@ -198,7 +198,7 @@ When local development is complete:
 
 | Category | Check |
 |----------|-------|
-| **Changelog** | Entry exists with timestamp and emoji |
+| **Commit Messages** | Descriptive, with conventional prefix (feat/fix/refactor/docs) |
 | **Requirements** | Updated if new feature or scope change |
 | **Architecture** | Updated if API/schema/integration changes |
 | **Feature Flows** | Created/updated for behavior changes |
@@ -242,7 +242,7 @@ Checks structural issues: SQL safety, race conditions, auth boundaries, scope dr
 ```
 /validate-pr <number>
 ```
-Checks docs, changelog, requirements, feature flows, security (no secrets in diff), traceability.
+Checks docs, commit messages, requirements, feature flows, security (no secrets in diff), traceability.
 
 **Step 3: Security audit (P0/P1 or security-sensitive changes)**
 ```
@@ -356,7 +356,6 @@ The `docs/memory/` directory contains persistent project state:
 docs/memory/
 ├── requirements.md      ← SINGLE SOURCE OF TRUTH for features
 ├── architecture.md      ← Current system design (~1000 lines max)
-├── changelog.md         ← Timestamped history (~500 lines)
 ├── feature-flows.md     ← Index of all feature flow documents
 └── feature-flows/       ← Individual feature documentation
 ```
@@ -373,7 +372,7 @@ GitHub Issues    ──prioritizes──►  What to work on next
 feature-flows/*  ──documents──►  How features work
        │
        ▼
-changelog.md     ──records──►  What changed and when
+git log          ──records──►  What changed and when
        │
        ▼
 architecture.md  ──maintains──►  Current system state

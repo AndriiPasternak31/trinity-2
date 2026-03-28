@@ -41,7 +41,6 @@ Automate the complete Trinity development workflow:
 | Requirements | `docs/memory/requirements.md` | ✅ | ✅ | Feature requirements |
 | Architecture | `docs/memory/architecture.md` | ✅ | ✅ | System design |
 | Feature Flows | `docs/memory/feature-flows/` | ✅ | ✅ | Feature documentation |
-| Changelog | `docs/memory/changelog.md` | ✅ | ✅ | Change history |
 | Source Code | `src/`, `docker/base-image/` | ✅ | ✅ | Implementation |
 | Tests | `tests/` | ✅ | ✅ | Test files |
 | Git | `.git/` | ✅ | ✅ | Branches, commits |
@@ -220,13 +219,6 @@ This handles:
 - Creating new flow documents if needed
 - Updating the feature flows index
 
-Also verify changelog was updated (should be done by `/implement`, but check):
-```bash
-head -20 docs/memory/changelog.md
-```
-
-If changelog was not updated, add an entry now following the existing format.
-
 ### Step 10: Commit, Push & Create PR
 
 **Stage all changes:**
@@ -322,7 +314,6 @@ Next steps:
 - [ ] Security audit passed (via /cso --diff, P0/P1)
 - [ ] Tests exist and pass
 - [ ] Feature flows synced (via /sync-feature-flows)
-- [ ] Changelog updated
 - [ ] No secrets in diff
 - [ ] Committed with issue reference
 - [ ] PR created with summary

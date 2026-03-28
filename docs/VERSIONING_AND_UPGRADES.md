@@ -18,7 +18,7 @@ MAJOR.MINOR.PATCH (e.g., 1.2.3)
 
 During the `0.x` phase:
 - API may change between minor versions
-- Breaking changes documented in changelog
+- Breaking changes documented in git history and PR descriptions
 - Recommended: Pin to specific version tags
 
 **Post-1.0**: Strict semver adherence with deprecation warnings before breaking changes.
@@ -210,7 +210,7 @@ docker compose restart backend
 
 ### Pre-Upgrade Checklist
 
-- [ ] Read changelog for breaking changes
+- [ ] Review git history for breaking changes (`git log --oneline`)
 - [ ] Backup database (`data/trinity.db`)
 - [ ] Backup Redis (`data/redis/`)
 - [ ] Note running agents and their configurations
@@ -255,7 +255,7 @@ docker compose up -d
 | 0.8.x | 2025-12-24 | PATCH | Test suite fixes, bug fixes |
 | 0.8.0 | 2025-12-23 | MINOR | First-time setup wizard, API keys management |
 
-See [changelog.md](memory/changelog.md) for detailed history.
+See `git log --oneline` for detailed history.
 
 ---
 
