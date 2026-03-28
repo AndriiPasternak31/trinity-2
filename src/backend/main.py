@@ -420,6 +420,19 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Source-Agent", "Accept"],
 )
 
+# Security headers middleware — covers API responses when accessed directly (dev mode)
+# or through nginx proxy. X-Frame-Options is omitted here to avoid conflicting with
+# nginx's SAMEORIGIN value on proxied responses.
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=()"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    return response
+
+
 # Include all routers
 app.include_router(auth_router)
 app.include_router(agents_router)
