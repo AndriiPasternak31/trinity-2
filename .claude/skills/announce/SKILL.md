@@ -1,14 +1,15 @@
 ---
 name: announce
-description: Send an announcement message to Discord and/or Slack channels
+description: Send an announcement message to Discord, Slack, and/or Telegram channels
 allowed-tools: [Bash, Read]
 user-invocable: true
 metadata:
-  version: "1.3"
+  version: "1.4"
   created: 2026-03-28
   updated: 2026-03-28
   author: trinity
   changelog:
+    - "1.4: Add Telegram support via Bot API + sendMessage with topic threading"
     - "1.3: Save each announcement to docs/user-docs/dev-announcements/ with timestamped filename"
     - "1.2: Add message style rule — dense, no-filler announcements"
     - "1.1: Add Slack support via Bot OAuth Token + chat.postMessage API"
@@ -19,7 +20,7 @@ metadata:
 
 ## Purpose
 
-Send an arbitrary message to a configured announcement channel. Supports Discord (webhooks) and Slack (Bot OAuth Token + chat.postMessage API).
+Send an arbitrary message to a configured announcement channel. Supports Discord (webhooks), Slack (Bot OAuth Token + chat.postMessage API), and Telegram (Bot API + sendMessage with topic threading).
 
 ## State Dependencies
 
@@ -40,6 +41,11 @@ ANNOUNCE_DISCORD_<NAME>_WEBHOOK=https://discord.com/api/webhooks/...
 ANNOUNCE_SLACK_TOKEN=xoxb-...
 ANNOUNCE_SLACK_<NAME>_CHANNEL=C0123456789
 
+# Telegram channels (Bot API token + chat IDs)
+ANNOUNCE_TELEGRAM_TOKEN=<bot-token-from-botfather>
+ANNOUNCE_TELEGRAM_<NAME>_CHANNEL=<chat_id>            # channel or group
+ANNOUNCE_TELEGRAM_<NAME>_CHANNEL=<chat_id>:<thread_id> # group with topic
+
 # Default channel (used when no channel is specified)
 ANNOUNCE_DEFAULT_CHANNEL=discord:updates
 ```
@@ -50,6 +56,7 @@ ANNOUNCE_DEFAULT_CHANNEL=discord:updates
 |------|----------|---------|
 | `updates` | Discord | Trinity community updates channel |
 | `updates` | Slack | Slack updates channel (C06MCLZ966Q) |
+| `updates` | Telegram | Telegram group topic (-1001722567447, thread 7491) |
 
 ## Prerequisites
 
@@ -81,6 +88,7 @@ Resolve the webhook URL from the channel name:
 - Parse the channel argument (e.g., `discord:updates` -> platform=`discord`, name=`updates`)
 - For Discord: look up `ANNOUNCE_DISCORD_UPDATES_WEBHOOK` (uppercased name)
 - For Slack: look up `ANNOUNCE_SLACK_UPDATES_CHANNEL` (uppercased name) and `ANNOUNCE_SLACK_TOKEN`
+- For Telegram: look up `ANNOUNCE_TELEGRAM_UPDATES_CHANNEL` (uppercased name) and `ANNOUNCE_TELEGRAM_TOKEN`. If the channel value contains `:`, split into `chat_id:thread_id` for topic threading.
 - If not found, stop and show available channels
 
 ### Step 3: Send Message
@@ -139,6 +147,37 @@ RESPONSE=$(curl -s -X POST https://slack.com/api/chat.postMessage \
 - Common errors: `channel_not_found`, `not_in_channel` (bot must be invited to the channel first)
 
 For rich formatting, Slack supports [mrkdwn](https://api.slack.com/reference/surfaces/formatting): `*bold*`, `_italic_`, `` `code` ``, `>` blockquote.
+
+#### Telegram
+
+Post via Bot API `sendMessage`:
+
+```bash
+# Parse chat_id and optional thread_id from channel value
+CHANNEL_VALUE="$ANNOUNCE_TELEGRAM_UPDATES_CHANNEL"
+if [[ "$CHANNEL_VALUE" == *":"* ]]; then
+  CHAT_ID="${CHANNEL_VALUE%%:*}"
+  THREAD_ID="${CHANNEL_VALUE##*:}"
+  THREAD_PARAM="\"message_thread_id\": $THREAD_ID,"
+else
+  CHAT_ID="$CHANNEL_VALUE"
+  THREAD_PARAM=""
+fi
+
+RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${ANNOUNCE_TELEGRAM_TOKEN}/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"chat_id\": \"$CHAT_ID\",
+    ${THREAD_PARAM}
+    \"text\": \"<message>\",
+    \"parse_mode\": \"HTML\"
+  }")
+```
+
+- Check `echo $RESPONSE | python3 -c "import sys,json; r=json.load(sys.stdin); print('ok' if r['ok'] else r['description'])"` — `ok` = success
+- Common errors: `Forbidden: bot is not a member of the channel chat` (bot must be admin), `Bad Request: message thread not found` (wrong thread ID)
+- HTML formatting: `<b>bold</b>`, `<i>italic</i>`, `<code>code</code>`, `<pre>block</pre>`, `<a href="url">link</a>`
+- Max message length: 4096 characters
 
 ### Step 4: Confirm
 
@@ -234,3 +273,21 @@ ANNOUNCE_SLACK_UPDATES_CHANNEL=C06MCLZ966Q
 ```
 
 Usage: `/announce slack:updates Your message here`
+
+### Telegram Setup
+
+1. Message `@BotFather` on Telegram → `/newbot` → pick a name and username (must end in `bot`)
+2. Copy the API token BotFather gives you
+3. Add the bot as an **administrator** of your channel/group (must have "Post Messages" permission)
+4. For groups with Topics: get the topic thread ID from the topic link (e.g., `https://t.me/c/1722567447/7491` → thread ID is `7491`, chat ID is `-1001722567447`)
+
+Add to `.env`:
+
+```bash
+# Announce skill - Telegram
+ANNOUNCE_TELEGRAM_TOKEN=<bot-token-from-botfather>
+ANNOUNCE_TELEGRAM_UPDATES_CHANNEL=-100XXXXXXXXXX:7491  # chat_id:thread_id for topics
+# Without topic: ANNOUNCE_TELEGRAM_GENERAL_CHANNEL=-100XXXXXXXXXX
+```
+
+Usage: `/announce telegram:updates Your message here`
