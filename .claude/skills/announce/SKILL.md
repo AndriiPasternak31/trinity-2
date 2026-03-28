@@ -4,11 +4,12 @@ description: Send an announcement message to Discord and/or Slack channels
 allowed-tools: [Bash, Read]
 user-invocable: true
 metadata:
-  version: "1.2"
+  version: "1.3"
   created: 2026-03-28
   updated: 2026-03-28
   author: trinity
   changelog:
+    - "1.3: Save each announcement to docs/user-docs/dev-announcements/ with timestamped filename"
     - "1.2: Add message style rule — dense, no-filler announcements"
     - "1.1: Add Slack support via Bot OAuth Token + chat.postMessage API"
     - "1.0: Initial version — Discord webhook support"
@@ -25,6 +26,7 @@ Send an arbitrary message to a configured announcement channel. Supports Discord
 | Source | Location | Read | Write | Description |
 |--------|----------|------|-------|-------------|
 | Env file | `.env` | Yes | | Webhook URLs and channel config |
+| Announcements | `docs/user-docs/dev-announcements/` | | Yes | Timestamped announcement records |
 
 ## Channel Registry
 
@@ -146,10 +148,38 @@ Report the result:
 Sent to discord:updates (HTTP 204)
 ```
 
+### Step 5: Save Announcement Record
+
+Save every announcement to `docs/user-docs/dev-announcements/` with a timestamped filename:
+
+```bash
+mkdir -p docs/user-docs/dev-announcements
+TIMESTAMP=$(date +%Y-%m-%d-%H%M%S)
+FILENAME="docs/user-docs/dev-announcements/${TIMESTAMP}.md"
+```
+
+Write the file with frontmatter and the message content:
+
+```markdown
+---
+date: <ISO 8601 timestamp, e.g. 2026-03-28T14:30:00>
+channel: <platform:name, e.g. discord:updates>
+---
+
+<message content as sent>
+```
+
+Report the saved path:
+
+```
+Saved to docs/user-docs/dev-announcements/2026-03-28-143000.md
+```
+
 ## Outputs
 
 - Message posted to the target channel
 - Confirmation of delivery status
+- Announcement record saved to `docs/user-docs/dev-announcements/<timestamp>.md`
 
 ---
 

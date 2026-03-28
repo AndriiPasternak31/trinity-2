@@ -58,6 +58,10 @@
 - [MCP Server](integrations/mcp-server.md) — 62 MCP tools, API keys, tool categories
 - [Nevermined Payments](integrations/nevermined-payments.md) — x402 payment monetization
 
+## Dev Announcements
+
+- [Dev Announcements](dev-announcements/) — Timestamped archive of all `/announce` messages sent to Discord and Slack
+
 ## Advanced
 
 - [Voice Chat](advanced/voice-chat.md) — Real-time voice via Gemini Live API
