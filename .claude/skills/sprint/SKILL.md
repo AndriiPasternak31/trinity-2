@@ -17,20 +17,19 @@ Automate the complete Trinity development workflow:
 1. Select the highest-priority issue from the backlog
 2. Validate requirements and acceptance criteria
 3. Create a feature branch
-4. Security audit (via `/cso --diff`) — optional, recommended for P0/P1
-5. Plan review (via `/autoplan`) — strategy + eng + security review
-6. Human reviews and approves the plan
-7. Implement the feature (via `/implement`)
-8. Pre-landing code review (via `/review`)
+4. Plan review (via `/autoplan`) — strategy + eng + security review
+5. Human reviews and approves the plan
+6. Implement the feature (via `/implement`)
+7. Pre-landing code review (via `/review`)
+8. Security audit (via `/cso --diff`) — recommended for P0/P1
 9. Verify tests exist and pass
 10. Sync feature flow documentation (via `/sync-feature-flows`)
-11. Process/docs validation (via `/validate-pr`)
-12. Commit, push, and create a PR
+11. Commit, push, and create a PR
 
 ## Pipeline Overview
 
 ```
-/sprint X → /cso --diff → /autoplan → review → approve → /implement → /review → /validate-pr → /sync-feature-flows → PR
+/sprint X → /autoplan → approve → /implement → /review → /cso --diff → /sync-feature-flows → PR
 ```
 
 ## State Dependencies
@@ -122,21 +121,7 @@ git checkout -b feature/[NUMBER]-[slug]
 Branch naming: `feature/[issue-number]-[2-3-word-slug]`
 - Example: `feature/68-live-execution-output`
 
-### Step 4: Security Audit (P0/P1 recommended)
-
-For P0 and P1 issues, run a security audit scoped to the branch changes:
-
-```
-/cso --diff
-```
-
-This checks: secrets archaeology, dependency supply chain, CI/CD pipeline, auth boundaries, and Trinity-specific security patterns on the changed files.
-
-**For P2/P3 issues**: Ask the user if they want to run `/cso --diff` or skip.
-
-**GATE: If critical findings, present them. User must acknowledge before proceeding.**
-
-### Step 5: Plan Review
+### Step 4: Plan Review
 
 Run the auto-review pipeline:
 
@@ -153,7 +138,7 @@ Auto-decides intermediate questions using 6 decision principles. Surfaces taste 
 
 **GATE: Wait for user to approve the autoplan output before implementing.**
 
-### Step 6: Implement
+### Step 5: Implement
 
 Run the `/implement` skill with the issue number:
 
@@ -167,7 +152,7 @@ This handles:
 - Writing initial tests
 - Updating `requirements.md` if needed
 
-### Step 7: Pre-Landing Code Review
+### Step 6: Pre-Landing Code Review
 
 Run the code review on the implementation:
 
@@ -179,7 +164,21 @@ This catches structural issues tests miss: SQL safety, race conditions, auth bou
 
 **If critical findings**: Fix them before proceeding. The `/review` skill offers a fix-first flow.
 
-### Step 9: Verify Tests
+### Step 7: Security Audit (P0/P1 recommended)
+
+For P0 and P1 issues, run a security audit on the actual code changes:
+
+```
+/cso --diff
+```
+
+Now that code exists on the branch, this scans: secrets archaeology, dependency supply chain, CI/CD pipeline, auth boundaries, and Trinity-specific security patterns.
+
+**For P2/P3 issues**: Ask the user if they want to run `/cso --diff` or skip.
+
+**GATE: If critical findings, present them. User must acknowledge before proceeding.**
+
+### Step 8: Verify Tests
 
 After `/implement` completes, explicitly verify tests were created:
 
@@ -207,7 +206,7 @@ cd tests && source .venv/bin/activate && python -m pytest tests/test_[feature].p
 
 Fix any failures before proceeding.
 
-### Step 10: Sync Feature Flows
+### Step 9: Sync Feature Flows
 
 Run the `/sync-feature-flows` skill to update documentation:
 
@@ -228,7 +227,7 @@ head -20 docs/memory/changelog.md
 
 If changelog was not updated, add an entry now following the existing format.
 
-### Step 11: Commit, Push & Create PR
+### Step 10: Commit, Push & Create PR
 
 **Stage all changes:**
 ```bash
@@ -295,7 +294,7 @@ The PR title prefix should match the change type:
 - `refactor:` — code restructuring
 - `docs:` — documentation only
 
-### Step 12: Final Status
+### Step 11: Final Status
 
 Report completion:
 
@@ -317,10 +316,10 @@ Next steps:
 
 - [ ] Issue selected and validated
 - [ ] Feature branch created from latest main
-- [ ] Security audit passed (via /cso --diff, P0/P1)
 - [ ] Plan reviewed and approved (via /autoplan)
 - [ ] Implementation complete (via /implement)
 - [ ] Code review passed (via /review)
+- [ ] Security audit passed (via /cso --diff, P0/P1)
 - [ ] Tests exist and pass
 - [ ] Feature flows synced (via /sync-feature-flows)
 - [ ] Changelog updated

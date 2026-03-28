@@ -24,8 +24,8 @@ Trinity follows a 4-stage lifecycle that maps 1:1 to the **Trinity Roadmap** Git
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ IN       │  /claim → /cso --diff → /autoplan → approve             │
-│ PROGRESS │  → /implement → /review → /sync-feature-flows           │
+│ IN       │  /claim → /autoplan → approve → /implement              │
+│ PROGRESS │  → /review → /cso --diff → /sync-feature-flows          │
 │          │  Label: status-in-progress                               │
 │          │  GitHub Project: In Progress                             │
 │          │                                                          │
@@ -113,20 +113,19 @@ Then follow the development pipeline:
 The full pipeline for a sprint (each step can also be run standalone):
 
 ```
-/sprint X → /cso --diff → /autoplan → approve → /implement → /review → /validate-pr → /sync-feature-flows → PR
+/sprint X → /autoplan → approve → /implement → /review → /cso --diff → /sync-feature-flows → PR
 ```
 
 | Step | Skill | What it does |
 |------|-------|-------------|
 | 1. Claim issue | `/claim` (GitHub) | Auto-assign + `status-in-progress` label |
-| 2. Security audit | `/cso --diff` | Scan branch changes for vulnerabilities (P0/P1 recommended) |
-| 3. Plan review | `/autoplan` | Strategy + engineering + security review with auto-decisions |
-| 4. Human approval | *(manual)* | Review autoplan output, approve or revise |
-| 5. Implement | `/implement` | Code the feature, write tests |
-| 6. Code review | `/review` | Pre-landing diff review for structural issues |
-| 7. Docs validation | `/validate-pr` | Check docs, process, security checklist |
-| 8. Sync docs | `/sync-feature-flows` | Update feature flow documentation |
-| 9. Ship | `/commit` + PR | Commit, push, create pull request |
+| 2. Plan review | `/autoplan` | Strategy + engineering + security review with auto-decisions |
+| 3. Human approval | *(manual)* | Review autoplan output, approve or revise |
+| 4. Implement | `/implement` | Code the feature, write tests |
+| 5. Code review | `/review` | Pre-landing diff review for structural issues |
+| 6. Security audit | `/cso --diff` | Scan actual code changes for vulnerabilities (P0/P1 recommended) |
+| 7. Sync docs | `/sync-feature-flows` | Update feature flow documentation |
+| 8. Ship | `/commit` + PR | Commit, push, create pull request |
 
 #### Context Loading
 
@@ -402,11 +401,11 @@ Skills in `.claude/skills/` define HOW to approach specific tasks:
 - [ ] `/claim` the issue (or assign yourself manually)
 - [ ] Create feature branch: `feature/<issue-number>-<slug>`
 - [ ] Load context (`/read-docs` or read relevant feature flows)
-- [ ] `/cso --diff` — security audit (recommended for P0/P1)
 - [ ] `/autoplan` — plan review (strategy + eng + security)
 - [ ] Review and approve the plan
 - [ ] `/implement` — build the feature
 - [ ] `/review` — pre-landing code review
+- [ ] `/cso --diff` — security audit of changes (recommended for P0/P1)
 - [ ] Run tests (`test-runner` agent)
 - [ ] `/sync-feature-flows` — update documentation
 - [ ] Open PR with `Fixes #N`, run `/validate-pr`
