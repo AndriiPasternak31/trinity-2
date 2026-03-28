@@ -4,11 +4,12 @@ description: Send an announcement message to Discord and/or Slack channels
 allowed-tools: [Bash, Read]
 user-invocable: true
 metadata:
-  version: "1.1"
+  version: "1.2"
   created: 2026-03-28
   updated: 2026-03-28
   author: trinity
   changelog:
+    - "1.2: Add message style rule — dense, no-filler announcements"
     - "1.1: Add Slack support via Bot OAuth Token + chat.postMessage API"
     - "1.0: Initial version — Discord webhook support"
 ---
@@ -81,6 +82,10 @@ Resolve the webhook URL from the channel name:
 - If not found, stop and show available channels
 
 ### Step 3: Send Message
+
+#### Message Style
+
+Keep announcements dense and information-rich. No filler, no preamble, no "we're excited to announce". Lead with what changed, then why it matters. One sentence per fact. If the update fits in one line, use plain `content`. Only use embeds for multi-fact updates.
 
 #### Discord
 
