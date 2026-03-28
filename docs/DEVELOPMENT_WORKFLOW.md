@@ -24,13 +24,14 @@ Trinity follows a 4-stage lifecycle that maps 1:1 to the **Trinity Roadmap** Git
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ IN       │  Developer assigned, feature branch created              │
-│ PROGRESS │  Label: status-in-progress                               │
+│ IN       │  /claim → /cso --diff → /autoplan → approve             │
+│ PROGRESS │  → /implement → /review → /sync-feature-flows           │
+│          │  Label: status-in-progress                               │
 │          │  GitHub Project: In Progress                             │
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ REVIEW   │  PR opened, /validate-pr passes                          │
+│ REVIEW   │  PR opened, /review + /validate-pr pass                  │
 │          │  Code review approved, ready to merge                    │
 │          │  GitHub Project: In Progress                             │
 │          │                                                          │
@@ -69,7 +70,7 @@ Within P1, the **Tier** field on the project board provides sub-prioritization: 
 
 - **All work on feature branches** — direct pushes to `main` are blocked (branch protection)
 - **Every PR links to an issue** — use `Fixes #N` in the PR description
-- **Assign yourself** when you start work on an issue
+- **Claim issues via `/claim`** — comment `/claim` on an issue to auto-assign yourself (or assign manually). Use `/unclaim` to release.
 - **No merge without passing `/validate-pr`**
 
 ---
@@ -92,10 +93,9 @@ An issue is ready to pick up when it has a clear description, acceptance criteri
 
 When picking up work:
 
-1. **Assign yourself** to the issue
-2. Apply `status-in-progress` label
-3. Move to **In Progress** on the project board
-4. Create a feature branch from `main`
+1. **Claim the issue** — comment `/claim` on the issue (GitHub Action auto-assigns you and adds `status-in-progress` label), or assign yourself manually
+2. Move to **In Progress** on the project board
+3. Create a feature branch from `main`
 
 #### Branch Convention
 
@@ -106,7 +106,27 @@ All work happens on feature branches. Direct pushes to `main` are blocked by bra
 
 **Merge strategy**: Squash merge via PR with `Fixes #N`.
 
-Then follow the development cycle:
+Then follow the development pipeline:
+
+#### Development Pipeline
+
+The full pipeline for a sprint (each step can also be run standalone):
+
+```
+/sprint X → /cso --diff → /autoplan → approve → /implement → /review → /validate-pr → /sync-feature-flows → PR
+```
+
+| Step | Skill | What it does |
+|------|-------|-------------|
+| 1. Claim issue | `/claim` (GitHub) | Auto-assign + `status-in-progress` label |
+| 2. Security audit | `/cso --diff` | Scan branch changes for vulnerabilities (P0/P1 recommended) |
+| 3. Plan review | `/autoplan` | Strategy + engineering + security review with auto-decisions |
+| 4. Human approval | *(manual)* | Review autoplan output, approve or revise |
+| 5. Implement | `/implement` | Code the feature, write tests |
+| 6. Code review | `/review` | Pre-landing diff review for structural issues |
+| 7. Docs validation | `/validate-pr` | Check docs, process, security checklist |
+| 8. Sync docs | `/sync-feature-flows` | Update feature flow documentation |
+| 9. Ship | `/commit` + PR | Commit, push, create pull request |
 
 #### Context Loading
 
@@ -157,17 +177,25 @@ After tests pass, update documentation:
 
 When local development is complete:
 
-1. **Open a PR** — reference the issue with `Fixes #N`
-2. **Verify locally** — test the feature on localhost
-3. **For P0/P1 features** (recommended): deploy to dev server for additional validation
+1. **Run `/review`** — pre-landing code review for structural issues (SQL safety, race conditions, auth boundaries, scope drift)
+2. **Fix critical findings** — `/review` offers a fix-first flow for critical issues
+3. **Open a PR** — reference the issue with `Fixes #N`
+4. **Run `/validate-pr`** — process and documentation validation
+5. **For P0/P1 features** (recommended): deploy to dev server for additional validation
 
-Run PR validation:
+**Code review (`/review`) checks:**
 
-```
-/validate-pr 42
-```
+| Category | Check |
+|----------|-------|
+| **SQL & Data Safety** | Raw queries, missing parameterization, mass assignment |
+| **Race Conditions** | Shared state, TOCTOU, Docker container races |
+| **Auth Boundaries** | Missing auth, resource ownership, admin access |
+| **Credential Exposure** | Secrets in logs, error messages, responses |
+| **Scope Drift** | Did the diff match the issue requirements? |
+| **Enum Completeness** | New values handled everywhere they're referenced |
+| **Test Gaps** | New endpoints/paths without tests |
 
-**What gets validated:**
+**Process validation (`/validate-pr`) checks:**
 
 | Category | Check |
 |----------|-------|
@@ -179,9 +207,73 @@ Run PR validation:
 | **Code Quality** | Minimal changes, follows patterns |
 | **Traceability** | Links to requirements and issue |
 
-The validator produces a report with a recommendation: **APPROVE**, **REQUEST CHANGES**, or **NEEDS DISCUSSION**.
+Both produce reports with recommendations: **APPROVE**, **REQUEST CHANGES**, or **NEEDS DISCUSSION**.
 
-If changes are requested, the developer fixes and re-requests review. The reviewer runs `/validate-pr` again.
+If changes are requested, fix and re-run the failing check.
+
+### 3b. Reviewer / Admin Workflow
+
+When a PR lands in your queue:
+
+#### Quick Triage (30 seconds)
+
+1. Check the PR has an issue link (`Fixes #N`)
+2. Check priority label — P0/P1 get deeper review
+3. Check size — large PRs (50+ files) may need to be split
+
+#### Review Pipeline
+
+Run these based on PR type:
+
+| PR Type | `/review` | `/validate-pr` | `/cso --diff` |
+|---------|-----------|-----------------|----------------|
+| **Feature (P0/P1)** | Required | Required | Required |
+| **Feature (P2/P3)** | Required | Required | Recommended |
+| **Bug fix** | Required | Required | Skip unless auth/security related |
+| **Refactor** | Required | Required | Skip |
+| **Docs only** | Skip | Required | Skip |
+
+**Step 1: Code review**
+```
+/review
+```
+Checks structural issues: SQL safety, race conditions, auth boundaries, scope drift, test gaps. Produces a findings report with CRITICAL (block merge) and INFORMATIONAL (review) categories.
+
+**Step 2: Process validation**
+```
+/validate-pr <number>
+```
+Checks docs, changelog, requirements, feature flows, security (no secrets in diff), traceability.
+
+**Step 3: Security audit (P0/P1 or security-sensitive changes)**
+```
+/cso --diff
+```
+Runs a scoped security audit on the branch changes only. Checks secrets, dependencies, auth boundaries, injection vectors, Trinity-specific patterns.
+
+#### Decision
+
+| Outcome | When |
+|---------|------|
+| **APPROVE** | All checks pass, no critical findings |
+| **REQUEST CHANGES** | Critical findings in `/review` or `/validate-pr` — list what to fix |
+| **NEEDS DISCUSSION** | Scope drift detected, architecture concerns, or taste decisions |
+
+#### After Approval
+
+1. **Squash merge** the PR
+2. Verify the issue **auto-closes** via `Fixes #N`
+3. Move to **Done** on the project board
+4. Remove `status-in-progress` label (if not auto-removed)
+
+#### Red Flags to Watch For
+
+- Secrets, credentials, or real emails in the diff
+- New endpoints without auth checks
+- Changes to `docker-compose.yml` or `Dockerfile` without justification
+- Large unrelated changes bundled with the feature
+- Missing tests for new behavior
+- `requirements.md` not updated for new features
 
 ### 4. Done
 
@@ -243,11 +335,17 @@ Agents are invoked automatically by Claude Code when appropriate, or you can req
 | Command | Purpose | SDLC Stage |
 |---------|---------|------------|
 | `/read-docs` | Load project context | In Progress |
+| `/cso [--diff\|--comprehensive]` | Security audit (CSO mode) | In Progress |
+| `/autoplan [issue-number]` | Auto-review pipeline (strategy + eng + security) | In Progress |
+| `/implement <issue-number>` | End-to-end feature implementation | In Progress |
+| `/review` | Pre-landing code review (structural issues) | In Progress |
 | `/update-docs` | Update documentation | In Progress |
 | `/feature-flow-analysis <feature>` | Document feature flow | In Progress |
+| `/sync-feature-flows` | Sync feature flow docs with code changes | In Progress |
 | `/security-check` | Validate no secrets in staged files | In Progress |
 | `/add-testing` | Add tests for a feature | In Progress |
 | `/validate-pr <number>` | Validate PR against methodology | Review |
+| `/sprint [issue-number]` | Full dev cycle (orchestrates all above) | All |
 
 ---
 
@@ -299,20 +397,26 @@ Skills in `.claude/skills/` define HOW to approach specific tasks:
 
 ## Quick Start Checklist
 
-**For every development session:**
+**For every development session (or just run `/sprint`):**
 
-- [ ] Check GitHub Issues — pick the highest priority issue from Todo
-- [ ] Assign yourself, apply `status-in-progress`, move to In Progress
+- [ ] `/claim` the issue (or assign yourself manually)
 - [ ] Create feature branch: `feature/<issue-number>-<slug>`
 - [ ] Load context (`/read-docs` or read relevant feature flows)
-- [ ] Implement changes
+- [ ] `/cso --diff` — security audit (recommended for P0/P1)
+- [ ] `/autoplan` — plan review (strategy + eng + security)
+- [ ] Review and approve the plan
+- [ ] `/implement` — build the feature
+- [ ] `/review` — pre-landing code review
 - [ ] Run tests (`test-runner` agent)
-- [ ] Update documentation (see tiered doc requirements above)
-- [ ] Open PR with `Fixes #N`, squash merge when approved
-- [ ] Run `/validate-pr`
+- [ ] `/sync-feature-flows` — update documentation
+- [ ] Open PR with `Fixes #N`, run `/validate-pr`
+- [ ] Squash merge when approved
 
-**For PR reviews:**
+**For PR reviews (reviewer/admin):**
 
-- [ ] Run `/validate-pr <number>`
-- [ ] Verify all Critical issues resolved
-- [ ] Approve only when report shows all pass
+- [ ] Quick triage: issue link, priority label, PR size
+- [ ] `/review` — code quality (structural issues, auth, races)
+- [ ] `/validate-pr <number>` — docs and process
+- [ ] `/cso --diff` — security (P0/P1 or security-sensitive PRs)
+- [ ] Verify all critical findings resolved
+- [ ] Squash merge, verify issue auto-closes

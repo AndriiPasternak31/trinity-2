@@ -1,6 +1,6 @@
 ---
 name: sprint
-description: Full development cycle — pick top issue from backlog, implement, test, sync docs, commit to feature branch, and create PR.
+description: Full development cycle — pick issue, plan review, implement, code review, sync docs, commit to feature branch, and create PR. Orchestrates /cso, /autoplan, /implement, /review, /validate-pr, /sync-feature-flows.
 allowed-tools: [Agent, Bash, Edit, Glob, Grep, Read, Skill, Write, AskUserQuestion]
 user-invocable: true
 argument-hint: "[issue-number]"
@@ -17,10 +17,21 @@ Automate the complete Trinity development workflow:
 1. Select the highest-priority issue from the backlog
 2. Validate requirements and acceptance criteria
 3. Create a feature branch
-4. Implement the feature (via `/implement`)
-5. Verify tests exist and pass
-6. Sync feature flow documentation (via `/sync-feature-flows`)
-7. Commit, push, and create a PR
+4. Security audit (via `/cso --diff`) — optional, recommended for P0/P1
+5. Plan review (via `/autoplan`) — strategy + eng + security review
+6. Human reviews and approves the plan
+7. Implement the feature (via `/implement`)
+8. Pre-landing code review (via `/review`)
+9. Verify tests exist and pass
+10. Sync feature flow documentation (via `/sync-feature-flows`)
+11. Process/docs validation (via `/validate-pr`)
+12. Commit, push, and create a PR
+
+## Pipeline Overview
+
+```
+/sprint X → /cso --diff → /autoplan → review → approve → /implement → /review → /validate-pr → /sync-feature-flows → PR
+```
 
 ## State Dependencies
 
@@ -111,7 +122,38 @@ git checkout -b feature/[NUMBER]-[slug]
 Branch naming: `feature/[issue-number]-[2-3-word-slug]`
 - Example: `feature/68-live-execution-output`
 
-### Step 4: Implement
+### Step 4: Security Audit (P0/P1 recommended)
+
+For P0 and P1 issues, run a security audit scoped to the branch changes:
+
+```
+/cso --diff
+```
+
+This checks: secrets archaeology, dependency supply chain, CI/CD pipeline, auth boundaries, and Trinity-specific security patterns on the changed files.
+
+**For P2/P3 issues**: Ask the user if they want to run `/cso --diff` or skip.
+
+**GATE: If critical findings, present them. User must acknowledge before proceeding.**
+
+### Step 5: Plan Review
+
+Run the auto-review pipeline:
+
+```
+/autoplan #[NUMBER]
+```
+
+This reviews the plan from 3 angles:
+- **Strategy**: Is this the right approach? Premises valid? Scope calibrated?
+- **Engineering**: Architecture sound? Edge cases? Test coverage?
+- **Security**: New attack surface? Auth boundaries? Input validation?
+
+Auto-decides intermediate questions using 6 decision principles. Surfaces taste decisions at the end.
+
+**GATE: Wait for user to approve the autoplan output before implementing.**
+
+### Step 6: Implement
 
 Run the `/implement` skill with the issue number:
 
@@ -125,7 +167,19 @@ This handles:
 - Writing initial tests
 - Updating `requirements.md` if needed
 
-### Step 5: Verify Tests
+### Step 7: Pre-Landing Code Review
+
+Run the code review on the implementation:
+
+```
+/review
+```
+
+This catches structural issues tests miss: SQL safety, race conditions, auth boundary violations, scope drift, enum completeness.
+
+**If critical findings**: Fix them before proceeding. The `/review` skill offers a fix-first flow.
+
+### Step 9: Verify Tests
 
 After `/implement` completes, explicitly verify tests were created:
 
@@ -153,7 +207,7 @@ cd tests && source .venv/bin/activate && python -m pytest tests/test_[feature].p
 
 Fix any failures before proceeding.
 
-### Step 6: Sync Feature Flows
+### Step 10: Sync Feature Flows
 
 Run the `/sync-feature-flows` skill to update documentation:
 
@@ -174,7 +228,7 @@ head -20 docs/memory/changelog.md
 
 If changelog was not updated, add an entry now following the existing format.
 
-### Step 7: Commit, Push & Create PR
+### Step 11: Commit, Push & Create PR
 
 **Stage all changes:**
 ```bash
@@ -241,7 +295,7 @@ The PR title prefix should match the change type:
 - `refactor:` — code restructuring
 - `docs:` — documentation only
 
-### Step 8: Final Status
+### Step 12: Final Status
 
 Report completion:
 
@@ -263,7 +317,10 @@ Next steps:
 
 - [ ] Issue selected and validated
 - [ ] Feature branch created from latest main
+- [ ] Security audit passed (via /cso --diff, P0/P1)
+- [ ] Plan reviewed and approved (via /autoplan)
 - [ ] Implementation complete (via /implement)
+- [ ] Code review passed (via /review)
 - [ ] Tests exist and pass
 - [ ] Feature flows synced (via /sync-feature-flows)
 - [ ] Changelog updated
