@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-03-31 | #222 | Slack inbound file sharing — images via vision, text files via container copy (SLACK-FILES) | [slack-file-sharing.md](feature-flows/slack-file-sharing.md) |
 | 2026-03-31 | TELEGRAM-001 | Telegram bot integration — per-agent bots, webhook transport, encrypted tokens | [telegram-integration.md](feature-flows/telegram-integration.md) |
 | 2026-03-30 | FANOUT-001 | Fan-out parallel task dispatch and result collection | [fan-out.md](feature-flows/fan-out.md) |
 | 2026-03-27 | #182 | Subscription BOLA fix — restrict assign/clear to owner/admin via `can_user_share_agent` | [subscription-management.md](feature-flows/subscription-management.md) |
@@ -166,6 +167,7 @@
 | Public Agent Links | [public-agent-links.md](feature-flows/public-agent-links.md) | Shareable public links with optional email verification |
 | Slack Integration | [slack-integration.md](feature-flows/slack-integration.md) | Slack as delivery channel for public links (SLACK-001) |
 | Slack Channel Routing | [slack-channel-routing.md](feature-flows/slack-channel-routing.md) | Channel adapter abstraction + multi-agent Slack routing (SLACK-002) |
+| Slack File Sharing | [slack-file-sharing.md](feature-flows/slack-file-sharing.md) | Inbound file uploads: images via vision, text via container (SLACK-FILES) |
 | Telegram Integration | [telegram-integration.md](feature-flows/telegram-integration.md) | Per-agent Telegram bots with webhook transport (TELEGRAM-001) |
 | Nevermined x402 Payments | [nevermined-payments.md](feature-flows/nevermined-payments.md) | Per-agent paid API via x402 payment protocol (NVM-001) |
 
