@@ -18,6 +18,7 @@ class ChatOperations:
     @staticmethod
     def _row_to_chat_session(row) -> ChatSession:
         """Convert a chat_sessions row to a ChatSession model."""
+        keys = row.keys()
         return ChatSession(
             id=row["id"],
             agent_name=row["agent_name"],
@@ -29,12 +30,14 @@ class ChatOperations:
             total_cost=row["total_cost"],
             total_context_used=row["total_context_used"],
             total_context_max=row["total_context_max"],
-            status=row["status"]
+            status=row["status"],
+            subscription_id=row["subscription_id"] if "subscription_id" in keys else None,
         )
 
     @staticmethod
     def _row_to_chat_message(row) -> ChatMessage:
         """Convert a chat_messages row to a ChatMessage model."""
+        keys = row.keys()
         return ChatMessage(
             id=row["id"],
             session_id=row["session_id"],
@@ -49,10 +52,18 @@ class ChatOperations:
             context_max=row["context_max"],
             tool_calls=row["tool_calls"],
             execution_time_ms=row["execution_time_ms"],
-            source=row["source"] if "source" in row.keys() else "text"
+            source=row["source"] if "source" in keys else "text",
+            subscription_id=row["subscription_id"] if "subscription_id" in keys else None,
+            output_tokens=row["output_tokens"] if "output_tokens" in keys else None,
         )
 
-    def get_or_create_chat_session(self, agent_name: str, user_id: int, user_email: str) -> ChatSession:
+    def get_or_create_chat_session(
+        self,
+        agent_name: str,
+        user_id: int,
+        user_email: str,
+        subscription_id: Optional[str] = None,
+    ) -> ChatSession:
         """
         Get the active chat session for a user+agent, or create a new one.
         Returns the most recent active session if it exists.
@@ -78,10 +89,11 @@ class ChatOperations:
 
             cursor.execute("""
                 INSERT INTO chat_sessions (
-                    id, agent_name, user_id, user_email, started_at, last_message_at
+                    id, agent_name, user_id, user_email, started_at, last_message_at,
+                    subscription_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (session_id, agent_name, user_id, user_email, now, now))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (session_id, agent_name, user_id, user_email, now, now, subscription_id))
 
             conn.commit()
 
@@ -103,7 +115,9 @@ class ChatOperations:
         context_max: Optional[int] = None,
         tool_calls: Optional[str] = None,
         execution_time_ms: Optional[int] = None,
-        source: Optional[str] = "text"
+        source: Optional[str] = "text",
+        subscription_id: Optional[str] = None,
+        output_tokens: Optional[int] = None,
     ) -> ChatMessage:
         """Add a message to a chat session and update session stats."""
         with get_db_connection() as conn:
@@ -118,14 +132,14 @@ class ChatOperations:
                     id, session_id, agent_name, user_id, user_email,
                     role, content, timestamp,
                     cost, context_used, context_max, tool_calls, execution_time_ms,
-                    source
+                    source, subscription_id, output_tokens
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 message_id, session_id, agent_name, user_id, user_email,
                 role, content, now,
                 cost, context_used, context_max, tool_calls, execution_time_ms,
-                source or "text"
+                source or "text", subscription_id, output_tokens,
             ))
 
             # Update session stats
@@ -236,7 +250,13 @@ class ChatOperations:
             conn.commit()
             return cursor.rowcount > 0
 
-    def create_new_chat_session(self, agent_name: str, user_id: int, user_email: str) -> ChatSession:
+    def create_new_chat_session(
+        self,
+        agent_name: str,
+        user_id: int,
+        user_email: str,
+        subscription_id: Optional[str] = None,
+    ) -> ChatSession:
         """
         Create a new chat session, closing any existing active sessions for this user+agent.
         Use this when user explicitly wants a new conversation (e.g., "New Chat" button).
@@ -256,10 +276,11 @@ class ChatOperations:
 
             cursor.execute("""
                 INSERT INTO chat_sessions (
-                    id, agent_name, user_id, user_email, started_at, last_message_at
+                    id, agent_name, user_id, user_email, started_at, last_message_at,
+                    subscription_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (session_id, agent_name, user_id, user_email, now, now))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (session_id, agent_name, user_id, user_email, now, now, subscription_id))
 
             conn.commit()
 

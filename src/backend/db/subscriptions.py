@@ -10,11 +10,11 @@ Tokens are encrypted using the same AES-256-GCM system as other credentials.
 
 import uuid
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 from .connection import get_db_connection
-from db_models import SubscriptionCredential, SubscriptionWithAgents
+from db_models import SubscriptionCredential, SubscriptionUsage, SubscriptionUsageWindow, SubscriptionWithAgents
 
 
 class SubscriptionOperations:
@@ -598,3 +598,80 @@ class SubscriptionOperations:
                     return sub
 
             return None
+
+    # =========================================================================
+    # Usage Tracking (SUB-004: Per-subscription usage windows)
+    # =========================================================================
+
+    def get_subscription_usage(self, subscription_id: str) -> SubscriptionUsage:
+        """
+        Return rolling usage totals for a subscription across two time windows:
+        - window_5h: last 5 hours
+        - window_7d: last 7 days (168 hours)
+
+        Aggregates chat_messages and schedule_executions by subscription_id.
+
+        Args:
+            subscription_id: The subscription UUID to query
+
+        Returns:
+            SubscriptionUsage with two windows and list of currently-assigned agents
+        """
+        now = datetime.utcnow()
+        cutoff_5h = (now - timedelta(hours=5)).isoformat()
+        cutoff_7d = (now - timedelta(hours=168)).isoformat()
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            def _query_window(cutoff: str) -> SubscriptionUsageWindow:
+                # Chat messages: input tokens stored in context_used, output in output_tokens
+                cursor.execute("""
+                    SELECT
+                        COALESCE(SUM(context_used), 0) AS input_tokens,
+                        COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                        COALESCE(SUM(cost), 0.0) AS cost_usd,
+                        COUNT(*) AS message_count
+                    FROM chat_messages
+                    WHERE subscription_id = ?
+                      AND role = 'assistant'
+                      AND timestamp >= ?
+                """, (subscription_id, cutoff))
+                chat_row = cursor.fetchone()
+
+                # Schedule executions: input tokens in context_used (no separate output_tokens)
+                cursor.execute("""
+                    SELECT
+                        COALESCE(SUM(context_used), 0) AS input_tokens,
+                        COALESCE(SUM(cost), 0.0) AS cost_usd,
+                        COUNT(*) AS exec_count
+                    FROM schedule_executions
+                    WHERE subscription_id = ?
+                      AND started_at >= ?
+                      AND status NOT IN ('running', 'pending')
+                """, (subscription_id, cutoff))
+                exec_row = cursor.fetchone()
+
+                return SubscriptionUsageWindow(
+                    input_tokens=int(chat_row["input_tokens"] or 0) + int(exec_row["input_tokens"] or 0),
+                    output_tokens=int(chat_row["output_tokens"] or 0),
+                    cost_usd=float(chat_row["cost_usd"] or 0.0) + float(exec_row["cost_usd"] or 0.0),
+                    message_count=int(chat_row["message_count"] or 0) + int(exec_row["exec_count"] or 0),
+                )
+
+            window_5h = _query_window(cutoff_5h)
+            window_7d = _query_window(cutoff_7d)
+
+            # Currently-assigned agents (live assignment, not historical)
+            cursor.execute(
+                "SELECT agent_name FROM agent_ownership WHERE subscription_id = ?",
+                (subscription_id,)
+            )
+            agents = [row["agent_name"] for row in cursor.fetchall()]
+
+        return SubscriptionUsage(
+            subscription_id=subscription_id,
+            window_5h=window_5h,
+            window_7d=window_7d,
+            agents=agents,
+        )

@@ -171,6 +171,7 @@ TABLES = {
             tool_calls TEXT,
             execution_log TEXT,
             model_used TEXT,
+            subscription_id TEXT,
             FOREIGN KEY (schedule_id) REFERENCES agent_schedules(id)
         )
     """,
@@ -191,6 +192,7 @@ TABLES = {
             total_context_used INTEGER DEFAULT 0,
             total_context_max INTEGER DEFAULT 200000,
             status TEXT DEFAULT 'active',
+            subscription_id TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """,
@@ -211,6 +213,8 @@ TABLES = {
             tool_calls TEXT,
             execution_time_ms INTEGER,
             source TEXT DEFAULT 'text',
+            subscription_id TEXT,
+            output_tokens INTEGER,
             FOREIGN KEY (session_id) REFERENCES chat_sessions(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
@@ -675,6 +679,10 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_agent ON chat_messages(agent_name)",
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_chat_messages_subscription ON chat_messages(subscription_id, timestamp)",
+
+    # Execution subscription index (SUB-004)
+    "CREATE INDEX IF NOT EXISTS idx_executions_subscription ON schedule_executions(subscription_id, started_at)",
 
     # Activity indexes
     "CREATE INDEX IF NOT EXISTS idx_activities_agent ON agent_activities(agent_name, created_at DESC)",

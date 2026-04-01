@@ -144,6 +144,7 @@ class TaskExecutionService:
         system_prompt: Optional[str] = None,
         execution_id: Optional[str] = None,
         fan_out_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
     ) -> TaskExecutionResult:
         """
         Execute a task on an agent container with full lifecycle management.
@@ -174,6 +175,13 @@ class TaskExecutionService:
 
         # ---- 1. Create execution record (if not provided) ----------------
         if not execution_id:
+            # Snapshot subscription at record time (best-effort) for usage tracking (SUB-004)
+            _exec_sub_id = subscription_id
+            if _exec_sub_id is None:
+                try:
+                    _exec_sub_id = db.get_agent_subscription_id(agent_name)
+                except Exception:
+                    _exec_sub_id = None
             execution = db.create_task_execution(
                 agent_name=agent_name,
                 message=message,
@@ -185,6 +193,7 @@ class TaskExecutionService:
                 source_mcp_key_name=source_mcp_key_name,
                 model_used=model,
                 fan_out_id=fan_out_id,
+                subscription_id=_exec_sub_id,
             )
             execution_id = execution.id if execution else None
 

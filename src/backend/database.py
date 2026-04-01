@@ -553,6 +553,7 @@ class DatabaseManager:
         source_mcp_key_name: str = None,
         model_used: str = None,
         fan_out_id: str = None,
+        subscription_id: str = None,
     ):
         """Create an execution record for a manual/API-triggered task (no schedule)."""
         return self._schedule_ops.create_task_execution(
@@ -564,6 +565,7 @@ class DatabaseManager:
             source_mcp_key_name=source_mcp_key_name,
             model_used=model_used,
             fan_out_id=fan_out_id,
+            subscription_id=subscription_id,
         )
 
     def create_schedule_execution(
@@ -577,6 +579,7 @@ class DatabaseManager:
         source_agent_name: str = None,
         source_mcp_key_id: str = None,
         source_mcp_key_name: str = None,
+        subscription_id: str = None,
     ):
         return self._schedule_ops.create_schedule_execution(
             schedule_id, agent_name, message, triggered_by,
@@ -585,6 +588,7 @@ class DatabaseManager:
             source_agent_name=source_agent_name,
             source_mcp_key_id=source_mcp_key_id,
             source_mcp_key_name=source_mcp_key_name,
+            subscription_id=subscription_id,
         )
 
     def update_execution_status(self, execution_id: str, status: str, response: str = None, error: str = None,
@@ -1129,6 +1133,10 @@ class DatabaseManager:
 
     def select_best_alternative_subscription(self, current_subscription_id: str):
         return self._subscription_ops.select_best_alternative_subscription(current_subscription_id)
+
+    def get_subscription_usage(self, subscription_id: str):
+        """Return rolling usage totals for a subscription (SUB-004)."""
+        return self._subscription_ops.get_subscription_usage(subscription_id)
 
     # =========================================================================
     # Agent Monitoring (delegated to db/monitoring.py) - MON-001

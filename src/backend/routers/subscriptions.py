@@ -20,6 +20,7 @@ from dependencies import get_current_user
 from db_models import (
     SubscriptionCredentialCreate,
     SubscriptionCredential,
+    SubscriptionUsage,
     SubscriptionWithAgents,
     AgentAuthStatus,
 )
@@ -112,6 +113,37 @@ async def list_subscriptions(
     require_admin(current_user)
 
     return db.list_subscriptions_with_agents()
+
+
+@router.get("/{subscription_id}/usage", response_model=SubscriptionUsage)
+async def get_subscription_usage(
+    subscription_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get rolling usage statistics for a subscription (SUB-004).
+
+    Admin-only. Returns token and cost aggregates across two rolling windows:
+    - window_5h: last 5 hours
+    - window_7d: last 7 days
+
+    Covers both chat messages and schedule executions attributed to this subscription.
+    """
+    require_admin(current_user)
+
+    # Resolve by ID or name
+    subscription = db.get_subscription(subscription_id)
+    if not subscription:
+        subscription = db.get_subscription_by_name(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    try:
+        return db.get_subscription_usage(subscription.id)
+    except Exception as e:
+        logger.error(f"Failed to get usage for subscription {subscription_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve usage data")
 
 
 @router.get("/{subscription_id}", response_model=SubscriptionWithAgents)

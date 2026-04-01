@@ -119,6 +119,7 @@ create_agent_internal()
 | MCP Tool: `get_agent_auth` | `GET /api/subscriptions/agents/{agent_name}/auth` | Get agent auth status |
 | MCP Tool: `delete_subscription` | `DELETE /api/subscriptions/{subscription_id}` | Delete subscription |
 | Fleet Dashboard | `GET /api/ops/auth-report` | Fleet-wide auth status report |
+| Admin: subscription usage | `GET /api/subscriptions/{subscription_id}/usage` | Rolling 5h/7d token and cost totals for one subscription (SUB-004) |
 
 ---
 
@@ -1017,6 +1018,92 @@ async def get_auth_report(request: Request, current_user: User = Depends(get_cur
 
 ---
 
+## Flow 6: Subscription Usage Query (SUB-004)
+
+### Overview
+
+Admin fetches rolling token and cost aggregates for a single subscription. Two pre-defined windows are returned: the last 5 hours (rate-limit window) and the last 7 days (billing window). The data is sourced from `subscription_id` fields that are snapshotted onto `chat_messages` and `schedule_executions` at record time.
+
+### Backend Endpoint (`src/backend/routers/subscriptions.py:118-146`)
+
+```python
+@router.get("/{subscription_id}/usage", response_model=SubscriptionUsage)
+async def get_subscription_usage(
+    subscription_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Admin-only. Returns token and cost aggregates across two rolling windows."""
+    require_admin(current_user)
+
+    # Resolve by ID or name
+    subscription = db.get_subscription(subscription_id)
+    if not subscription:
+        subscription = db.get_subscription_by_name(subscription_id)
+
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    return db.get_subscription_usage(subscription.id)
+```
+
+Note: `subscription_id` in the path accepts either the UUID or the human-readable name (name lookup is the fallback).
+
+### Database Method (`src/backend/db/subscriptions.py:606-677`)
+
+`get_subscription_usage(subscription_id)` executes two window queries for each of `chat_messages` and `schedule_executions`, then merges the results:
+
+```
+window_5h  cutoff = now - 5h
+window_7d  cutoff = now - 168h
+
+chat_messages query (per window):
+  WHERE subscription_id = ? AND role = 'assistant' AND timestamp >= ?
+  → SUM(context_used) as input_tokens, SUM(output_tokens), SUM(cost), COUNT(*)
+
+schedule_executions query (per window):
+  WHERE subscription_id = ? AND started_at >= ? AND status NOT IN ('running', 'pending')
+  → SUM(context_used) as input_tokens, SUM(cost), COUNT(*)
+
+Merged window = chat totals + execution totals
+
+agents = SELECT agent_name FROM agent_ownership WHERE subscription_id = ?
+```
+
+`context_used` on `chat_messages` stores input tokens; `output_tokens` is a separate column added in SUB-004. Schedule executions do not track output tokens separately.
+
+### subscription_id Snapshotting
+
+`subscription_id` is recorded at write time on both tables so historical queries remain stable even after reassignment:
+
+- **`chat_messages.subscription_id`** (`src/backend/db_models.py:243`) — snapshotted when the assistant message is stored after a chat turn
+- **`schedule_executions.subscription_id`** (`src/backend/db_models.py:172`) — snapshotted when the execution record is created
+- **`chat_sessions.subscription_id`** (`src/backend/db_models.py:223`) — snapshotted at session creation (informational; not used by the usage query)
+
+### Response Shape
+
+```json
+{
+  "subscription_id": "uuid",
+  "window_5h": {
+    "input_tokens": 12000,
+    "output_tokens": 3400,
+    "cost_usd": 0.18,
+    "message_count": 7
+  },
+  "window_7d": {
+    "input_tokens": 450000,
+    "output_tokens": 98000,
+    "cost_usd": 5.62,
+    "message_count": 210
+  },
+  "agents": ["agent-ruby", "agent-sage"]
+}
+```
+
+`message_count` includes both chat assistant messages and completed schedule executions.
+
+---
+
 ## Agent-Side Diagnostics
 
 ### Claude Code Execution Diagnostics (`docker/base-image/agent_server/services/claude_code.py:685-710`)
@@ -1107,6 +1194,20 @@ class AgentAuthStatus(BaseModel):
     subscription_name: Optional[str] = None
     subscription_id: Optional[str] = None
     has_api_key: bool = False
+
+class SubscriptionUsageWindow(BaseModel):
+    """Usage totals for a rolling time window. (SUB-004)"""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    message_count: int = 0
+
+class SubscriptionUsage(BaseModel):
+    """Per-subscription usage across rolling time windows. (SUB-004)"""
+    subscription_id: str
+    window_5h: SubscriptionUsageWindow
+    window_7d: SubscriptionUsageWindow
+    agents: List[str] = []  # agents currently assigned to this subscription
 ```
 
 ---
@@ -1182,6 +1283,8 @@ MCP client methods: `src/mcp-server/src/client.ts:1079-1196`
 | Subscription not found | 404 | "Subscription '{name}' not found" |
 | Agent not found | 400 | "Agent {name} not found in ownership table" |
 | User not found | 404 | "User not found" |
+| Subscription not found (usage) | 404 | "Subscription not found" |
+| Usage query failure | 500 | "Failed to retrieve usage data" |
 | Subscription usage exhausted | 429 | "Subscription usage limit: [reset message]. To resolve: (1) wait for reset, (2) set ANTHROPIC_API_KEY, or (3) assign different subscription" |
 | Failed registration | 500 | "Failed to register subscription: {error}" |
 

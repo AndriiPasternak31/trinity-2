@@ -103,10 +103,11 @@ const response = await axios.get(`/api/agents/${name}/chat/sessions`,
 ### Modified Chat Endpoint (`routers/chat.py:106-356`)
 
 **Key Changes**:
-1. Get or create chat session before sending message
-2. Log user message to database
-3. Proxy to agent container (unchanged)
-4. Log assistant response with metadata
+1. Resolve agent subscription ID via `db.get_agent_subscription_id(name)`
+2. Get or create chat session, passing `subscription_id`
+3. Log user message to database, passing `subscription_id`
+4. Proxy to agent container (unchanged)
+5. Log assistant response with metadata, passing `subscription_id`
 
 ```python
 @router.post("/{name}/chat")
@@ -120,24 +121,29 @@ async def chat_with_agent(
     if container.status != "running":
         raise HTTPException(status_code=503, detail="Agent is not running")
 
-    # 1. Get or create chat session for this user+agent
+    # 1. Resolve subscription ID for this agent (Nevermined)
+    subscription_id = db.get_agent_subscription_id(name)
+
+    # 2. Get or create chat session for this user+agent
     session = db.get_or_create_chat_session(
         agent_name=name,
         user_id=current_user.id,
-        user_email=current_user.email or current_user.username
+        user_email=current_user.email or current_user.username,
+        subscription_id=subscription_id
     )
 
-    # 2. Log user message to database
+    # 3. Log user message to database
     user_message = db.add_chat_message(
         session_id=session.id,
         agent_name=name,
         user_id=current_user.id,
         user_email=current_user.email or current_user.username,
         role="user",
-        content=request.message
+        content=request.message,
+        subscription_id=subscription_id
     )
 
-    # 3. Proxy to agent's internal server (unchanged)
+    # 4. Proxy to agent's internal server (unchanged)
     start_time = datetime.utcnow()
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -147,14 +153,14 @@ async def chat_with_agent(
         )
         response_data = response.json()
 
-    # 4. Extract metadata for persistence
+    # 5. Extract metadata for persistence
     execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
     metadata = response_data.get("metadata", {})
     session_data = response_data.get("session", {})
     execution_log = response_data.get("execution_log", [])
     tool_calls_json = json.dumps(execution_log) if execution_log else None
 
-    # 5. Log assistant response with observability data
+    # 6. Log assistant response with observability data
     assistant_message = db.add_chat_message(
         session_id=session.id,
         agent_name=name,
@@ -166,10 +172,11 @@ async def chat_with_agent(
         context_used=session_data.get("context_tokens"),
         context_max=session_data.get("context_window"),
         tool_calls=tool_calls_json,
-        execution_time_ms=execution_time_ms
+        execution_time_ms=execution_time_ms,
+        subscription_id=subscription_id
     )
 
-    # 6. Audit log (unchanged)
+    # 7. Audit log (unchanged)
     await log_audit_event(...)
 
     return response_data
@@ -329,7 +336,7 @@ async def close_chat_session(
 
 ### Schema (`src/backend/database.py`)
 
-#### Chat Sessions Table (`database.py:380-396`)
+#### Chat Sessions Table (`src/backend/db/schema.py`)
 
 ```sql
 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -344,6 +351,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     total_context_used INTEGER DEFAULT 0, -- Latest context tokens used
     total_context_max INTEGER DEFAULT 200000, -- Latest context window size
     status TEXT DEFAULT 'active',         -- 'active' or 'closed'
+    subscription_id TEXT,                 -- Nevermined subscription ID (nullable)
     FOREIGN KEY (user_id) REFERENCES users(id)
 )
 
@@ -353,7 +361,7 @@ CREATE INDEX idx_chat_sessions_user ON chat_sessions(user_id)
 CREATE INDEX idx_chat_sessions_status ON chat_sessions(status)
 ```
 
-#### Chat Messages Table (`database.py:398-417`)
+#### Chat Messages Table (`src/backend/db/schema.py`)
 
 ```sql
 CREATE TABLE IF NOT EXISTS chat_messages (
@@ -370,6 +378,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     context_max INTEGER,                  -- Context window size (assistant only)
     tool_calls TEXT,                      -- JSON array of tool executions (assistant only)
     execution_time_ms INTEGER,            -- Execution duration (assistant only)
+    subscription_id TEXT,                 -- Nevermined subscription ID (nullable)
+    output_tokens INTEGER,                -- Output token count (nullable)
     FOREIGN KEY (session_id) REFERENCES chat_sessions(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
 )
@@ -381,7 +391,7 @@ CREATE INDEX idx_chat_messages_user ON chat_messages(user_id)
 CREATE INDEX idx_chat_messages_timestamp ON chat_messages(timestamp)
 ```
 
-### Models (`src/backend/db_models.py:187-217`)
+### Models (`src/backend/db_models.py`)
 
 ```python
 class ChatSession(BaseModel):
@@ -397,6 +407,7 @@ class ChatSession(BaseModel):
     total_context_used: int = 0
     total_context_max: int = 200000
     status: str = "active"  # "active" or "closed"
+    subscription_id: Optional[str] = None  # Nevermined subscription ID
 
 
 class ChatMessage(BaseModel):
@@ -415,6 +426,8 @@ class ChatMessage(BaseModel):
     context_max: Optional[int] = None
     tool_calls: Optional[str] = None  # JSON array
     execution_time_ms: Optional[int] = None
+    subscription_id: Optional[str] = None  # Nevermined subscription ID
+    output_tokens: Optional[int] = None    # Output token count
 ```
 
 ### Database Operations (`src/backend/db/chat.py`)
@@ -426,11 +439,13 @@ class ChatOperations:
     """Chat session and message database operations."""
 
     def get_or_create_chat_session(
-        self, agent_name: str, user_id: int, user_email: str
+        self, agent_name: str, user_id: int, user_email: str,
+        subscription_id: Optional[str] = None
     ) -> ChatSession:
         """
         Get the active chat session for a user+agent, or create a new one.
         Returns the most recent active session if it exists.
+        subscription_id is stored on the session row when provided.
         """
         # Try to find an active session for this user+agent
         # If none exists, create a new session with secrets.token_urlsafe(16)
@@ -447,7 +462,9 @@ class ChatOperations:
         context_used: Optional[int] = None,
         context_max: Optional[int] = None,
         tool_calls: Optional[str] = None,
-        execution_time_ms: Optional[int] = None
+        execution_time_ms: Optional[int] = None,
+        subscription_id: Optional[str] = None,
+        output_tokens: Optional[int] = None
     ) -> ChatMessage:
         """Add a message to a chat session and update session stats."""
 

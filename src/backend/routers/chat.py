@@ -155,6 +155,13 @@ async def chat_with_agent(
         triggered_by = "mcp"
     else:
         triggered_by = "chat"
+    # Look up subscription for this agent (best-effort, for usage tracking SUB-004)
+    # We fetch this early so it can be passed to the execution record too
+    try:
+        _exec_subscription_id = db.get_agent_subscription_id(name)
+    except Exception:
+        _exec_subscription_id = None
+
     task_execution = db.create_task_execution(
         agent_name=name,
         message=request.message,
@@ -163,7 +170,8 @@ async def chat_with_agent(
         source_user_email=current_user.email or current_user.username,
         source_agent_name=x_source_agent,
         source_mcp_key_id=x_mcp_key_id,
-        source_mcp_key_name=x_mcp_key_name
+        source_mcp_key_name=x_mcp_key_name,
+        subscription_id=_exec_subscription_id,
     )
     task_execution_id = task_execution.id if task_execution else None
     logger.info(f"[Chat] Created task execution {task_execution_id} for {triggered_by} call on agent '{name}'")
@@ -195,10 +203,13 @@ async def chat_with_agent(
         )
 
     # Get or create chat session for this user+agent
+    # Reuse _exec_subscription_id already fetched above (SUB-004)
+    _chat_subscription_id = _exec_subscription_id
     session = db.get_or_create_chat_session(
         agent_name=name,
         user_id=current_user.id,
-        user_email=current_user.email or current_user.username
+        user_email=current_user.email or current_user.username,
+        subscription_id=_chat_subscription_id,
     )
 
     # Track chat start activity
@@ -289,7 +300,9 @@ async def chat_with_agent(
             context_used=session_data.get("context_tokens"),
             context_max=session_data.get("context_window"),
             tool_calls=tool_calls_json,
-            execution_time_ms=execution_time_ms
+            execution_time_ms=execution_time_ms,
+            subscription_id=_chat_subscription_id,
+            output_tokens=metadata.get("output_tokens"),
         )
 
         # Note: Tool calls are stored in chat_messages.tool_calls JSON column

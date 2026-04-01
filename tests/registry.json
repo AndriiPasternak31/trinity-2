@@ -110,6 +110,13 @@
       "added": "2026-03-27",
       "categories": ["backend", "security", "rate-limiting", "unit"],
       "description": "Tests for X-Forwarded-For rate limit bypass fix: trusted-proxy validation, spoofed header rejection, per-token secondary rate limit, pentest 3.2.4 PoC scenario"
+    },
+    {
+      "file": "test_subscription_usage.py",
+      "feature": "SUB-004",
+      "added": "2026-04-01",
+      "categories": ["backend", "api", "subscriptions", "usage-tracking"],
+      "description": "Tests for per-subscription usage tracking: GET /api/subscriptions/{id}/usage returns correct structure, zeros for fresh subscriptions, 404 for unknown, auth enforcement, name-based lookup"
     }
   ]
 }

@@ -897,6 +897,46 @@ def _migrate_slack_channel_agents(cursor, conn):
     conn.commit()
 
 
+def _migrate_subscription_usage_tracking(cursor, conn):
+    """Add subscription_id and output_tokens columns for per-subscription usage tracking (SUB-004).
+
+    - chat_messages: subscription_id (snapshotted at record time), output_tokens
+    - chat_sessions: subscription_id (active when session started)
+    - schedule_executions: subscription_id (snapshotted at record time)
+    """
+    cursor.execute("PRAGMA table_info(chat_messages)")
+    chat_msg_cols = {row[1] for row in cursor.fetchall()}
+
+    if "subscription_id" not in chat_msg_cols:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN subscription_id TEXT")
+    if "output_tokens" not in chat_msg_cols:
+        cursor.execute("ALTER TABLE chat_messages ADD COLUMN output_tokens INTEGER")
+
+    cursor.execute("PRAGMA table_info(chat_sessions)")
+    chat_sess_cols = {row[1] for row in cursor.fetchall()}
+
+    if "subscription_id" not in chat_sess_cols:
+        cursor.execute("ALTER TABLE chat_sessions ADD COLUMN subscription_id TEXT")
+
+    cursor.execute("PRAGMA table_info(schedule_executions)")
+    exec_cols = {row[1] for row in cursor.fetchall()}
+
+    if "subscription_id" not in exec_cols:
+        cursor.execute("ALTER TABLE schedule_executions ADD COLUMN subscription_id TEXT")
+
+    # Indexes for usage queries
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_chat_messages_subscription "
+        "ON chat_messages(subscription_id, timestamp)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_executions_subscription "
+        "ON schedule_executions(subscription_id, started_at)"
+    )
+
+    conn.commit()
+
+
 def _migrate_execution_fan_out_id(cursor, conn):
     """Add fan_out_id column to schedule_executions table (FANOUT-001).
 
@@ -1002,4 +1042,5 @@ MIGRATIONS = [
     ("slack_channel_agents", _migrate_slack_channel_agents),
     ("execution_fan_out_id", _migrate_execution_fan_out_id),
     ("telegram_bindings", _migrate_telegram_bindings),
+    ("subscription_usage_tracking", _migrate_subscription_usage_tracking),
 ]

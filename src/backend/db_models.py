@@ -168,6 +168,8 @@ class ScheduleExecution(BaseModel):
     model_used: Optional[str] = None           # Model used for this execution
     # Fan-out linkage (FANOUT-001)
     fan_out_id: Optional[str] = None           # Parent fan-out operation ID
+    # Subscription usage tracking (SUB-004)
+    subscription_id: Optional[str] = None      # Subscription active at record time
 
 
 # =========================================================================
@@ -218,6 +220,7 @@ class ChatSession(BaseModel):
     total_context_used: int = 0
     total_context_max: int = 200000
     status: str = "active"  # "active" or "closed"
+    subscription_id: Optional[str] = None  # SUB-004: subscription active when session started
 
 
 class ChatMessage(BaseModel):
@@ -237,6 +240,8 @@ class ChatMessage(BaseModel):
     tool_calls: Optional[str] = None  # JSON array
     execution_time_ms: Optional[int] = None
     source: Optional[str] = "text"  # "text" or "voice" (VOICE-003)
+    subscription_id: Optional[str] = None  # SUB-004: snapshotted at record time
+    output_tokens: Optional[int] = None  # SUB-004: output tokens for this message
 
 
 # =========================================================================
@@ -662,6 +667,22 @@ class AgentAuthStatus(BaseModel):
     subscription_name: Optional[str] = None
     subscription_id: Optional[str] = None
     has_api_key: bool = False
+
+
+class SubscriptionUsageWindow(BaseModel):
+    """Usage totals for a rolling time window. (SUB-004)"""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    message_count: int = 0
+
+
+class SubscriptionUsage(BaseModel):
+    """Per-subscription usage across rolling time windows. (SUB-004)"""
+    subscription_id: str
+    window_5h: SubscriptionUsageWindow
+    window_7d: SubscriptionUsageWindow
+    agents: List[str] = []  # agents currently assigned to this subscription
 
 
 # =========================================================================

@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-04-01 | SUB-004 | Per-subscription rolling token/cost usage windows (5h, 7d) across chat and executions | [subscription-usage-tracking.md](feature-flows/subscription-usage-tracking.md) |
 | 2026-03-31 | #222 | Slack inbound file sharing — images via vision, text files via container copy (SLACK-FILES) | [slack-file-sharing.md](feature-flows/slack-file-sharing.md) |
 | 2026-03-31 | TELEGRAM-001 | Telegram bot integration — per-agent bots, webhook transport, encrypted tokens | [telegram-integration.md](feature-flows/telegram-integration.md) |
 | 2026-03-30 | FANOUT-001 | Fan-out parallel task dispatch and result collection | [fan-out.md](feature-flows/fan-out.md) |
@@ -231,6 +232,7 @@
 | Platform Settings | [platform-settings.md](feature-flows/platform-settings.md) | Admin settings page |
 | SSH Access | [ssh-access.md](feature-flows/ssh-access.md) | Ephemeral SSH credentials |
 | Subscription Management | [subscription-management.md](feature-flows/subscription-management.md) | Claude Max/Pro subscription tokens via env var (SUB-002) |
+| Subscription Usage Tracking | [subscription-usage-tracking.md](feature-flows/subscription-usage-tracking.md) | Rolling 5h/7d token and cost usage per subscription (SUB-004) |
 
 ### System & Infrastructure
 

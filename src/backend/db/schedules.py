@@ -126,6 +126,8 @@ class ScheduleOperations:
             model_used=row["model_used"] if "model_used" in row_keys else None,
             # Fan-out linkage (FANOUT-001)
             fan_out_id=row["fan_out_id"] if "fan_out_id" in row_keys else None,
+            # Subscription usage tracking (SUB-004)
+            subscription_id=row["subscription_id"] if "subscription_id" in row_keys else None,
         )
 
     @staticmethod
@@ -449,6 +451,7 @@ class ScheduleOperations:
         source_mcp_key_name: str = None,
         model_used: str = None,
         fan_out_id: str = None,
+        subscription_id: str = None,
     ) -> Optional[ScheduleExecution]:
         """Create a new execution record for a manual/API-triggered task (no schedule).
 
@@ -463,6 +466,7 @@ class ScheduleOperations:
             source_mcp_key_name: MCP API key name (denormalized)
             model_used: Model used for this execution (MODEL-001)
             fan_out_id: Parent fan-out operation ID (FANOUT-001)
+            subscription_id: Subscription active at record time (SUB-004)
         """
         execution_id = self._generate_id()
         now = utc_now_iso()
@@ -473,8 +477,9 @@ class ScheduleOperations:
                 INSERT INTO schedule_executions (
                     id, schedule_id, agent_name, status, started_at, message, triggered_by,
                     source_user_id, source_user_email, source_agent_name,
-                    source_mcp_key_id, source_mcp_key_name, model_used, fan_out_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_mcp_key_id, source_mcp_key_name, model_used, fan_out_id,
+                    subscription_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 execution_id,
                 "__manual__",  # Special marker for manual/API-triggered tasks
@@ -490,6 +495,7 @@ class ScheduleOperations:
                 source_mcp_key_name,
                 model_used,
                 fan_out_id,
+                subscription_id,
             ))
             conn.commit()
 
@@ -508,6 +514,7 @@ class ScheduleOperations:
                 source_mcp_key_name=source_mcp_key_name,
                 model_used=model_used,
                 fan_out_id=fan_out_id,
+                subscription_id=subscription_id,
             )
 
     def create_schedule_execution(
@@ -522,6 +529,7 @@ class ScheduleOperations:
         source_mcp_key_id: str = None,
         source_mcp_key_name: str = None,
         model_used: str = None,
+        subscription_id: str = None,
     ) -> Optional[ScheduleExecution]:
         """Create a new execution record for a scheduled task.
 
@@ -538,8 +546,8 @@ class ScheduleOperations:
                 INSERT INTO schedule_executions (
                     id, schedule_id, agent_name, status, started_at, message, triggered_by,
                     source_user_id, source_user_email, source_agent_name,
-                    source_mcp_key_id, source_mcp_key_name, model_used
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    source_mcp_key_id, source_mcp_key_name, model_used, subscription_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 execution_id,
                 schedule_id,
@@ -554,6 +562,7 @@ class ScheduleOperations:
                 source_mcp_key_id,
                 source_mcp_key_name,
                 model_used,
+                subscription_id,
             ))
             conn.commit()
 
@@ -571,6 +580,7 @@ class ScheduleOperations:
                 source_mcp_key_id=source_mcp_key_id,
                 source_mcp_key_name=source_mcp_key_name,
                 model_used=model_used,
+                subscription_id=subscription_id,
             )
 
     def mark_execution_dispatched(self, execution_id: str) -> bool:
