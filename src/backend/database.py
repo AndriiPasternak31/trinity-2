@@ -158,6 +158,19 @@ def _ensure_admin_user(cursor, conn):
     admin_password = os.getenv("ADMIN_PASSWORD", "")
     admin_username = os.getenv("ADMIN_USERNAME", "admin")
 
+    # Warn operators if ADMIN_PASSWORD doesn't meet complexity requirements
+    if admin_password:
+        try:
+            from utils.password_validation import validate_password_strength
+            pw_errors = validate_password_strength(admin_password)
+            if pw_errors:
+                print(f"WARNING: ADMIN_PASSWORD does not meet complexity requirements:")
+                for err in pw_errors:
+                    print(f"         - {err}")
+                print("         Recommended: 12+ chars with uppercase, lowercase, digits, and special characters")
+        except ImportError:
+            pass  # password_validation module not available during early init
+
     cursor.execute("SELECT id, password_hash FROM users WHERE username = ?", (admin_username,))
     existing = cursor.fetchone()
 

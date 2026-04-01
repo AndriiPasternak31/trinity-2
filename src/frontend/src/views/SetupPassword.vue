@@ -51,9 +51,9 @@
                 v-model="password"
                 :disabled="loading"
                 class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
-                placeholder="Enter password (8+ characters)"
+                placeholder="Enter password (12+ characters)"
                 required
-                minlength="8"
+                minlength="12"
               />
               <button
                 type="button"
@@ -85,7 +85,7 @@
                 class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
                 placeholder="Confirm your password"
                 required
-                minlength="8"
+                minlength="12"
               />
               <button
                 type="button"
@@ -126,8 +126,23 @@
               <div
                 class="h-full rounded transition-all duration-300"
                 :class="passwordStrengthBarClass"
-                :style="{ width: `${passwordStrength * 25}%` }"
+                :style="{ width: `${passwordStrength * 20}%` }"
               ></div>
+            </div>
+          </div>
+
+          <!-- Password Requirements Checklist -->
+          <div v-if="password" class="space-y-1 text-sm">
+            <div v-for="req in passwordRequirements" :key="req.label" class="flex items-center">
+              <svg v-if="req.met" class="h-4 w-4 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <svg v-else class="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke-width="2" />
+              </svg>
+              <span :class="req.met ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'">
+                {{ req.label }}
+              </span>
             </div>
           </div>
 
@@ -186,25 +201,29 @@ const passwordsMatch = computed(() => {
   return password.value === confirmPassword.value
 })
 
-const passwordStrength = computed(() => {
+const passwordRequirements = computed(() => {
   const p = password.value
-  if (!p) return 0
-  let strength = 0
-  if (p.length >= 8) strength++
-  if (p.length >= 12) strength++
-  if (/[A-Z]/.test(p) && /[a-z]/.test(p)) strength++
-  if (/[0-9]/.test(p)) strength++
-  if (/[^A-Za-z0-9]/.test(p)) strength++
-  return Math.min(strength, 4)
+  return [
+    { label: 'At least 12 characters', met: p.length >= 12 },
+    { label: 'Uppercase letter (A-Z)', met: /[A-Z]/.test(p) },
+    { label: 'Lowercase letter (a-z)', met: /[a-z]/.test(p) },
+    { label: 'Number (0-9)', met: /[0-9]/.test(p) },
+    { label: 'Special character (!@#$...)', met: /[^A-Za-z0-9]/.test(p) },
+  ]
+})
+
+const passwordStrength = computed(() => {
+  return passwordRequirements.value.filter(r => r.met).length
 })
 
 const passwordStrengthText = computed(() => {
-  const texts = ['Weak', 'Fair', 'Good', 'Strong', 'Excellent']
-  return texts[passwordStrength.value] || 'Weak'
+  const texts = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong', 'Excellent']
+  return texts[passwordStrength.value] || 'Very Weak'
 })
 
 const passwordStrengthClass = computed(() => {
   const classes = [
+    'text-red-600 dark:text-red-400',
     'text-red-600 dark:text-red-400',
     'text-orange-600 dark:text-orange-400',
     'text-yellow-600 dark:text-yellow-400',
@@ -217,6 +236,7 @@ const passwordStrengthClass = computed(() => {
 const passwordStrengthBarClass = computed(() => {
   const classes = [
     'bg-red-500',
+    'bg-red-500',
     'bg-orange-500',
     'bg-yellow-500',
     'bg-green-500',
@@ -226,7 +246,7 @@ const passwordStrengthBarClass = computed(() => {
 })
 
 const isValid = computed(() => {
-  return setupToken.value.length > 0 && password.value.length >= 8 && passwordsMatch.value
+  return setupToken.value.length > 0 && passwordRequirements.value.every(r => r.met) && passwordsMatch.value
 })
 
 async function handleSubmit() {
