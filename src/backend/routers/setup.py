@@ -6,10 +6,11 @@ These endpoints require NO authentication and only work before setup is complete
 """
 import secrets
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database import db
 from dependencies import hash_password
+from utils.password_validation import validate_password_strength, PASSWORD_REQUIREMENTS_MESSAGE
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
@@ -26,8 +27,8 @@ def get_setup_token() -> str:
 
 class SetAdminPasswordRequest(BaseModel):
     """Request body for setting admin password."""
-    password: str
-    confirm_password: str
+    password: str = Field(..., max_length=128)
+    confirm_password: str = Field(..., max_length=128)
     setup_token: str
 
 
@@ -55,7 +56,7 @@ async def set_admin_password(data: SetAdminPasswordRequest, request: Request):
 
     Requirements:
     - setup_token must match the token printed in server logs at startup
-    - Password must be at least 8 characters
+    - Password must meet OWASP ASVS 2.1 complexity requirements
     - Password and confirm_password must match
 
     Returns:
@@ -76,11 +77,14 @@ async def set_admin_password(data: SetAdminPasswordRequest, request: Request):
             detail="Invalid setup token. Check server logs for the setup token printed at startup."
         )
 
-    # Validate password
-    if len(data.password) < 8:
+    # Validate password complexity (OWASP ASVS 2.1)
+    errors = validate_password_strength(data.password)
+    if errors:
+        # Return generic message — don't reveal which specific rules failed
+        # on this unauthenticated endpoint (CSO review finding #1)
         raise HTTPException(
             status_code=400,
-            detail="Password must be at least 8 characters"
+            detail=PASSWORD_REQUIREMENTS_MESSAGE,
         )
 
     if data.password != data.confirm_password:

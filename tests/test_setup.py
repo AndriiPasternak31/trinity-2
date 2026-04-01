@@ -97,8 +97,8 @@ class TestSetupAdminPassword:
             "/api/setup/admin-password",
             json={
                 "setup_token": "invalid-token-that-will-not-match",
-                "password": "validpassword123",
-                "confirm_password": "validpassword123"
+                "password": "V@lidP4ssword!123",
+                "confirm_password": "V@lidP4ssword!123"
             },
             auth=False
         )
