@@ -1078,6 +1078,25 @@ The Process Engine supports six step types:
   - `src/backend/routers/chat.py` - 429 interception hooks
   - `src/frontend/src/views/Settings.vue` - Toggle UI
 
+### 20.5 Per-Subscription Usage Tracking (SUB-004)
+- **Status**: ✅ Implemented (2026-04-01)
+- **Requirement ID**: SUB-004
+- **Extends**: SUB-002
+- **Priority**: MEDIUM
+- **Description**: Track token usage (input, output, cost) per subscription across all agents, enabling admins to see how much each subscription is being consumed. Snapshots subscription_id at execution time so usage history survives SUB-003 auto-switches.
+- **Key Features**:
+  - `subscription_id` column added to `task_executions` and `chat_sessions` tables (nullable, safe migration)
+  - Admin-only `/api/subscriptions/{name}/usage` endpoint with dual-window aggregation (24h + 7d)
+  - Per-agent breakdown of input/output tokens, execution count, and estimated cost
+  - Snapshot strategy: subscription_id captured at execution time, not looked up retroactively
+- **Database**: `subscription_id` columns on `task_executions`, `chat_sessions`
+- **Files**:
+  - `src/backend/db/subscriptions.py` - Usage aggregation queries
+  - `src/backend/routers/subscriptions.py` - Usage endpoint
+  - `src/backend/routers/chat.py` - Subscription ID capture at execution time
+  - `src/backend/db/chat.py` - Session creation with subscription_id
+  - `src/frontend/src/views/Settings.vue` - Usage display (if applicable)
+
 ---
 
 ## Non-Functional Requirements

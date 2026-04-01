@@ -457,7 +457,8 @@ async def _execute_task_background(
     x_source_agent: Optional[str],
     release_slot: bool = False,
     user_id: Optional[int] = None,
-    user_email: Optional[str] = None
+    user_email: Optional[str] = None,
+    subscription_id: Optional[str] = None
 ):
     """
     Background task execution for async mode.
@@ -529,7 +530,8 @@ async def _execute_task_background(
                     session = db.create_new_chat_session(
                         agent_name=agent_name,
                         user_id=user_id,
-                        user_email=user_email
+                        user_email=user_email,
+                        subscription_id=subscription_id
                     )
                 elif request.chat_session_id:
                     # Use the explicit session ID from the frontend
@@ -703,6 +705,12 @@ async def execute_parallel_task(
         source = ExecutionSource.USER
         triggered_by = "manual"
 
+    # SUB-004: Look up subscription for usage tracking (best-effort)
+    try:
+        _task_subscription_id = db.get_agent_subscription_id(name)
+    except Exception:
+        _task_subscription_id = None
+
     # Create execution record in database (persisted task history)
     execution = db.create_task_execution(
         agent_name=name,
@@ -806,7 +814,8 @@ async def execute_parallel_task(
                 x_source_agent=x_source_agent,
                 release_slot=True,  # CAPACITY-001: Release slot when background task completes
                 user_id=current_user.id,  # THINK-001: Pass user context for session persistence
-                user_email=current_user.email or current_user.username
+                user_email=current_user.email or current_user.username,
+                subscription_id=_task_subscription_id,  # SUB-004: Usage tracking
             )
         )
 
@@ -879,7 +888,8 @@ async def execute_parallel_task(
                 session = db.create_new_chat_session(
                     agent_name=name,
                     user_id=current_user.id,
-                    user_email=current_user.email or current_user.username
+                    user_email=current_user.email or current_user.username,
+                    subscription_id=_task_subscription_id,  # SUB-004
                 )
             elif request.chat_session_id:
                 session = db.get_chat_session(request.chat_session_id)

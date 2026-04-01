@@ -692,8 +692,8 @@ class DatabaseManager:
     def close_chat_session(self, session_id: str):
         return self._chat_ops.close_chat_session(session_id)
 
-    def create_new_chat_session(self, agent_name: str, user_id: int, user_email: str):
-        return self._chat_ops.create_new_chat_session(agent_name, user_id, user_email)
+    def create_new_chat_session(self, agent_name: str, user_id: int, user_email: str, subscription_id: str = None):
+        return self._chat_ops.create_new_chat_session(agent_name, user_id, user_email, subscription_id=subscription_id)
 
     def delete_chat_session(self, session_id: str):
         return self._chat_ops.delete_chat_session(session_id)
