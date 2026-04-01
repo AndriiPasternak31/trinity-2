@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-[600px] relative">
+  <div class="flex flex-col h-full relative">
     <!-- Header with session selector -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
       <div class="flex items-center space-x-3">

@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
+  <div :class="activeTab === 'chat' ? 'h-screen overflow-hidden flex flex-col bg-gray-100 dark:bg-gray-900' : 'min-h-screen bg-gray-100 dark:bg-gray-900'">
     <NavBar />
 
-    <main class="max-w-[1400px] mx-auto py-2 sm:px-6 lg:px-8 overflow-visible">
-      <div class="px-4 py-2 sm:px-0 overflow-visible">
+    <main :class="['max-w-[1400px] mx-auto sm:px-6 lg:px-8', activeTab === 'chat' ? 'flex-1 flex flex-col overflow-hidden' : 'py-2 overflow-visible']">
+      <div :class="['px-4 sm:px-0', activeTab === 'chat' ? 'flex-1 flex flex-col overflow-hidden' : 'py-2 overflow-visible']">
         <div v-if="loading" class="text-center py-8">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto"></div>
         </div>
@@ -22,7 +22,7 @@
           {{ error }}
         </div>
 
-        <div v-if="agent" class="ml-16">
+        <div v-if="agent" :class="['ml-16', activeTab === 'chat' ? 'flex-1 flex flex-col overflow-hidden' : '']">
           <!-- Agent Header Component -->
           <AgentHeader
             :agent="agent"
@@ -67,7 +67,7 @@
           />
 
           <!-- Tabs -->
-          <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
+          <div :class="['bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg', activeTab === 'chat' ? 'flex-1 flex flex-col overflow-hidden' : '']">
             <div class="border-b border-gray-200 dark:border-gray-700 overflow-x-auto overflow-y-hidden">
               <nav class="-mb-px flex whitespace-nowrap">
                 <button
@@ -100,7 +100,7 @@
             </div>
 
             <!-- Chat Tab Content -->
-            <div v-if="activeTab === 'chat'" class="p-6">
+            <div v-if="activeTab === 'chat'" class="flex-1 overflow-hidden">
               <ChatPanel
                 :agent-name="agent.name"
                 :agent-status="agent.status"
