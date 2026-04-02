@@ -270,6 +270,10 @@ class TelegramAdapter(ChannelAdapter):
     # Message formatting
     # =========================================================================
 
+    def format_response(self, text: str) -> str:
+        """Convert standard markdown to Telegram HTML format."""
+        return self._markdown_to_html(text)
+
     @staticmethod
     def _markdown_to_html(text: str) -> str:
         """Convert common Markdown to Telegram HTML. Plain text fallback on failure."""
