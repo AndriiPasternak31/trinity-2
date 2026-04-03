@@ -62,6 +62,23 @@ class ExecutionQueue:
     - complete(): Uses Lua script for atomic pop-and-set
     """
 
+    # Lua script for atomic conditional release (Issue #129 review fix)
+    # Only deletes the running key if it holds the expected execution ID
+    CONDITIONAL_RELEASE_SCRIPT = """
+local running_key = KEYS[1]
+local expected_id = ARGV[1]
+local current = redis.call('GET', running_key)
+if current == false then
+    return 0
+end
+local data = cjson.decode(current)
+if data['id'] == expected_id then
+    redis.call('DEL', running_key)
+    return 1
+end
+return 0
+"""
+
     # Lua script for atomic complete operation
     # Atomically pops next from queue and sets as running, or clears if empty
     COMPLETE_SCRIPT = """
@@ -87,8 +104,9 @@ end
         self.redis = redis.from_url(redis_url, decode_responses=True)
         self.running_prefix = "agent:running:"
         self.queue_prefix = "agent:queue:"
-        # Register Lua script for atomic complete operation
+        # Register Lua scripts for atomic operations
         self._complete_script = self.redis.register_script(self.COMPLETE_SCRIPT)
+        self._conditional_release_script = self.redis.register_script(self.CONDITIONAL_RELEASE_SCRIPT)
 
     def _running_key(self, agent_name: str) -> str:
         """Redis key for currently running execution."""
@@ -291,6 +309,27 @@ end
             self.redis.delete(running_key)
             logger.warning(f"[Queue] Force released agent '{agent_name}' from running state")
         return existed
+
+    async def force_release_if_matches(self, agent_name: str, execution_id: str) -> bool:
+        """Atomically release running state only if the given execution holds it.
+
+        Uses a Lua script to GET, compare execution ID, and conditional DELETE
+        in a single atomic operation. Prevents TOCTOU race where a new execution
+        could start between the check and the release.
+
+        Returns True if the running state was released, False if it didn't match
+        or no running execution existed.
+        """
+        running_key = self._running_key(agent_name)
+        result = self._conditional_release_script(
+            keys=[running_key], args=[execution_id]
+        )
+        if result:
+            logger.warning(
+                f"[Queue] Conditionally released agent '{agent_name}' "
+                f"(execution {execution_id})"
+            )
+        return bool(result)
 
     async def get_all_busy_agents(self) -> List[str]:
         """Get list of all agents currently executing.

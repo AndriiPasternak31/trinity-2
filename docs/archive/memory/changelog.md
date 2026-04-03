@@ -247,6 +247,25 @@ Socket Mode management and per-agent Slack channel binding, decoupled from the p
 
 ### 2026-03-25
 
+**feat: Active watchdog — remediate stuck executions detected by monitoring (#129)**
+
+The cleanup service now actively reconciles DB execution state against agent process registries every 5 minutes. Previously, stuck executions were only passively detected (health set to "degraded") with no remediation for up to 120 minutes. The watchdog closes this gap by:
+
+1. **Orphan recovery**: Executions marked "running" in DB but not found on the agent's process registry are marked as failed with descriptive error, capacity slots and queue state released, and a WebSocket event broadcast.
+2. **Auto-terminate**: Executions confirmed running on the agent but exceeding their schedule's `timeout_seconds` are terminated via the agent's terminate endpoint, then recovered.
+3. **Race-condition guard**: Conditional DB update (`WHERE status='running'`) prevents overwriting normal completions.
+4. **Systemic failure detection**: Warns if >50% of recovery attempts fail in a single cycle.
+
+**Backend:**
+- `src/backend/db/schedules.py` — Added `get_running_executions_with_agent_info()` (SQL JOIN) and `mark_execution_failed_by_watchdog()` (conditional update)
+- `src/backend/database.py` — Exposed new DB methods via facade
+- `src/backend/services/cleanup_service.py` — Added watchdog reconciliation as first cleanup operation, shared `_recover_execution()` helper, WebSocket event broadcasting, expanded `CleanupReport`
+- `src/backend/main.py` — Wired WebSocket manager to cleanup service
+
+**Tests:**
+- `tests/test_watchdog.py` — Integration tests for cleanup report watchdog fields
+- `tests/test_watchdog_unit.py` — Unit tests for reconciliation logic, decision matrix, error isolation
+
 **fix: Subscription registration fails silently when CREDENTIAL_ENCRYPTION_KEY is not set (#148)**
 
 Fresh Trinity deployments had no `CREDENTIAL_ENCRYPTION_KEY` configured, causing subscription registration to fail with a 500 error that was not clearly communicated to the user. Three fixes applied:

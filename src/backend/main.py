@@ -91,7 +91,7 @@ from services.log_archive_service import log_archive_service
 from services.operator_queue_service import operator_queue_service, set_websocket_manager as set_opqueue_sync_ws_manager
 
 # Import cleanup service
-from services.cleanup_service import cleanup_service
+from services.cleanup_service import cleanup_service, set_cleanup_ws_manager
 
 
 # Import process engine WebSocket publisher
@@ -225,6 +225,9 @@ activity_service.set_filtered_websocket_manager(filtered_manager)
 
 # Set up process engine WebSocket publisher
 set_websocket_publisher_broadcast(manager.broadcast)
+
+# Set up cleanup service WebSocket manager for watchdog events (Issue #129)
+set_cleanup_ws_manager(manager)
 
 
 

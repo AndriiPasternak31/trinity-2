@@ -438,19 +438,27 @@ Trinity is autonomous agent orchestration and infrastructure — sovereign infra
 - **Flow**: `docs/memory/feature-flows/agent-monitoring.md`
 
 ### 12.9 Cleanup Service for Stuck Resources
-- **Status**: ✅ Implemented (2026-03-11)
+- **Status**: ✅ Implemented (Updated 2026-03-25, Issue #129)
 - **Requirement ID**: CLEANUP-001
-- **GitHub Issue**: #94
-- **Description**: Background service that automatically recovers stuck intermediate states
+- **GitHub Issue**: #94, #129
+- **Description**: Background service that automatically recovers stuck intermediate states via active watchdog reconciliation and passive stale detection
 - **Key Features**:
-  - Marks stale executions (`status='running'` > 30 min) as `failed`
-  - Marks stale activities (`activity_state='started'` > 30 min) as `failed`
-  - Cleans up stale Redis slots (entries older than 30 min TTL)
+  - **Active watchdog** (Issue #129): Reconciles DB execution state against agent process registries every 5 minutes
+  - Orphan recovery: Executions marked "running" in DB but not found on agent are marked failed with descriptive error
+  - Auto-terminate: Executions confirmed running on agent but exceeding `timeout_seconds` are terminated via agent API
+  - Race-condition guard: Conditional DB update (`WHERE status='running'`) prevents overwriting normal completions
+  - Capacity/queue release: Slots and queue state released on recovery; atomic Lua-script queue release prevents TOCTOU
+  - WebSocket broadcast: Frontend notified of watchdog recovery actions
+  - Dispatch grace period: 60s grace for newly created executions before orphan detection
+  - Systemic failure detection: Warns if >50% of recovery attempts fail in a single cycle
+  - **Passive stale cleanup**: Marks stale executions (`status='running'` > 120 min) as `failed`
+  - Marks stale activities (`activity_state='started'` > 120 min) as `failed`
+  - Cleans up stale Redis slots (entries older than TTL)
   - One-shot startup sweep on backend restart
   - Periodic cleanup every 5 minutes
   - Admin-only status endpoint: `GET /api/monitoring/cleanup-status`
   - Admin-only trigger endpoint: `POST /api/monitoring/cleanup-trigger`
-- **Constants**: Interval 300s, execution timeout 120min, activity timeout 120min (increased from 30min in SCHED-ASYNC-001 to prevent premature cleanup of long-running tasks)
+- **Constants**: Interval 300s, execution timeout 120min, activity timeout 120min, watchdog HTTP timeout 5s, dispatch grace 60s
 
 ---
 

@@ -21,6 +21,7 @@
 | 2026-03-27 | #137 | Fix cleanup service: SQLite datetime format mismatch, skipped terminal state, empty session ID | [cleanup-service.md](feature-flows/cleanup-service.md) |
 | 2026-03-26 | #189 | Password complexity requirements — OWASP ASVS 2.1 validation on admin setup | [first-time-setup.md](feature-flows/first-time-setup.md) |
 | 2026-03-26 | EVT-001 | Agent Event Subscriptions — lightweight pub/sub for inter-agent pipelines | [agent-event-subscriptions.md](feature-flows/agent-event-subscriptions.md) |
+| 2026-03-25 | #129 | Active watchdog — reconcile DB state against agent process registries, recover orphans, auto-terminate timeouts | [cleanup-service.md](feature-flows/cleanup-service.md) |
 | 2026-03-25 | #148 | Fix silent subscription registration failure — encryption key auto-generation, status endpoint, frontend warning | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-25 | #74 | Auto-assign subscription to new agents (round-robin, rate-limit aware) | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-23 | VOICE-001 | Voice Chat — real-time voice conversations with agents via Gemini Live API | [voice-chat.md](feature-flows/voice-chat.md) |
@@ -33,7 +34,7 @@
 | 2026-03-12 | #90 | Fix stuck executions on slot acquisition failure — try block covers all execution steps | [task-execution-service.md](feature-flows/task-execution-service.md) |
 | 2026-03-11 | #81 | Default model for headless tasks — prevents misleading "token expired" errors when agent settings contain incompatible model | [parallel-headless-execution.md](feature-flows/parallel-headless-execution.md) |
 | 2026-03-11 | SCHED-ASYNC-001 | Scheduler async fire-and-forget with DB polling, status overwrite guard, cleanup timeout 30→120 min | [scheduler-service.md](feature-flows/scheduler-service.md), [cleanup-service.md](feature-flows/cleanup-service.md) |
-| 2026-03-11 | CLEANUP-001 | Background cleanup service for stale executions, activities, and slots | [cleanup-service.md](feature-flows/cleanup-service.md) |
+| 2026-03-11 | CLEANUP-001 | Background cleanup service with active watchdog reconciliation, stale recovery, and slot cleanup | [cleanup-service.md](feature-flows/cleanup-service.md) |
 | 2026-03-10 | AVATAR | Avatar display in Dashboard Timeline tiles (lg size, border ring) | [agent-avatars.md](feature-flows/agent-avatars.md), [dashboard-timeline-view.md](feature-flows/dashboard-timeline-view.md) |
 | 2026-03-09 | AVATAR | Avatar image optimization — WebP conversion via Pillow, stable emotion cache keys | [agent-avatars.md](feature-flows/agent-avatars.md) |
 | 2026-03-09 | CAPACITY-001 | Scheduled tasks route through TaskExecutionService — capacity meter now tracks cron/manual executions | [parallel-capacity.md](feature-flows/parallel-capacity.md), [scheduler-service.md](feature-flows/scheduler-service.md), [task-execution-service.md](feature-flows/task-execution-service.md) |
@@ -246,7 +247,7 @@
 | Vector Logging | [vector-logging.md](feature-flows/vector-logging.md) | Centralized log aggregation |
 | OpenTelemetry Integration | [opentelemetry-integration.md](feature-flows/opentelemetry-integration.md) | OTel metrics export |
 | Async Docker Operations | [async-docker-operations.md](feature-flows/async-docker-operations.md) | Non-blocking Docker SDK wrappers |
-| Cleanup Service | [cleanup-service.md](feature-flows/cleanup-service.md) | Background recovery of stale executions, activities, and slots (CLEANUP-001) |
+| Cleanup Service | [cleanup-service.md](feature-flows/cleanup-service.md) | Active watchdog reconciliation + passive stale recovery for executions, activities, and slots (CLEANUP-001, #129) |
 
 ### Templates & Pages
 

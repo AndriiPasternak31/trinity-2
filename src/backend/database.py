@@ -745,6 +745,14 @@ class DatabaseManager:
         """Finalize skipped executions missing completed_at (Issue #106)."""
         return self._schedule_ops.finalize_orphaned_skipped_executions()
 
+    def get_running_executions_with_agent_info(self):
+        """Get all running executions with schedule timeout info (Issue #129)."""
+        return self._schedule_ops.get_running_executions_with_agent_info()
+
+    def mark_execution_failed_by_watchdog(self, execution_id: str, error_message: str) -> bool:
+        """Mark a running execution as failed by watchdog with race guard (Issue #129)."""
+        return self._schedule_ops.mark_execution_failed_by_watchdog(execution_id, error_message)
+
     def mark_stale_activities_failed(self, timeout_minutes: int = 30):
         """Mark activities stuck in 'started' past threshold as failed."""
         return self._activity_ops.mark_stale_activities_failed(timeout_minutes)
