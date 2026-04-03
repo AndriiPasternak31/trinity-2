@@ -99,8 +99,8 @@
               <TasksPanel :agent-name="agent.name" :agent-status="agent.status" :highlight-execution-id="route.query.execution" :initial-message="taskPrefillMessage" @create-schedule="handleCreateSchedule" />
             </div>
 
-            <!-- Chat Tab Content -->
-            <div v-if="activeTab === 'chat'" class="flex-1 overflow-hidden">
+            <!-- Chat Tab Content (v-show keeps component mounted so state/polling survives tab switches) -->
+            <div v-show="activeTab === 'chat'" class="flex-1 overflow-hidden">
               <ChatPanel
                 :agent-name="agent.name"
                 :agent-status="agent.status"
