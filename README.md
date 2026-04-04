@@ -46,48 +46,60 @@
 
 ---
 
-## Ways to Use Trinity
+## Getting Started — Deploy an Agent in 3 Minutes
 
-Trinity supports three primary workflows depending on your starting point:
-
-### 1. Onboard an Existing Claude Code Agent
-
-**You have:** A Claude Code agent (local project with CLAUDE.md)
-**You want:** Deploy it to the cloud for autonomous operation, scheduling, and team access
+You need: a Trinity instance running somewhere (localhost or remote) and a local agent directory with `CLAUDE.md` and `template.yaml`.
 
 ```bash
-# In Claude Code, install the Trinity plugin
-/plugin marketplace add abilityai/abilities
-/plugin install trinity-onboard@abilityai-abilities
+# 1. Install the CLI
+pip install trinity-cli                     # or: brew install abilityai/tap/trinity-cli
 
-# Run the onboarding wizard
+# 2. Connect to your Trinity instance
+trinity init
+#    → Enter instance URL (e.g. trinity.example.com — bare domains work)
+#    → Enter your email
+#    → Enter the 6-digit verification code from your inbox
+#    → Done — JWT + MCP key auto-provisioned
+
+# 3. Deploy your agent
+cd my-agent/
+trinity deploy .
+#    → Packages directory, uploads, creates + starts the agent container
+#    → Writes .trinity-remote.yaml for future redeploys
+
+# 4. Use it
+trinity agents list                         # see your agents
+trinity chat my-agent "Hello, what can you do?"
+trinity logs my-agent                       # container logs
+trinity health fleet                        # fleet overview
+
+# 5. Redeploy after changes
+trinity deploy .                            # updates the same agent
+```
+
+See the [CLI documentation](docs/CLI.md) for the full command reference.
+
+---
+
+## Other Ways to Use Trinity
+
+### Deploy from Claude Code (Plugin)
+
+Already have a Claude Code agent? Deploy it with the Trinity plugin:
+
+```bash
+/plugin marketplace add abilityai/abilities
+/plugin install trinity-onboard@abilityai
 /trinity-onboard:onboard
 ```
 
-The plugin analyzes your agent, creates required configuration files, pushes to GitHub, and deploys to Trinity. After onboarding, you get management skills:
+After onboarding you get management skills: `/trinity-sync` (push/pull code), `/trinity-remote` (execute tasks), `/trinity-schedules` (cron automation).
 
-| Skill | Description |
-|-------|-------------|
-| `/trinity-sync` | Sync local ↔ remote via git |
-| `/trinity-remote` | Execute tasks on remote agent |
-| `/trinity-schedules` | Manage cron-based automation |
+### Create via Web UI
 
-### 2. Create an Agent in Trinity
+Open the Trinity web UI → **Create Agent** → pick a template (blank, built-in, or `github:org/repo@branch`) → configure credentials → start chatting.
 
-**You have:** A Trinity instance running
-**You want:** Create a new agent from scratch or from a template
-
-1. Open Trinity web UI → **Create Agent**
-2. Choose a template:
-   - **Blank** — Start fresh, define behavior via chat
-   - **Built-in templates** — Pre-configured for common use cases
-   - **GitHub template** — `github:org/repo` (or `github:org/repo@branch`) for custom templates
-3. Configure credentials and start chatting
-
-### 3. Deploy a Multi-Agent System
-
-**You have:** A complex workflow requiring multiple specialized agents
-**You want:** Orchestrated agent fleet with shared state and coordination
+### Deploy a Multi-Agent System
 
 ```yaml
 # system-manifest.yaml
@@ -107,29 +119,6 @@ permissions:
 Deploy via MCP: `mcp__trinity__deploy_system(manifest="...")`
 
 See the [Multi-Agent System Guide](docs/MULTI_AGENT_SYSTEM_GUIDE.md) for patterns.
-
-### 4. Use the CLI
-
-**You have:** A Trinity instance running
-**You want:** Manage agents from your terminal
-
-```bash
-# Install
-pip install trinity-cli
-
-# Or via Homebrew
-brew install abilityai/tap/trinity-cli
-
-# Connect to your instance
-trinity init
-
-# Manage agents
-trinity agents list
-trinity chat my-agent "Hello, what can you do?"
-trinity health fleet
-```
-
-See the [CLI documentation](docs/CLI.md) for the full command reference.
 
 ---
 
