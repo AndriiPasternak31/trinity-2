@@ -171,7 +171,7 @@ If you're an AI agent given this repository:
 - **Shared Folders** — File-based state sharing between agents via Docker volumes
 - **System Manifest Deployment** — Deploy multi-agent systems from a single YAML configuration
 - **Scheduling** — Cron-based automation with dedicated scheduler service and Redis distributed locks
-- **MCP Integration** — 62 tools for external agent orchestration via Model Context Protocol
+- **MCP Integration** — 67 tools for external agent orchestration via Model Context Protocol
 - **Trinity Connect** — WebSocket event streaming for local Claude Code integration
 
 ### Operations
@@ -298,7 +298,8 @@ trinity/
 ├── src/
 │   ├── backend/          # FastAPI backend API
 │   ├── frontend/         # Vue.js 3 + Tailwind CSS web UI
-│   ├── mcp-server/       # Trinity MCP server (62 tools)
+│   ├── mcp-server/       # Trinity MCP server (67 tools)
+│   ├── cli/              # Trinity CLI (pip install trinity-cli)
 │   └── scheduler/        # Dedicated scheduler service (Redis locks)
 ├── docker/
 │   ├── base-image/       # Universal agent base image
@@ -409,7 +410,7 @@ Trinity includes an MCP server for external orchestration of agents:
 {
   "mcpServers": {
     "trinity": {
-      "type": "http",
+      "type": "streamable-http",
       "url": "http://localhost:8080/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
@@ -439,6 +440,7 @@ Trinity includes an MCP server for external orchestration of agents:
 | `chat_with_agent` | Send a message and get response (supports parallel and async modes) |
 | `get_chat_history` | Retrieve conversation history |
 | `get_agent_logs` | View container logs |
+| `fan_out` | Dispatch N parallel tasks to an agent and collect results |
 
 > **Note**: Claude Code enforces a 60-second timeout on MCP HTTP tool calls. For longer tasks, use `async=true` with `parallel=true` to get an `execution_id` immediately and poll for results. See [Known Issues](docs/KNOWN_ISSUES.md) for details.
 
@@ -466,6 +468,7 @@ Trinity includes an MCP server for external orchestration of agents:
 - **Monitoring** (3 tools) — Get fleet health, agent health details, trigger health checks
 - **Payments** (4 tools) — Configure Nevermined x402 payments, toggle, view payment history
 - **Notifications** (1 tool) — Send structured notifications from agents to platform
+- **Events** (4 tools) — Emit events, subscribe to agent events, list/delete subscriptions
 
 ## Multi-Agent Systems
 
