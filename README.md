@@ -603,6 +603,22 @@ docker compose build backend
 docker compose up -d backend
 ```
 
+### Releasing the CLI
+
+The CLI is published to PyPI and Homebrew via tag-driven automation. To release a new version:
+
+```bash
+git tag cli-v0.3.0
+git push --tags
+```
+
+This triggers a GitHub Actions workflow that:
+1. Extracts the version from the tag (`cli-v0.3.0` → `0.3.0`)
+2. Builds and publishes to [PyPI](https://pypi.org/project/trinity-cli/)
+3. Updates the [Homebrew formula](https://github.com/abilityai/homebrew-tap) with the new version and sha256
+
+No manual version edits needed — the tag is the single source of truth.
+
 ## License
 
 This project is licensed under the [Polyform Noncommercial License 1.0.0](LICENSE).

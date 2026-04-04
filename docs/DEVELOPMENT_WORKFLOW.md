@@ -55,7 +55,16 @@ Trinity follows a 4-stage lifecycle that maps 1:1 to the **Trinity Roadmap** Git
 
 Within P1, the **Tier** field on the project board provides sub-prioritization: **P1a** (highest) → **P1b** → **P1c**.
 
-**Rule**: Work P0 first, then P1 by Tier (P1a → P1b → P1c), then by issue number (oldest first).
+**Rule**: Work P0 first, then P1 by Tier (P1a → P1b → P1c), then by Rank (lowest number first).
+
+#### Backlog Grooming
+
+Run `/groom` periodically to keep the backlog healthy. It audits board coverage, detects unranked items, reviews priority ordering, and applies rank updates after approval. Key checks:
+
+- All open issues are on the project board
+- All Todo items have a Rank and Tier assigned
+- P1a items ranked highest, bugs above features within same tier
+- Stale or resolved items flagged for closure
 
 ### Issue Types
 
@@ -282,6 +291,25 @@ When the PR is approved and merged:
 2. Move to **Done** on the project board
 3. Remove status labels
 
+### 5. Release (CLI only)
+
+If the merged changes affect `src/cli/`, publish a new CLI version:
+
+```bash
+git tag cli-v0.3.0
+git push --tags
+```
+
+The `publish-cli.yml` workflow automatically:
+1. Extracts the version from the tag name
+2. Injects it into `pyproject.toml` at build time
+3. Publishes to [PyPI](https://pypi.org/project/trinity-cli/)
+4. Updates the [Homebrew formula](https://github.com/abilityai/homebrew-tap) (version + sha256)
+
+**No manual version edits.** The source has a placeholder `0.0.0`; the real version comes from the tag. Runtime reads it via `importlib.metadata`.
+
+**Requires**: `HOMEBREW_TAP_TOKEN` repo secret (fine-grained PAT with Contents read/write on `abilityai/homebrew-tap`).
+
 ---
 
 ## GitHub Project Board
@@ -344,6 +372,7 @@ Agents are invoked automatically by Claude Code when appropriate, or you can req
 | `/security-check` | Validate no secrets in staged files | In Progress |
 | `/add-testing` | Add tests for a feature | In Progress |
 | `/validate-pr <number>` | Validate PR against methodology | Review |
+| `/groom` | Backlog grooming — audit board, rank issues, review priorities | Todo |
 | `/sprint [issue-number]` | Full dev cycle (orchestrates all above) | All |
 
 ---
