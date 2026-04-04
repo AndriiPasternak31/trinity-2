@@ -71,6 +71,15 @@ The project includes Rank (1-N) and Tier (P1a/P1b/P1c) fields:
 - **P1b** — Important (user-facing features)
 - **P1c** — Backlog (architecture + future)
 
+**Find issues NOT on the project board:**
+
+```bash
+# Get all open issues with their project board membership
+gh issue list --repo abilityai/trinity --state open --limit 100 \
+  --json number,title,labels,projectItems \
+  --jq '.[] | select(.projectItems | length == 0) | "#\(.number)\t\([.labels[].name] | join(", "))\t\(.title)"'
+```
+
 ### Step 3: Read Recent Changes from Git History
 
 Get recent changes from git log (the single source of truth for what changed):
@@ -97,12 +106,24 @@ Note: `CLAUDE.md` is loaded automatically at session start - no need to read it 
 Documentation loaded. Ready to work on Trinity.
 
 P0: [P0 issues or "None"]
+```
 
-Pipeline (from Trinity Roadmap project, ranked):
-  P1a: #[rank1] [title], #[rank2] [title], ...
-  P1b: #[rank5] [title], #[rank6] [title], ...
-  P1c: [count] issues in backlog
+**Top 15 Backlog** (from Trinity Roadmap project, ranked):
 
+| Rank | Issue | Tier | Title |
+|------|-------|------|-------|
+| 1 | #NNN | P1a | ... |
+| ... | | | |
+
+**Not on Board** (open issues missing from Trinity Roadmap):
+
+| Issue | Labels | Title |
+|-------|--------|-------|
+| #NNN | ... | ... |
+
+If no issues are missing from the board, report "All open issues are on the board."
+
+```
 Recent: [most recent git commits]
 ```
 
@@ -126,5 +147,7 @@ Load context first, then act. Never modify code without understanding the curren
 - [ ] Testing guide read
 - [ ] P0 issues queried
 - [ ] Ranked P1 pipeline queried from Project #6
+- [ ] Issues not on board identified
 - [ ] Recent git history reviewed
-- [ ] Summary reported with ranked pipeline
+- [ ] Top 15 backlog table shown
+- [ ] Not-on-board table shown
