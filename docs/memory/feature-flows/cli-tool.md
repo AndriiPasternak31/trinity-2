@@ -63,7 +63,9 @@ Legacy flat configs (`{"instance_url": "...", "token": "..."}`) are auto-migrate
 ```
 User runs `trinity init [--profile name]`
   → Prompt: instance URL
+  → Normalize URL (bare domain → https://, strip trailing slash)
   → GET /api/auth/mode (verify reachable)
+  → If unreachable: prompt for new URL (up to 3 attempts)
   → Derive profile name from hostname (or use --profile)
   → Prompt: email
   → POST /api/access/request {email}     ← NEW ENDPOINT (auto-whitelist)
@@ -78,6 +80,8 @@ User runs `trinity init [--profile name]`
   → Add .mcp.json to .gitignore (if git repo)
   → Ready
 ```
+
+URL normalization (`_normalize_url`): bare domains like `trinity.ability.ai` get `https://` prepended. Both `init` and `login` retry up to 3 times on connection failure.
 
 ### `trinity login` (returning user)
 
@@ -132,10 +136,10 @@ Response: {"success": true, "message": "Access granted", "already_registered": f
 
 **File**: `src/cli/trinity_cli/output.py`
 
-- `--format json` (default): `json.dumps(data, indent=2)`
-- `--format table`: Rich table rendering
+- `--format table` (default): Rich table rendering
   - Lists → column headers from dict keys
   - Dicts → key/value two-column table
+- `--format json`: `json.dumps(data, indent=2)` for piping/scripting
 
 ## Command Map
 
@@ -257,6 +261,23 @@ Enables idempotent redeploys — subsequent `trinity deploy .` updates the same 
 - System agents (`is_system=True`) excluded from count
 - Redeploys of existing user-owned agents bypass quota
 - Returns HTTP 429 on exceed
+
+## Release Process
+
+Tag-driven auto-versioning. Version is extracted from the git tag at build time.
+
+```
+git tag cli-v0.3.0 && git push --tags
+```
+
+This triggers `.github/workflows/publish-cli.yml`:
+
+1. **PyPI publish**: Extracts version from tag (`cli-v0.3.0` → `0.3.0`), injects into `pyproject.toml`, builds, publishes
+2. **Homebrew update**: Downloads published sdist, computes sha256, pushes updated formula to `abilityai/homebrew-tap`
+
+**Version at runtime**: `trinity --version` reads from installed package metadata via `importlib.metadata.version("trinity-cli")`. Source files contain placeholder `0.0.0`.
+
+**Requires**: `HOMEBREW_TAP_TOKEN` repo secret (fine-grained PAT with Contents read/write on `abilityai/homebrew-tap`).
 
 ## Future Phases
 

@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-04-04 | CLI-001 | CLI UX: URL normalization + retry, table default output, tag-driven auto-versioning | [cli-tool.md](feature-flows/cli-tool.md) |
 | 2026-04-01 | CLI-001 | Trinity CLI tool — Python Click CLI mirroring core MCP tools as shell commands | [cli-tool.md](feature-flows/cli-tool.md) |
 | 2026-04-01 | SUB-004 | Per-subscription rolling token/cost usage windows (5h, 7d) across chat and executions | [subscription-usage-tracking.md](feature-flows/subscription-usage-tracking.md) |
 | 2026-03-31 | #222 | Slack inbound file sharing — images via vision, text files via container copy (SLACK-FILES) | [slack-file-sharing.md](feature-flows/slack-file-sharing.md) |
