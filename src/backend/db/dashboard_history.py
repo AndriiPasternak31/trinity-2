@@ -295,6 +295,77 @@ class DashboardHistoryOperations:
                 logger.info(f"Cleaned up {deleted} old dashboard value records")
             return deleted
 
+    # =========================================================================
+    # Dashboard Cache (survives backend restarts)
+    # =========================================================================
+
+    def cache_valid_dashboard(
+        self,
+        agent_name: str,
+        config: Dict[str, Any],
+        last_modified: Optional[str] = None
+    ) -> None:
+        """Cache a valid dashboard config in the database.
+
+        Called whenever the agent returns a valid dashboard.yaml parse.
+        Replaces in-memory _last_valid_dashboard dict.
+        """
+        import json
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO agent_dashboard_cache (agent_name, config_json, last_modified, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(agent_name) DO UPDATE SET
+                    config_json = excluded.config_json,
+                    last_modified = excluded.last_modified,
+                    updated_at = excluded.updated_at
+            """, (agent_name, json.dumps(config), last_modified, utc_now_iso()))
+            conn.commit()
+
+    def get_cached_dashboard(self, agent_name: str) -> Optional[Dict[str, Any]]:
+        """Get the last valid dashboard config from cache.
+
+        Returns None if no cached dashboard exists.
+        """
+        import json
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT config_json, last_modified, updated_at
+                FROM agent_dashboard_cache
+                WHERE agent_name = ?
+            """, (agent_name,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "has_dashboard": True,
+                "config": json.loads(row["config_json"]),
+                "last_modified": row["last_modified"],
+                "error": None
+            }
+
+    def delete_cached_dashboard(self, agent_name: str) -> None:
+        """Delete cached dashboard for an agent."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM agent_dashboard_cache WHERE agent_name = ?",
+                (agent_name,)
+            )
+            conn.commit()
+
+    def has_cached_dashboard(self, agent_name: str) -> bool:
+        """Check if an agent has ever had a valid dashboard (for tab visibility)."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM agent_dashboard_cache WHERE agent_name = ? LIMIT 1",
+                (agent_name,)
+            )
+            return cursor.fetchone() is not None
+
     def delete_agent_dashboard_history(self, agent_name: str) -> int:
         """Delete all dashboard history for an agent (when agent is deleted).
 
@@ -309,5 +380,10 @@ class DashboardHistoryOperations:
             cursor.execute("""
                 DELETE FROM agent_dashboard_values WHERE agent_name = ?
             """, (agent_name,))
+            # Also delete cached dashboard config
+            cursor.execute(
+                "DELETE FROM agent_dashboard_cache WHERE agent_name = ?",
+                (agent_name,)
+            )
             conn.commit()
             return cursor.rowcount

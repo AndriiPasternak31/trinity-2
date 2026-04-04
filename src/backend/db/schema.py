@@ -498,6 +498,16 @@ TABLES = {
         )
     """,
 
+    # Dashboard cache: survives backend restarts (DASH-001)
+    "agent_dashboard_cache": """
+        CREATE TABLE IF NOT EXISTS agent_dashboard_cache (
+            agent_name TEXT PRIMARY KEY,
+            config_json TEXT NOT NULL,
+            last_modified TEXT,
+            updated_at TEXT NOT NULL
+        )
+    """,
+
     # -------------------------------------------------------------------------
     # Slack Integration Tables (SLACK-001)
     # -------------------------------------------------------------------------

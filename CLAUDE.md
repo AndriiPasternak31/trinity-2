@@ -110,6 +110,9 @@ Follow methodology guides in `.claude/skills/`:
 | `tdd` | Write failing test first, then minimal code to pass |
 | `code-review` | Verify feedback technically before implementing |
 
+### 7. Architectural Invariants
+Before adding endpoints, services, DB tables, or frontend views, review the Architectural Invariants section in @docs/memory/architecture.md. Violations of these patterns will break the system.
+
 ---
 
 ## Memory Files
@@ -117,7 +120,7 @@ Follow methodology guides in `.claude/skills/`:
 | File | Purpose |
 |------|---------|
 | `docs/memory/requirements.md` | **SINGLE SOURCE OF TRUTH** - All features |
-| `docs/memory/architecture.md` | Current system design (~1000 lines max) |
+| @docs/memory/architecture.md | Current system design (~1000 lines max) |
 | `docs/memory/feature-flows.md` | Index of vertical slice docs |
 | GitHub Issues + Project Board | Prioritized task queue — **Trinity Roadmap** board (Todo/In Progress/Done), priority labels (P0-P3), Tier sub-priority (P1a/P1b/P1c) |
 
@@ -295,7 +298,7 @@ The **[abilities](https://github.com/abilityai/abilities)** repo is the canonica
 ## See Also
 
 - **SDLC & Development Workflow**: `docs/DEVELOPMENT_WORKFLOW.md` ← Start here for dev process
-- **Full Architecture**: `.claude/memory/architecture.md`
+- **Full Architecture**: @docs/memory/architecture.md
 - **All Requirements**: `.claude/memory/requirements.md`
 - **Current Roadmap**: https://github.com/abilityai/trinity/issues
 - **Recent Changes**: `git log --oneline --since="2 weeks ago"`

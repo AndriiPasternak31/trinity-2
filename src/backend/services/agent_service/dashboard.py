@@ -18,10 +18,6 @@ from services.docker_utils import container_reload
 
 logger = logging.getLogger(__name__)
 
-# In-memory cache of last valid dashboard configs per agent.
-# Used to display stale dashboards when current YAML is broken.
-_last_valid_dashboard: Dict[str, dict] = {}
-
 
 def _build_platform_metrics_section(agent_name: str, hours: int = 24) -> dict:
     """Build the platform metrics section with execution and health stats.
@@ -144,7 +140,7 @@ def _enrich_widgets_with_history(
             # Get history for this widget
             history_values = all_history.get(widget_key, [])
 
-            if len(history_values) > 1:
+            if len(history_values) >= 1:
                 # Calculate stats
                 stats = db.calculate_widget_stats(history_values)
 
@@ -233,45 +229,20 @@ async def get_agent_dashboard_logic(
                 data["status"] = "running"
 
                 # If the agent returned an error (YAML parse/validation),
-                # try to serve the last valid cached dashboard instead
+                # try to serve the last valid cached dashboard from DB
                 if data.get("error") and not data.get("has_dashboard"):
-                    cached = _last_valid_dashboard.get(agent_name)
-                    if cached:
-                        stale_data = copy.deepcopy(cached)
-                        stale_data["agent_name"] = agent_name
-                        stale_data["status"] = "running"
-                        stale_data["stale"] = True
-                        stale_data["stale_reason"] = data["error"]
+                    return _serve_cached_or_error(
+                        agent_name, data["error"], data,
+                        include_history, history_hours, include_platform_metrics
+                    )
 
-                        # Still enrich with history and platform metrics
-                        if include_history and stale_data.get("config"):
-                            _enrich_widgets_with_history(stale_data["config"], agent_name, history_hours)
-                        if include_platform_metrics and stale_data.get("config"):
-                            config = stale_data["config"]
-                            if config.get("platform_metrics") is not False:
-                                platform_section = _build_platform_metrics_section(agent_name, history_hours)
-                                if platform_section["widgets"]:
-                                    # Remove any existing platform section from cache
-                                    config["sections"] = [
-                                        s for s in config.get("sections", [])
-                                        if not s.get("platform_managed")
-                                    ]
-                                    config["sections"].append(platform_section)
-
-                        return stale_data
-
-                    # No cache available - return the error as-is
-                    return data
-
-                # Valid dashboard - cache it and process normally
+                # Valid dashboard - cache to DB and process normally
                 if data.get("has_dashboard") and data.get("config"):
-                    # Cache the raw valid response (before enrichment)
-                    _last_valid_dashboard[agent_name] = {
-                        "has_dashboard": True,
-                        "config": copy.deepcopy(data["config"]),
-                        "last_modified": data.get("last_modified"),
-                        "error": None
-                    }
+                    db.cache_valid_dashboard(
+                        agent_name,
+                        data["config"],
+                        data.get("last_modified")
+                    )
 
                     # Capture snapshot if dashboard changed
                     if data.get("last_modified"):
@@ -292,66 +263,73 @@ async def get_agent_dashboard_logic(
 
                 # Add platform metrics section if requested
                 if include_platform_metrics and data.get("has_dashboard") and data.get("config"):
-                    # Check if agent opted out
-                    config = data["config"]
-                    if config.get("platform_metrics") is not False:
-                        platform_section = _build_platform_metrics_section(agent_name, history_hours)
-                        if platform_section["widgets"]:  # Only add if there are metrics
-                            if "sections" not in config:
-                                config["sections"] = []
-                            config["sections"].append(platform_section)
+                    _add_platform_metrics(data["config"], agent_name, history_hours)
 
                 return data
             else:
-                # HTTP error from agent - try cache
-                cached = _last_valid_dashboard.get(agent_name)
-                if cached:
-                    stale_data = copy.deepcopy(cached)
-                    stale_data["agent_name"] = agent_name
-                    stale_data["status"] = "running"
-                    stale_data["stale"] = True
-                    stale_data["stale_reason"] = f"Failed to fetch dashboard: HTTP {response.status_code}"
-                    return stale_data
-                return {
-                    "agent_name": agent_name,
-                    "has_dashboard": False,
-                    "config": None,
-                    "last_modified": None,
-                    "status": "running",
-                    "error": f"Failed to fetch dashboard: HTTP {response.status_code}"
-                }
+                return _serve_cached_or_error(
+                    agent_name, f"Failed to fetch dashboard: HTTP {response.status_code}", None,
+                    include_history, history_hours, include_platform_metrics
+                )
     except httpx.TimeoutException:
-        cached = _last_valid_dashboard.get(agent_name)
-        if cached:
-            stale_data = copy.deepcopy(cached)
-            stale_data["agent_name"] = agent_name
-            stale_data["status"] = "running"
-            stale_data["stale"] = True
-            stale_data["stale_reason"] = "Agent is starting up, please try again"
-            return stale_data
-        return {
-            "agent_name": agent_name,
-            "has_dashboard": False,
-            "config": None,
-            "last_modified": None,
-            "status": "running",
-            "error": "Agent is starting up, please try again"
-        }
+        return _serve_cached_or_error(
+            agent_name, "Agent is starting up, please try again", None,
+            include_history, history_hours, include_platform_metrics
+        )
     except Exception as e:
         logger.error(f"Failed to fetch dashboard for agent {agent_name}: {e}")
-        cached = _last_valid_dashboard.get(agent_name)
-        if cached:
-            stale_data = copy.deepcopy(cached)
-            stale_data["agent_name"] = agent_name
-            stale_data["status"] = "running"
-            stale_data["stale"] = True
-            stale_data["stale_reason"] = f"Failed to read dashboard: {str(e)}"
-            return stale_data
-        return {
-            "agent_name": agent_name,
-            "has_dashboard": False,
-            "config": None,
-            "last_modified": None,
-            "status": "running",
-            "error": f"Failed to read dashboard: {str(e)}"
-        }
+        return _serve_cached_or_error(
+            agent_name, f"Failed to read dashboard: {str(e)}", None,
+            include_history, history_hours, include_platform_metrics
+        )
+
+
+def _serve_cached_or_error(
+    agent_name: str,
+    error_reason: str,
+    fallback_data: Optional[dict],
+    include_history: bool,
+    history_hours: int,
+    include_platform_metrics: bool
+) -> dict:
+    """Try to serve a DB-cached dashboard; fall back to error response."""
+    cached = db.get_cached_dashboard(agent_name)
+    if cached:
+        stale_data = copy.deepcopy(cached)
+        stale_data["agent_name"] = agent_name
+        stale_data["status"] = "running"
+        stale_data["stale"] = True
+        stale_data["stale_reason"] = error_reason
+
+        if include_history and stale_data.get("config"):
+            _enrich_widgets_with_history(stale_data["config"], agent_name, history_hours)
+        if include_platform_metrics and stale_data.get("config"):
+            _add_platform_metrics(stale_data["config"], agent_name, history_hours)
+
+        return stale_data
+
+    # No cache available
+    if fallback_data:
+        return fallback_data
+
+    return {
+        "agent_name": agent_name,
+        "has_dashboard": False,
+        "config": None,
+        "last_modified": None,
+        "status": "running",
+        "error": error_reason
+    }
+
+
+def _add_platform_metrics(config: dict, agent_name: str, hours: int) -> None:
+    """Append platform metrics section to config if opted in."""
+    if config.get("platform_metrics") is not False:
+        platform_section = _build_platform_metrics_section(agent_name, hours)
+        if platform_section["widgets"]:
+            # Remove any existing platform section
+            config["sections"] = [
+                s for s in config.get("sections", [])
+                if not s.get("platform_managed")
+            ]
+            config["sections"].append(platform_section)

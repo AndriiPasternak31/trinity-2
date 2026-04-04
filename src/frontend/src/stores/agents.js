@@ -552,6 +552,14 @@ export const useAgentsStore = defineStore('agents', {
       return response.data
     },
 
+    async checkDashboardExists(name) {
+      const authStore = useAuthStore()
+      const response = await axios.get(`/api/agent-dashboard/${name}/exists`, {
+        headers: authStore.authHeader
+      })
+      return response.data?.has_dashboard === true
+    },
+
     updateAgentStatus(name, status) {
       const agent = this.agents.find(a => a.name === name)
       if (agent) agent.status = status

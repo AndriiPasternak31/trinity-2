@@ -1,6 +1,6 @@
 # Feature: Dynamic Dashboards (DASH-001)
 
-> **Last Updated**: 2026-02-23 - Initial documentation for historical data visualization and platform metrics injection.
+> **Last Updated**: 2026-04-04 - Reliability improvements: DB-persisted cache, retry with backoff, partial YAML tolerance, decoupled tab visibility, immediate history display.
 
 ## Overview
 
@@ -14,8 +14,10 @@ As an agent developer, I want my dashboard to show platform-tracked execution st
 
 ## Entry Points
 
-- **UI**: `src/frontend/src/components/DashboardPanel.vue:135-143` - SparklineChart renders historical data
-- **API**: `GET /api/agent-dashboard/{name}?include_history=true&history_hours=24&include_platform_metrics=true`
+- **UI (tab check)**: `src/frontend/src/views/AgentDetail.vue:checkDashboardExists()` - DB-backed check with retry backoff
+- **UI (render)**: `src/frontend/src/components/DashboardPanel.vue` - Dashboard display with warning banners
+- **API (lightweight)**: `GET /api/agent-dashboard/{name}/exists` - DB-only tab visibility check
+- **API (full)**: `GET /api/agent-dashboard/{name}?include_history=true&history_hours=24&include_platform_metrics=true`
 
 ## Architecture
 
@@ -28,7 +30,8 @@ As an agent developer, I want my dashboard to show platform-tracked execution st
         |                        |                         |
         v                        v                         v
   SparklineChart          dashboard.py service      dashboard.yaml file
-  (uPlot-based)           - Capture snapshot         ~/dashboard.yaml
+  (uPlot-based)           - Cache valid config       ~/dashboard.yaml
+                          - Capture snapshot          (partial YAML tolerance)
                           - Enrich with history
                           - Inject platform metrics
                                  |
@@ -37,18 +40,39 @@ As an agent developer, I want my dashboard to show platform-tracked execution st
                           | Database         |
                           | agent_dashboard_ |
                           | values table     |
+                          | agent_dashboard_ |
+                          | cache table      |
                           +------------------+
+```
+
+### Reliability Layer
+
+```
+AgentDetail.vue                       Backend
+    |                                    |
+    |-- GET /{name}/exists ------------->|-- DB: agent_dashboard_cache
+    |   (fast, no container call)        |   (survives restarts)
+    |                                    |
+    |-- GET /{name} (with retries) ---->|-- HTTP to agent container
+    |   (0s, 3s, 6s backoff)            |   |
+    |                                    |   +--> On success: cache to DB
+    |                                    |   +--> On failure: serve DB cache (stale)
+    |                                    |
+    Tab stays visible if DB has cache    Partial YAML: strip bad widgets, keep rest
 ```
 
 ## Data Flow Summary
 
-1. **Frontend** requests dashboard with `include_history=true`
-2. **Backend** fetches raw config from agent's `/api/dashboard`
-3. **Change Detection**: If `dashboard.yaml` mtime changed, capture widget snapshot
-4. **History Enrichment**: Query historical values, calculate stats, inject `history` field
-5. **Platform Metrics**: If enabled, query execution stats and append section
-6. **Response**: Enriched config with sparkline data returned to frontend
-7. **Rendering**: SparklineChart renders historical values in metric/progress widgets
+1. **Tab Visibility Check**: Frontend calls `GET /{name}/exists` (DB-only, no container call)
+2. **Full Fetch** (with retry): Frontend requests dashboard with `include_history=true`; retries 3x on boot (0s, 3s, 6s)
+3. **Agent Validation**: Agent server validates YAML, strips invalid widgets (returns valid subset + warnings)
+4. **Backend Cache**: Valid config cached to `agent_dashboard_cache` DB table (survives restarts)
+5. **Fallback**: On agent error/timeout, backend serves DB-cached config with `stale: true`
+6. **Change Detection**: If `dashboard.yaml` mtime changed, capture widget snapshot
+7. **History Enrichment**: Query historical values (threshold: >= 1 data point), calculate stats, inject `history` field
+8. **Platform Metrics**: If enabled, query execution stats and append section
+9. **Response**: Enriched config with sparkline data + any widget warnings returned to frontend
+10. **Rendering**: SparklineChart renders historical values; warning banner shows stripped widgets
 
 ---
 
@@ -168,7 +192,7 @@ const getSparklineColor = (widget) => {
 
 ### State Management
 
-**stores/agents.js:545-550** - Store action:
+**stores/agents.js** - Store actions:
 ```javascript
 async getAgentDashboard(name) {
   const authStore = useAuthStore()
@@ -176,7 +200,15 @@ async getAgentDashboard(name) {
     headers: authStore.authHeader
   })
   return response.data
-}
+},
+
+async checkDashboardExists(name) {
+  const authStore = useAuthStore()
+  const response = await axios.get(`/api/agent-dashboard/${name}/exists`, {
+    headers: authStore.authHeader
+  })
+  return response.data?.has_dashboard === true
+},
 ```
 
 ---
@@ -185,121 +217,76 @@ async getAgentDashboard(name) {
 
 ### Router
 
-**src/backend/routers/agent_dashboard.py** (85 lines)
+**src/backend/routers/agent_dashboard.py**
 
 ```python
 router = APIRouter(prefix="/api/agent-dashboard", tags=["agent-dashboard"])
 
 @router.get("/{name}")
-async def get_agent_dashboard(
-    name: str,
-    include_history: bool = Query(
-        default=True,
-        description="Include historical sparkline data for widgets"
-    ),
-    history_hours: int = Query(
-        default=24,
-        ge=1,
-        le=168,
-        description="Hours of history to include (1-168)"
-    ),
-    include_platform_metrics: bool = Query(
-        default=True,
-        description="Include platform-managed metrics section"
-    ),
-    current_user: User = Depends(get_current_user)
-):
-    return await get_agent_dashboard_logic(
-        name,
-        current_user,
-        include_history=include_history,
-        history_hours=history_hours,
-        include_platform_metrics=include_platform_metrics
-    )
+async def get_agent_dashboard(name, include_history, history_hours, include_platform_metrics, current_user):
+    """Full dashboard fetch with enrichment."""
+    return await get_agent_dashboard_logic(...)
+
+@router.get("/{name}/exists")
+async def check_dashboard_exists(name, current_user):
+    """Lightweight DB-only check for tab visibility (no agent container call)."""
+    return {"has_dashboard": db.has_cached_dashboard(name)}
 ```
 
 ### Service Layer
 
 **src/backend/services/agent_service/dashboard.py** (286 lines)
 
-**Main Flow** - `get_agent_dashboard_logic()` (Line 157-286):
+**Main Flow** - `get_agent_dashboard_logic()`:
 ```python
-async def get_agent_dashboard_logic(
-    agent_name: str,
-    current_user: User,
-    include_history: bool = True,
-    history_hours: int = 24,
-    include_platform_metrics: bool = True
-) -> dict:
+async def get_agent_dashboard_logic(agent_name, current_user, ...):
     # 1. Authorization check
-    if not db.can_user_access_agent(current_user.username, agent_name):
-        raise HTTPException(status_code=403, ...)
-
     # 2. Get container and check status
-    container = get_agent_container(agent_name)
-    if container.status != "running":
-        return {"status": "stopped", ...}
-
-    # 3. Fetch from agent's internal API
-    agent_url = f"http://agent-{agent_name}:8000/api/dashboard"
-    response = await client.get(agent_url)
-    data = response.json()
-
-    # 4. Capture snapshot if dashboard changed (DASH-001)
-    if data.get("has_dashboard") and data.get("config") and data.get("last_modified"):
-        last_mtime = db.get_last_captured_mtime(agent_name)
-        current_mtime = data["last_modified"]
-        if last_mtime != current_mtime:
-            db.capture_dashboard_snapshot(agent_name, data["config"], current_mtime)
-
-    # 5. Enrich with history if requested (DASH-001)
-    if include_history and data.get("has_dashboard") and data.get("config"):
-        _enrich_widgets_with_history(data["config"], agent_name, history_hours)
-
-    # 6. Add platform metrics section if requested (DASH-001)
-    if include_platform_metrics and data.get("has_dashboard") and data.get("config"):
-        config = data["config"]
-        if config.get("platform_metrics") is not False:
-            platform_section = _build_platform_metrics_section(agent_name, history_hours)
-            if platform_section["widgets"]:
-                config["sections"].append(platform_section)
-
-    return data
+    # 3. Fetch from agent's internal API (10s timeout)
+    #    On success:
+    #      - Cache valid config to DB (db.cache_valid_dashboard)
+    #      - Capture snapshot if mtime changed
+    #      - Enrich with history + platform metrics
+    #    On error/timeout:
+    #      - _serve_cached_or_error() reads from DB cache
+    #      - Returns stale dashboard with stale_reason
 ```
 
-**History Enrichment** - `_enrich_widgets_with_history()` (Line 103-154):
+**Cache Fallback** - `_serve_cached_or_error()`:
 ```python
-def _enrich_widgets_with_history(config: dict, agent_name: str, hours: int = 24) -> dict:
+def _serve_cached_or_error(agent_name, error_reason, fallback_data, ...):
+    """Try DB-cached dashboard; fall back to error response."""
+    cached = db.get_cached_dashboard(agent_name)  # Survives backend restarts
+    if cached:
+        stale_data = copy.deepcopy(cached)
+        stale_data["stale"] = True
+        stale_data["stale_reason"] = error_reason
+        # Still enrich with history + platform metrics
+        return stale_data
+    return fallback_data or {"has_dashboard": False, "error": error_reason}
+```
+
+**History Enrichment** - `_enrich_widgets_with_history()`:
+```python
+def _enrich_widgets_with_history(config, agent_name, hours=24):
     """Enrich trackable widgets with historical data and trends."""
-    # Get all widget history at once
     all_history = db.get_all_widget_history(agent_name, hours)
 
     for section_idx, section in enumerate(config.get("sections", [])):
         for widget_idx, widget in enumerate(section.get("widgets", [])):
-            widget_type = widget.get("type")
-
-            # Only enrich trackable widgets
-            if widget_type not in ("metric", "progress", "status"):
+            if widget.get("type") not in ("metric", "progress", "status"):
                 continue
-
-            # Get widget key
             widget_key = widget.get("id") or f"s{section_idx}_w{widget_idx}"
-
-            # Get history for this widget
             history_values = all_history.get(widget_key, [])
 
-            if len(history_values) > 1:
+            if len(history_values) >= 1:  # Show from first data point
                 stats = db.calculate_widget_stats(history_values)
                 widget["history"] = {
                     "values": history_values,
                     "trend": stats["trend"],
                     "trend_percent": stats["trend_percent"],
-                    "min": stats["min"],
-                    "max": stats["max"],
-                    "avg": stats["avg"]
+                    "min": stats["min"], "max": stats["max"], "avg": stats["avg"]
                 }
-
-    return config
 ```
 
 **Platform Metrics Section** - `_build_platform_metrics_section()` (Line 20-100):
@@ -381,30 +368,32 @@ def _build_platform_metrics_section(agent_name: str, hours: int = 24) -> dict:
 
 ### Schema
 
-**src/backend/db/schema.py:461-474** - Dashboard values table:
-```python
-"agent_dashboard_values": """
-    CREATE TABLE IF NOT EXISTS agent_dashboard_values (
-        id TEXT PRIMARY KEY,
-        agent_name TEXT NOT NULL,
-        widget_key TEXT NOT NULL,
-        widget_label TEXT,
-        widget_type TEXT NOT NULL,
-        value_numeric REAL,
-        value_text TEXT,
-        dashboard_mtime TEXT NOT NULL,
-        captured_at TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )
-""",
+**Dashboard values table** (widget history for sparklines):
+```sql
+CREATE TABLE IF NOT EXISTS agent_dashboard_values (
+    id TEXT PRIMARY KEY,
+    agent_name TEXT NOT NULL,
+    widget_key TEXT NOT NULL,
+    widget_label TEXT,
+    widget_type TEXT NOT NULL,
+    value_numeric REAL,
+    value_text TEXT,
+    dashboard_mtime TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_dashboard_values_agent_time ON agent_dashboard_values(agent_name, captured_at DESC);
+CREATE INDEX idx_dashboard_values_widget ON agent_dashboard_values(agent_name, widget_key, captured_at DESC);
 ```
 
-**Indexes** (schema.py + migrations.py):
+**Dashboard cache table** (last valid config, survives backend restarts):
 ```sql
-CREATE INDEX IF NOT EXISTS idx_dashboard_values_agent_time
-  ON agent_dashboard_values(agent_name, captured_at DESC);
-CREATE INDEX IF NOT EXISTS idx_dashboard_values_widget
-  ON agent_dashboard_values(agent_name, widget_key, captured_at DESC);
+CREATE TABLE IF NOT EXISTS agent_dashboard_cache (
+    agent_name TEXT PRIMARY KEY,
+    config_json TEXT NOT NULL,
+    last_modified TEXT,
+    updated_at TEXT NOT NULL
+);
 ```
 
 ### Migration
@@ -432,9 +421,9 @@ def _migrate_agent_dashboard_values_table(cursor, conn):
     conn.commit()
 ```
 
-### Dashboard History Operations
+### Dashboard History & Cache Operations
 
-**src/backend/db/dashboard_history.py** (314 lines) - NEW FILE
+**src/backend/db/dashboard_history.py**
 
 **capture_dashboard_snapshot()** (Line 29-108):
 ```python
@@ -613,6 +602,16 @@ def delete_agent_dashboard_history(self, agent_name: str):
 
 def get_agent_execution_stats(self, agent_name: str, hours: int = 24):
     return self._schedule_ops.get_agent_execution_stats(agent_name, hours)
+
+# Dashboard Cache (survives backend restarts)
+def cache_valid_dashboard(self, agent_name, config, last_modified=None):
+    return self._dashboard_history_ops.cache_valid_dashboard(...)
+def get_cached_dashboard(self, agent_name):
+    return self._dashboard_history_ops.get_cached_dashboard(agent_name)
+def has_cached_dashboard(self, agent_name) -> bool:
+    return self._dashboard_history_ops.has_cached_dashboard(agent_name)
+def delete_cached_dashboard(self, agent_name):
+    return self._dashboard_history_ops.delete_cached_dashboard(agent_name)
 ```
 
 ---
@@ -621,11 +620,11 @@ def get_agent_execution_stats(self, agent_name: str, hours: int = 24):
 
 ### Dashboard Endpoint
 
-**docker/base-image/agent_server/routers/dashboard.py:150-229**:
+**docker/base-image/agent_server/routers/dashboard.py**:
 ```python
 @router.get("/api/dashboard")
 async def get_dashboard():
-    """Get agent dashboard configuration."""
+    """Get agent dashboard configuration with partial YAML tolerance."""
     dashboard_path = get_dashboard_path()  # /home/developer/dashboard.yaml
 
     if not dashboard_path.exists():
@@ -634,22 +633,27 @@ async def get_dashboard():
     content = dashboard_path.read_text()
     config = yaml.safe_load(content)
 
-    # Validate configuration
+    # Validate — strips invalid widgets, keeps valid ones
     errors = validate_dashboard(config)
-    if errors:
-        return {"has_dashboard": False, "error": f"Validation errors: {'; '.join(errors)}"}
 
-    # Get file modification time (used for change detection)
-    stat = dashboard_path.stat()
-    last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+    # Only fatal if no title or no sections remain after stripping
+    has_sections = isinstance(config.get('sections'), list) and len(config.get('sections', [])) > 0
+    if 'title' not in config or not has_sections:
+        return {"has_dashboard": False, "error": f"Validation errors: {'; '.join(errors)}"}
 
     return {
         "has_dashboard": True,
-        "config": config,
-        "last_modified": last_modified,
-        "error": None
+        "config": config,         # Valid widgets only
+        "last_modified": ...,
+        "error": None,
+        "warnings": errors or None  # Stripped widget details
     }
 ```
+
+**Partial Validation** - `validate_dashboard()`:
+- Top-level errors (missing title/sections) are fatal → `has_dashboard: false`
+- Widget-level errors strip the bad widget, add to warnings → rest of dashboard renders
+- Empty sections (all widgets stripped) are removed
 
 ### Platform Metrics Opt-Out
 
@@ -741,14 +745,18 @@ platform_metrics: false
 
 ## Error Handling
 
-| Error Case | HTTP Status | Message |
-|------------|-------------|---------|
+| Error Case | HTTP Status | Behavior |
+|------------|-------------|----------|
 | Not authenticated | 401 | Unauthorized |
-| No access to agent | 403 | You don't have permission to access this agent |
+| No access to agent | 403 | Permission denied |
 | Agent not found | 404 | Agent not found |
-| Agent not running | 200 | `error: "Agent must be running to read dashboard"` |
-| No dashboard.yaml | 200 | `error: "No dashboard.yaml found..."` |
-| YAML parse error | 200 | `error: "YAML parse error at line X, column Y: ..."` |
+| Agent not running | 200 | `error: "Agent must be running..."` |
+| No dashboard.yaml | 200 | `has_dashboard: false` |
+| YAML parse error | 200 | Serve DB-cached dashboard (`stale: true`) or error |
+| Agent timeout | 200 | Serve DB-cached dashboard (`stale: true`, `stale_reason: "Agent is starting up..."`) |
+| HTTP error from agent | 200 | Serve DB-cached dashboard or `has_dashboard: false` |
+| Widget validation error | 200 | Strip bad widget, return rest + `warnings` array |
+| All widgets invalid | 200 | `has_dashboard: false` (no sections remain) |
 
 ---
 
@@ -763,6 +771,9 @@ platform_metrics: false
 
 ## Performance Considerations
 
+- **Lightweight Exists Check**: `/{name}/exists` reads from DB only — no container call, fast enough for tab visibility
+- **Retry Backoff**: Frontend retries at 0s, 3s, 6s — avoids hammering agent during boot
+- **DB-Persisted Cache**: `agent_dashboard_cache` table avoids losing state on backend restart
 - **Batch History Fetch**: `get_all_widget_history()` fetches all widget history in single query
 - **Index Optimization**: Composite indexes on `(agent_name, captured_at)` and `(agent_name, widget_key, captured_at)`
 - **Change Detection**: Snapshots only captured when `dashboard.yaml` mtime changes (not on every request)
@@ -853,4 +864,5 @@ else:
 
 | Date | Change |
 |------|--------|
+| 2026-04-04 | Reliability improvements: DB-persisted cache (replaces in-memory dict), retry with backoff, partial YAML tolerance (strip bad widgets), decoupled tab visibility via `/exists` endpoint, history from first data point (>= 1) |
 | 2026-02-23 | Initial documentation for DASH-001 - Dashboard history tracking, sparkline visualization, platform metrics injection |

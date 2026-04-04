@@ -120,7 +120,12 @@ def validate_section(section: Dict[str, Any], index: int) -> List[str]:
 
 
 def validate_dashboard(config: Dict[str, Any]) -> List[str]:
-    """Validate dashboard configuration. Returns list of error messages."""
+    """Validate dashboard configuration. Returns list of error messages.
+
+    Top-level structural errors (missing title/sections) are fatal.
+    Widget-level errors are warnings — bad widgets are stripped so the
+    rest of the dashboard still renders.
+    """
     errors = []
 
     if 'title' not in config:
@@ -139,10 +144,36 @@ def validate_dashboard(config: Dict[str, Any]) -> List[str]:
     if not isinstance(refresh, (int, float)) or refresh < 5:
         errors.append(f"'refresh' must be a number >= 5, got {refresh}")
 
-    # Validate each section
+    # Validate each section — strip invalid widgets instead of rejecting
     for section_index, section in enumerate(config['sections']):
-        section_errors = validate_section(section, section_index)
-        errors.extend(section_errors)
+        if 'widgets' not in section:
+            errors.append(f"Section {section_index}: missing required 'widgets' field")
+            continue
+        if not isinstance(section['widgets'], list):
+            errors.append(f"Section {section_index}: 'widgets' must be a list")
+            section['widgets'] = []
+            continue
+
+        layout = section.get('layout', 'grid')
+        if layout not in ['grid', 'list']:
+            errors.append(f"Section {section_index}: invalid layout '{layout}'. Valid values: grid, list")
+
+        columns = section.get('columns', 3)
+        if not isinstance(columns, int) or columns < 1 or columns > 4:
+            errors.append(f"Section {section_index}: columns must be 1-4, got {columns}")
+
+        # Validate widgets and strip bad ones
+        valid_widgets = []
+        for widget_index, widget in enumerate(section['widgets']):
+            error = validate_widget(widget, widget_index)
+            if error:
+                errors.append(f"Section {section_index}, {error} (widget stripped)")
+            else:
+                valid_widgets.append(widget)
+        section['widgets'] = valid_widgets
+
+    # Remove sections that ended up with zero widgets
+    config['sections'] = [s for s in config['sections'] if s.get('widgets')]
 
     return errors
 
@@ -181,9 +212,12 @@ async def get_dashboard():
                 "error": "dashboard.yaml is empty"
             }
 
-        # Validate configuration
+        # Validate configuration — strips bad widgets, keeps valid ones
         errors = validate_dashboard(config)
-        if errors:
+
+        # Fatal: no title or sections structure is completely broken
+        has_sections = isinstance(config.get('sections'), list) and len(config.get('sections', [])) > 0
+        if 'title' not in config or not has_sections:
             return {
                 "has_dashboard": False,
                 "config": None,
@@ -203,7 +237,8 @@ async def get_dashboard():
             "has_dashboard": True,
             "config": config,
             "last_modified": last_modified,
-            "error": None
+            "error": None,
+            "warnings": errors if errors else None
         }
 
     except yaml.YAMLError as e:

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from models import User
 from dependencies import get_current_user
 from services.agent_service.dashboard import get_agent_dashboard_logic
+from database import db
 
 logger = logging.getLogger(__name__)
 
@@ -82,3 +83,17 @@ async def get_agent_dashboard(
         history_hours=history_hours,
         include_platform_metrics=include_platform_metrics
     )
+
+
+@router.get("/{name}/exists")
+async def check_dashboard_exists(
+    name: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lightweight check for whether an agent has (or ever had) a dashboard.
+
+    Returns from DB cache — does not call the agent container.
+    Used by the frontend to decide tab visibility without a full fetch.
+    """
+    return {"has_dashboard": db.has_cached_dashboard(name)}

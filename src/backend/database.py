@@ -1221,6 +1221,18 @@ class DatabaseManager:
     def delete_agent_dashboard_history(self, agent_name: str):
         return self._dashboard_history_ops.delete_agent_dashboard_history(agent_name)
 
+    def cache_valid_dashboard(self, agent_name: str, config: dict, last_modified: str = None):
+        return self._dashboard_history_ops.cache_valid_dashboard(agent_name, config, last_modified)
+
+    def get_cached_dashboard(self, agent_name: str):
+        return self._dashboard_history_ops.get_cached_dashboard(agent_name)
+
+    def delete_cached_dashboard(self, agent_name: str):
+        return self._dashboard_history_ops.delete_cached_dashboard(agent_name)
+
+    def has_cached_dashboard(self, agent_name: str) -> bool:
+        return self._dashboard_history_ops.has_cached_dashboard(agent_name)
+
     def get_agent_execution_stats(self, agent_name: str, hours: int = 24):
         return self._schedule_ops.get_agent_execution_stats(agent_name, hours)
 

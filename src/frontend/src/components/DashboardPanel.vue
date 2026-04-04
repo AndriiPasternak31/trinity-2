@@ -66,6 +66,23 @@
         </div>
       </div>
 
+      <!-- Widget Validation Warnings Banner -->
+      <div v-if="dashboardData.warnings?.length" class="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
+        <div class="flex items-start">
+          <svg class="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div class="ml-3 flex-1">
+            <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
+              {{ dashboardData.warnings.length }} widget{{ dashboardData.warnings.length > 1 ? 's' : '' }} skipped due to validation errors
+            </p>
+            <ul class="mt-1 text-xs text-amber-700 dark:text-amber-300 list-disc list-inside">
+              <li v-for="(warning, idx) in dashboardData.warnings" :key="idx">{{ warning }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div>

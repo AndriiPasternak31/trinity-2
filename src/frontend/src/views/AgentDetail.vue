@@ -752,19 +752,43 @@ async function removeTag(tag) {
   }
 }
 
-// Check if agent has a dashboard.yaml file (or a cached version)
+// Check if agent has a dashboard.yaml file.
+// Uses lightweight DB-backed /exists endpoint first (no agent call needed).
+// On failure, retries with backoff since agents need time to boot.
 async function checkDashboardExists() {
   if (!agent.value?.name) {
     hasDashboard.value = false
     return
   }
+
+  // Fast path: check DB cache (no agent container call)
   try {
-    const response = await agentsStore.getAgentDashboard(agent.value.name)
-    // Show tab if dashboard exists OR if we have a stale cached version
-    hasDashboard.value = response?.has_dashboard === true || response?.stale === true
-  } catch (err) {
-    hasDashboard.value = false
+    const exists = await agentsStore.checkDashboardExists(agent.value.name)
+    if (exists) {
+      hasDashboard.value = true
+      return
+    }
+  } catch {
+    // DB check failed — fall through to live check
   }
+
+  // Slow path: try live fetch with retries (agent may still be booting)
+  const delays = [0, 3000, 6000]
+  for (const delay of delays) {
+    if (delay > 0) await new Promise(r => setTimeout(r, delay))
+    if (agent.value?.status !== 'running') return
+    try {
+      const response = await agentsStore.getAgentDashboard(agent.value.name)
+      if (response?.has_dashboard === true || response?.stale === true) {
+        hasDashboard.value = true
+        return
+      }
+    } catch {
+      // Continue to next retry
+    }
+  }
+  // All retries exhausted — no dashboard found
+  hasDashboard.value = false
 }
 
 // Load auth status (subscription vs API key)
@@ -879,8 +903,8 @@ watch(() => agent.value?.status, async (newStatus) => {
     stopActivityPolling()
     stopGitStatusPolling()
     resetSessionActivity()
-    // Reset dashboard state when agent stops
-    hasDashboard.value = false
+    // Don't reset hasDashboard — DB cache keeps the tab visible
+    // so users can still see the last known dashboard state
   }
 })
 
