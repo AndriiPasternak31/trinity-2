@@ -372,6 +372,7 @@ Agents are invoked automatically by Claude Code when appropriate, or you can req
 | `/security-check` | Validate no secrets in staged files | In Progress |
 | `/add-testing` | Add tests for a feature | In Progress |
 | `/validate-pr <number>` | Validate PR against methodology | Review |
+| `/validate-architecture` | Validate codebase against 16 architectural invariants | Weekly / Review |
 | `/groom` | Backlog grooming — audit board, rank issues, review priorities | Todo |
 | `/sprint [issue-number]` | Full dev cycle (orchestrates all above) | All |
 
@@ -447,3 +448,8 @@ Skills in `.claude/skills/` define HOW to approach specific tasks:
 - [ ] `/cso --diff` — security (P0/P1 or security-sensitive PRs)
 - [ ] Verify all critical findings resolved
 - [ ] Squash merge, verify issue auto-closes
+
+**Weekly maintenance:**
+
+- [ ] `/validate-architecture` — check codebase against architectural invariants
+- [ ] `/groom` — audit backlog, rank issues, review priorities

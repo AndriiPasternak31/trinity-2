@@ -111,7 +111,7 @@ Follow methodology guides in `.claude/skills/`:
 | `code-review` | Verify feedback technically before implementing |
 
 ### 7. Architectural Invariants
-Before adding endpoints, services, DB tables, or frontend views, review the Architectural Invariants section in @docs/memory/architecture.md. Violations of these patterns will break the system.
+Before adding endpoints, services, DB tables, or frontend views, review the Architectural Invariants section in @docs/memory/architecture.md. Violations of these patterns will break the system. Run `/validate-architecture` weekly to catch drift.
 
 ---
 
