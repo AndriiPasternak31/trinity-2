@@ -84,10 +84,7 @@ class TrinityClient:
     def post_form(self, path: str, data: dict) -> Any:
         """POST with form-encoded body (for OAuth2 token endpoint)."""
         with httpx.Client(timeout=30) as c:
-            headers = {}
-            if self.token:
-                headers["Authorization"] = f"Bearer {self.token}"
-            resp = c.post(f"{self.base_url}{path}", data=data, headers=headers)
+            resp = c.post(f"{self.base_url}{path}", data=data)
             return self._handle_response(resp)
 
     def post_unauthenticated(self, path: str, json: Optional[dict] = None) -> Any:

@@ -90,9 +90,13 @@ def _get_profile_name(ctx: click.Context) -> str | None:
 @click.option("--instance", help="Trinity instance URL (e.g. https://trinity.example.com)")
 @click.option("--profile", "profile_opt", default=None,
               help="Profile name to store credentials under (default: hostname)")
+@click.option("--admin", is_flag=True, help="Login as admin with password instead of email")
 @click.pass_context
-def login(ctx, instance, profile_opt):
-    """Log in to a Trinity instance with email verification."""
+def login(ctx, instance, profile_opt, admin):
+    """Log in to a Trinity instance.
+
+    By default, uses email verification. With --admin, uses password login.
+    """
     profile_name = profile_opt or _get_profile_name(ctx)
     url = instance or get_instance_url(profile_name)
     if not url:
@@ -112,6 +116,34 @@ def login(ctx, instance, profile_opt):
             else:
                 click.echo("Giving up after 3 attempts.", err=True)
                 raise SystemExit(1)
+
+    if admin:
+        # Admin password login via /api/token (form-encoded OAuth2)
+        password = click.prompt("Admin password", hide_input=True)
+        try:
+            result = client.post_form("/api/token", {
+                "username": "admin",
+                "password": password,
+            })
+        except TrinityAPIError as e:
+            click.echo(f"Admin login failed: {e.detail}", err=True)
+            raise SystemExit(1)
+
+        token = result["access_token"]
+
+        # Fetch user info with the new token
+        authed_client = TrinityClient(base_url=url, token=token)
+        try:
+            user = authed_client.get("/api/users/me")
+        except TrinityAPIError:
+            user = {"username": "admin", "role": "admin"}
+
+        target_profile = profile_name or profile_name_from_url(url)
+        set_auth(url, token, user, profile_name=target_profile)
+        click.echo(f"Logged in as admin [profile: {target_profile}]")
+
+        _provision_mcp_key(authed_client, target_profile)
+        return
 
     email = click.prompt("Email")
 
