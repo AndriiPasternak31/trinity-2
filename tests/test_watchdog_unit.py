@@ -23,6 +23,38 @@ _backend_path = os.path.abspath(
 if _backend_path not in sys.path:
     sys.path.insert(0, _backend_path)
 
+# Pre-mock modules that conflict with test environment:
+# - database: tries to write to /data (doesn't exist outside Docker)
+# - utils.helpers: shadowed by tests/utils/ package
+# - models: depends on utils.helpers
+from unittest.mock import MagicMock as _MagicMock
+
+# tests/utils shadows src/backend/utils — provide real helper implementations
+# needed by cleanup_service for timestamp math
+import types as _types
+_helpers_mod = _types.ModuleType("utils.helpers")
+
+def _utc_now():
+    return datetime.utcnow()
+
+def _utc_now_iso():
+    return datetime.utcnow().isoformat() + "Z"
+
+def _parse_iso_timestamp(s):
+    s = s.rstrip("Z")
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return datetime.utcnow()
+
+_helpers_mod.utc_now = _utc_now
+_helpers_mod.utc_now_iso = _utc_now_iso
+_helpers_mod.parse_iso_timestamp = _parse_iso_timestamp
+_helpers_mod.to_utc_iso = _MagicMock(return_value="2025-01-01T00:00:00Z")
+sys.modules["utils.helpers"] = _helpers_mod
+
+sys.modules.setdefault("database", _MagicMock())
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -371,7 +403,7 @@ class TestReconcileOrphanedExecutions:
         # Mock _get_agent_running_ids to return None (unreachable)
         service._get_agent_running_ids = AsyncMock(return_value=None)
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -402,7 +434,7 @@ class TestReconcileOrphanedExecutions:
         service._get_agent_running_ids = AsyncMock(return_value=set())
         service._broadcast_watchdog_event = AsyncMock()
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -429,7 +461,7 @@ class TestReconcileOrphanedExecutions:
         service = self._make_service()
         service._get_agent_running_ids = AsyncMock(return_value={"exec-1"})
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -461,7 +493,7 @@ class TestReconcileOrphanedExecutions:
         service._terminate_on_agent = AsyncMock(return_value=True)
         service._broadcast_watchdog_event = AsyncMock()
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -493,7 +525,7 @@ class TestReconcileOrphanedExecutions:
         service._terminate_on_agent = AsyncMock(return_value=False)
         service._broadcast_watchdog_event = AsyncMock()
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -525,7 +557,7 @@ class TestReconcileOrphanedExecutions:
         service._get_agent_running_ids = AsyncMock(return_value=set())
         service._broadcast_watchdog_event = AsyncMock()
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -561,7 +593,7 @@ class TestReconcileOrphanedExecutions:
         service._get_agent_running_ids = AsyncMock(return_value=set())
         service._broadcast_watchdog_event = AsyncMock()
 
-        orphaned, terminated = asyncio.get_event_loop().run_until_complete(
+        orphaned, terminated = asyncio.run(
             service._reconcile_orphaned_executions()
         )
 
@@ -588,7 +620,7 @@ class TestBroadcastWatchdogEvent:
         try:
             service = CleanupService()
             # Should not raise
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 service._broadcast_watchdog_event("orphan_recovered", "agent-a", "exec-1", "test reason")
             )
         finally:
@@ -606,7 +638,7 @@ class TestBroadcastWatchdogEvent:
         cs_module._ws_manager = mock_manager
         try:
             service = CleanupService()
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 service._broadcast_watchdog_event("auto_terminated", "agent-x", "exec-42", "timed out")
             )
 

@@ -13,10 +13,19 @@ Related: GitHub Issue #179 (pentest finding 3.2.2)
 import pytest
 import sys
 import os
+import importlib
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'backend'))
+_backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'backend'))
+sys.path.insert(0, _backend_path)
 
-from utils.url_validation import validate_skills_library_url
+# tests/utils shadows src/backend/utils — use importlib to load the backend module directly
+_spec = importlib.util.spec_from_file_location(
+    "backend_url_validation",
+    os.path.join(_backend_path, "utils", "url_validation.py"),
+)
+_mod = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+validate_skills_library_url = _mod.validate_skills_library_url
 
 
 class TestValidateSkillsLibraryUrl:

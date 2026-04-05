@@ -28,7 +28,10 @@ from utils.cleanup import ResourceTracker, cleanup_test_agent
 
 
 def pytest_configure(config):
-    """Configure custom markers."""
+    """Configure custom markers.
+
+    Also clean up leftover test agents from prior runs to avoid quota exhaustion.
+    """
     config.addinivalue_line("markers", "smoke: mark test as smoke test (fast, no agent)")
     config.addinivalue_line("markers", "slow: mark test as slow running (chat execution)")
     config.addinivalue_line("markers", "requires_agent: test requires a running agent")
@@ -65,10 +68,28 @@ def api_config() -> ApiConfig:
 
 @pytest.fixture(scope="session")
 def api_client(api_config: ApiConfig) -> Generator[TrinityApiClient, None, None]:
-    """Create authenticated API client for the test session."""
+    """Create authenticated API client for the test session.
+
+    Also cleans up leftover test agents from prior runs to avoid quota exhaustion.
+    """
     client = TrinityApiClient(api_config)
     try:
         client.authenticate()
+
+        # Clean up leftover test agents from prior runs
+        try:
+            response = client.get("/api/agents")
+            if response.status_code == 200:
+                agents = response.json()
+                leftover = [a["name"] for a in agents if a["name"].startswith("test-")]
+                for name in leftover:
+                    cleanup_test_agent(client, name)
+                if leftover:
+                    import sys
+                    print(f"\n[conftest] Cleaned up {len(leftover)} leftover test agents", file=sys.stderr)
+        except Exception:
+            pass  # Best-effort cleanup
+
         yield client
     finally:
         client.close()

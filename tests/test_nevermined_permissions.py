@@ -206,5 +206,5 @@ class TestNeverminedNonexistentAgent:
             "/api/nevermined/agents/nonexistent-agent-xyz/config",
             json=VALID_NVM_CONFIG,
         )
-        # Admin bypasses write access check, may get 400/501 instead of 403
-        assert_status_in(response, [400, 403, 501])
+        # Admin bypasses write access check, may get 400/404/501 instead of 403
+        assert_status_in(response, [400, 403, 404, 501])

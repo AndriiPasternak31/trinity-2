@@ -85,7 +85,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 | `main.py` | FastAPI app initialization, WebSocket manager, router mounting (182 lines) |
 | `config.py` | Centralized configuration constants |
 | `models.py` | All Pydantic request/response models |
-| `dependencies.py` | FastAPI dependencies (auth, token validation, agent access control) |
+| `dependencies.py` | FastAPI dependencies (auth, token validation, role hierarchy, agent access control) |
 | `database.py` | SQLite persistence (users, agent ownership, MCP API keys) |
 | ~~`credentials.py`~~ | **REMOVED (2026-02-05)** - CRED-002 replaced with `routers/credentials.py` file injection system |
 
@@ -694,7 +694,7 @@ These are structural patterns that must be preserved. Breaking them causes casca
 
 7. **Single API Client (`api.js`)** — One Axios instance with auth interceptor. Stores call `api.get()`/`api.post()`. No raw `fetch()` or duplicate Axios instances.
 
-8. **Auth Pattern: `Depends(get_current_user)` + `AuthorizedAgent`** — Every authenticated endpoint uses FastAPI `Depends()` for auth. Agent-scoped endpoints use `AuthorizedAgent` or `OwnedAgentByName` for access control. `internal.py` is the only exception (no auth, for agent-to-backend calls).
+8. **Auth Pattern: `Depends(get_current_user)` + `AuthorizedAgent`** — Every authenticated endpoint uses FastAPI `Depends()` for auth. Agent-scoped endpoints use `AuthorizedAgent` or `OwnedAgentByName` for access control. Role-gated endpoints use `require_role("creator")` or `require_admin` (ROLE-001). `internal.py` is the only exception (no auth, for agent-to-backend calls).
 
 9. **Channel Adapter ABC** — External messaging (Slack, Telegram) follows `adapters/base.py` → `ChannelAdapter` ABC with `NormalizedMessage` and `ChannelResponse`. New channels must implement this interface.
 
@@ -721,12 +721,17 @@ These are structural patterns that must be preserved. Breaking them causes casca
 **users:**
 ```sql
 CREATE TABLE users (
-    id TEXT PRIMARY KEY,
-    email TEXT UNIQUE NOT NULL,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT,
+    role TEXT NOT NULL DEFAULT 'user',  -- ROLE-001: admin, creator, operator, user
+    auth0_sub TEXT UNIQUE,
     name TEXT,
     picture TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login TIMESTAMP
+    email TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_login TEXT
 );
 ```
 
@@ -1216,6 +1221,7 @@ Users authenticate to the Trinity web UI and API.
 
 - Email whitelist controls who can login via email
 - Admin login always available for 'admin' user
+- **4-tier role hierarchy** (ROLE-001): `user` < `operator` < `creator` < `admin`. New email users default to `creator`. Agent creation requires `creator` or above. Enforced via `require_role()` dependency factory in `dependencies.py`.
 
 ### 2. MCP API Keys (User → MCP Server)
 
@@ -1285,22 +1291,22 @@ Each agent gets an auto-generated MCP API key for agent-to-agent collaboration.
 
 Fine-grained control over which agents can communicate with each other.
 
-| Scope | Enforcement |
-|-------|-------------|
+**Enforcement layer**: Agent-to-agent permissions are enforced at the **MCP server layer** (`src/mcp-server/src/tools/`), not the backend REST API. The backend resolves agent-scoped keys to their owner user and applies standard ownership/sharing checks. The `current_user.agent_name` field is set for agent-scoped keys but is only used by notifications and event subscriptions, not for permission gating on chat/list.
+
+| MCP Tool | Enforcement |
+|----------|-------------|
 | **`list_agents`** | Returns only permitted agents + self |
 | **`chat_with_agent`** | Blocks calls to non-permitted targets |
 
-**Permission Rules**:
+**Permission Rules** (MCP layer):
 
 | Source | Target | Access |
 |--------|--------|--------|
 | Agent (any) | Self | ✅ Always allowed |
-| Agent (same owner) | Same owner agents | ✅ Default on creation |
-| Agent (different owner) | Shared agent | ✅ If `is_shared=true` |
-| Agent (different owner) | Private agent | ❌ Denied |
+| Agent (any) | Other agents | ❌ Denied unless explicitly granted |
 | System agent | Any agent | ✅ Bypasses all checks |
 
-**Configuration**: Permissions tab in Agent Detail UI (`PUT /api/agents/{name}/permissions`)
+**Restrictive default**: New agents start with zero permissions. All agent-to-agent access must be explicitly configured via the Permissions tab in Agent Detail UI (`PUT /api/agents/{name}/permissions`).
 
 ### 6. System Agent (Privileged Access)
 
@@ -1343,11 +1349,13 @@ Agent starts → If .credentials.enc exists → Decrypt → Write files
 
 ### MCP Scope Summary
 
-| Scope | Description | Permission Enforcement |
-|-------|-------------|----------------------|
-| `user` | Human user via Claude Code client | Owner/admin/shared checks |
-| `agent` | Regular agent calling other agents | Explicit permission list |
-| `system` | System agent only | **Bypasses all checks** |
+| Scope | Description | MCP Enforcement | Backend Enforcement |
+|-------|-------------|-----------------|---------------------|
+| `user` | Human user via Claude Code client | Owner/admin/shared checks | Owner/admin/shared checks |
+| `agent` | Regular agent calling other agents | Explicit permission list (`agent_permissions` table) | Resolves to owner user; ownership/sharing checks only |
+| `system` | System agent only | **Bypasses all checks** | Resolves to owner user (system agent owner) |
+
+**Note**: Agent-to-agent permission enforcement (`agent_permissions`) only occurs at the MCP layer. The backend treats agent-scoped keys as "act on behalf of the key's owner." In practice this is not a bypass risk because agents communicate via MCP, not direct REST calls.
 
 ---
 

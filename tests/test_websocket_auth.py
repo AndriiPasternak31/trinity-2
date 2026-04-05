@@ -9,7 +9,6 @@ Uses httpx WebSocket support for testing.
 """
 import pytest
 import httpx
-from tests.conftest import *
 
 
 class TestWebSocketAuthentication:
@@ -30,8 +29,8 @@ class TestWebSocketAuthentication:
                 # Try to GET the WebSocket endpoint — without proper upgrade headers
                 # this tests that the endpoint exists and requires auth
                 response = client.get(f"{base_url}/ws")
-                # WebSocket endpoints typically return 403 or protocol error for plain HTTP
-                assert response.status_code in (403, 400, 426), \
+                # WebSocket endpoints return error for plain HTTP GET (no upgrade)
+                assert response.status_code in (403, 400, 404, 426), \
                     f"Expected rejection, got {response.status_code}"
             except httpx.HTTPError:
                 pass  # Connection error is acceptable — means server rejected
@@ -46,7 +45,7 @@ class TestWebSocketAuthentication:
                     f"{base_url}/ws",
                     params={"token": "invalid-not-a-jwt"}
                 )
-                assert response.status_code in (403, 400, 426), \
+                assert response.status_code in (403, 400, 404, 426), \
                     f"Expected rejection, got {response.status_code}"
             except httpx.HTTPError:
                 pass

@@ -37,14 +37,14 @@ class TestSecurityHeaders:
         """CORS preflight (OPTIONS) should still return proper CORS headers
         alongside security headers — the middleware must not break CORS."""
         response = unauthenticated_client._client.options(
-            "/api/health",
+            "/health",
             headers={
-                "Origin": "http://localhost",
+                "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "GET",
             },
         )
 
-        # CORS headers should still be present
+        # CORS middleware intercepts preflight and returns 200
         assert response.status_code in (200, 204, 405)
         # Security headers should also be present on preflight responses
         assert response.headers.get("x-content-type-options") == "nosniff"

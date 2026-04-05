@@ -399,7 +399,7 @@ class TestDefaultAvatarGeneration:
             # Use a longer timeout since this generates avatars for all agents
             response = api_client._client.post(
                 "/api/agents/avatars/generate-defaults",
-                headers={"Authorization": f"Bearer {api_client._token}"},
+                headers={"Authorization": f"Bearer {api_client.token}"},
                 timeout=300.0,
             )
         except httpx.ReadTimeout:

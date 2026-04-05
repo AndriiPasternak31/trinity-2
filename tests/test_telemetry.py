@@ -68,11 +68,10 @@ class TestHostTelemetry:
         # Timestamp should be an ISO format string
         assert isinstance(data["timestamp"], str)
 
-    def test_host_no_auth_required(self, unauthenticated_client: TrinityApiClient):
-        """GET /api/telemetry/host does not require authentication."""
-        # Telemetry follows OpenTelemetry pattern - no auth required
+    def test_host_requires_auth(self, unauthenticated_client: TrinityApiClient):
+        """GET /api/telemetry/host requires authentication."""
         response = unauthenticated_client.get("/api/telemetry/host", auth=False)
-        assert_status(response, 200)
+        assert_status(response, 401)
 
     def test_host_cpu_count_present(self, api_client: TrinityApiClient):
         """GET /api/telemetry/host includes CPU count."""
@@ -203,14 +202,13 @@ class TestContainerTelemetry:
         assert "timestamp" in data
         assert isinstance(data["timestamp"], str)
 
-    def test_containers_no_auth_required(
+    def test_containers_requires_auth(
         self,
         unauthenticated_client: TrinityApiClient
     ):
-        """GET /api/telemetry/containers does not require authentication."""
-        # Telemetry follows OpenTelemetry pattern - no auth required
+        """GET /api/telemetry/containers requires authentication."""
         response = unauthenticated_client.get("/api/telemetry/containers", auth=False)
-        assert_status(response, 200)
+        assert_status(response, 401)
 
 
 class TestTelemetryConsistency:
