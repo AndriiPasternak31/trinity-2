@@ -22,7 +22,7 @@
           {{ error }}
         </div>
 
-        <div v-if="agent" :class="['ml-16', activeTab === 'chat' ? 'flex-1 flex flex-col overflow-hidden' : '']">
+        <div v-if="agent" :class="['ml-16', activeTab === 'chat' ? 'flex-1 flex flex-col min-h-0' : '']">
           <!-- Agent Header Component -->
           <AgentHeader
             :agent="agent"
