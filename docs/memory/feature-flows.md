@@ -27,9 +27,10 @@
 | 2026-03-25 | #148 | Fix silent subscription registration failure — encryption key auto-generation, status endpoint, frontend warning | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-25 | #74 | Auto-assign subscription to new agents (round-robin, rate-limit aware) | [subscription-management.md](feature-flows/subscription-management.md) |
 | 2026-03-23 | VOICE-001 | Voice Chat — real-time voice conversations with agents via Gemini Live API | [voice-chat.md](feature-flows/voice-chat.md) |
-| 2026-03-21 | SUB-003 | Auto-switch subscriptions on repeated rate-limit errors — setting, tracking, orchestration | [subscription-auto-switch.md](feature-flows/subscription-auto-switch.md) |
-| 2026-03-19 | CHAT-AC | Playbook autocomplete in chat input — slash-command dropdown, ghost text, arg hints | [playbook-autocomplete.md](feature-flows/playbook-autocomplete.md) |
 | 2026-03-23 | SLACK-002 | Channel adapter abstraction + multi-agent Slack routing | [slack-channel-routing.md](feature-flows/slack-channel-routing.md) |
+| 2026-03-21 | SUB-003 | Auto-switch subscriptions on repeated rate-limit errors — setting, tracking, orchestration | [subscription-auto-switch.md](feature-flows/subscription-auto-switch.md) |
+| 2026-03-20 | ROLE-001 | 4-tier role model (admin/creator/operator/user), require_role() helper, user management API + Settings UI | [role-model.md](feature-flows/role-model.md) |
+| 2026-03-19 | CHAT-AC | Playbook autocomplete in chat input — slash-command dropdown, ghost text, arg hints | [playbook-autocomplete.md](feature-flows/playbook-autocomplete.md) |
 | 2026-03-14 | MOB-001 | Mobile Admin — agent chat, autonomy toggle, task sending | [mobile-admin-pwa.md](feature-flows/mobile-admin-pwa.md) |
 | 2026-03-14 | MOB-001 | Mobile Admin PWA — standalone `/m` page with Agents/Ops/System tabs, installable PWA | [mobile-admin-pwa.md](feature-flows/mobile-admin-pwa.md) |
 | 2026-03-12 | TIMEOUT-001 | Per-agent configurable execution timeout (default 15 min), dynamic slot TTL | [task-execution-service.md](feature-flows/task-execution-service.md), [parallel-capacity.md](feature-flows/parallel-capacity.md) |

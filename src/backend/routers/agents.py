@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from models import AgentConfig, AgentStatus, User, DeployLocalRequest
 from database import db
-from dependencies import get_current_user, decode_token, AuthorizedAgentByName, OwnedAgentByName, CurrentUser
+from dependencies import get_current_user, decode_token, require_role, AuthorizedAgentByName, OwnedAgentByName, CurrentUser
 from services.docker_service import (
     docker_client,
     get_agent_container,
@@ -305,8 +305,8 @@ async def get_agent_endpoint(agent_name: AuthorizedAgentByName, request: Request
 
 
 @router.post("")
-async def create_agent_endpoint(config: AgentConfig, request: Request, current_user: User = Depends(get_current_user)):
-    """Create a new agent."""
+async def create_agent_endpoint(config: AgentConfig, request: Request, current_user: User = Depends(require_role("creator"))):
+    """Create a new agent. Requires creator role or above."""
     return await create_agent_internal(config, current_user, request, skip_name_sanitization=False)
 
 
@@ -314,9 +314,9 @@ async def create_agent_endpoint(config: AgentConfig, request: Request, current_u
 async def deploy_local_agent(
     body: DeployLocalRequest,
     request: Request,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role("creator"))
 ):
-    """Deploy a Trinity-compatible local agent."""
+    """Deploy a Trinity-compatible local agent. Requires creator role or above."""
     return await deploy_local_agent_logic(
         body=body,
         current_user=current_user,

@@ -13,6 +13,7 @@ Passwordless email-based authentication with verification codes. Users enter the
 | Date | Changes |
 |------|---------|
 | 2026-03-26 | **OTP rate limiting added**: `verify_email_login_code()` now enforces both IP-based rate limiting (existing) and new per-email OTP rate limiting (5 failed attempts → 429 for 10 minutes, Redis key `otp_attempts:{email}`). `confirm_verification_code()` in public.py also gains IP-based rate limiting. New helpers: `check_otp_rate_limit(email)`, `record_otp_attempt(email, success)`. |
+| 2026-03-20 | **ROLE-001**: `get_or_create_email_user()` now assigns role `"creator"` (was `"user"`) to new email-authenticated users. Existing users unaffected. See [role-model.md](role-model.md). |
 | 2026-02-23 | **Related security fixes**: M-003 removed plaintext password fallback (affects admin login path). M-005 added rate limiting to admin `/token` endpoint (5 attempts per 10 minutes per IP). See [admin-login.md](admin-login.md) for details. Email auth flow unchanged but now has consistent security posture with admin login. |
 | 2026-01-23 | Verified line numbers, updated auth.py references (140-269), settings.py (429-503), db/email_auth.py (27-253) |
 | 2025-12-29 | Login page simplified to email+admin only |

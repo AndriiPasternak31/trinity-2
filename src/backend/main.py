@@ -77,6 +77,7 @@ from routers.avatar import router as avatar_router
 from routers.operator_queue import router as operator_queue_router, set_websocket_manager as set_operator_queue_ws_manager
 from routers.voice import router as voice_router
 from routers.event_subscriptions import router as event_subscriptions_router, set_websocket_manager as set_event_subs_ws_manager, set_filtered_websocket_manager as set_event_subs_filtered_ws_manager
+from routers.users import router as users_router
 
 # Import activity service
 from services.activity_service import activity_service
@@ -444,6 +445,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error stopping Telegram transport: {e}")
 
+
     # Shutdown operator queue sync service
     try:
         operator_queue_service.stop()
@@ -535,6 +537,7 @@ app.include_router(avatar_router)  # Agent Avatars (AVATAR-001)
 app.include_router(operator_queue_router)  # Operator Queue (OPS-001)
 app.include_router(voice_router)  # Voice Chat (VOICE-001)
 app.include_router(event_subscriptions_router)  # Agent Event Subscriptions (EVT-001)
+app.include_router(users_router)  # User Management (ROLE-001)
 
 
 # WebSocket endpoint
