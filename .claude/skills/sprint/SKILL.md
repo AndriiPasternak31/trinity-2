@@ -48,7 +48,7 @@ Automate the complete Trinity development workflow:
 ## Arguments
 
 - `$ARGUMENTS`:
-  - Empty: Auto-select top issue from backlog (highest rank, P1a first)
+  - Empty: Present backlog sorted by board rank for user selection
   - Issue number: `#68` or `68` — work on a specific issue
 
 ## Prerequisites
@@ -68,32 +68,27 @@ gh issue view ${ARGUMENTS#\#} --repo abilityai/trinity --json number,title,body,
 
 **If no argument — present backlog for user selection:**
 
-> **Limitation**: The GitHub Projects API does not expose board position (drag-and-drop order) within columns. Auto-selection cannot reliably determine the top item. Instead, present the Todo items grouped by tier and let the user pick.
-
 ```bash
-# Get Todo items from Trinity Roadmap project, grouped by tier
+# Get Todo items from Trinity Roadmap project, sorted by rank
 gh project item-list 6 --owner abilityai --format json --limit 50
 ```
 
-Filter to `Status = Todo`, skip issues labeled `status-in-progress` or `status-blocked`, then present grouped by tier:
+The API returns `rank` (board position) and `tier` (P1a/P1b/P1c) fields per item. Filter to `Status = Todo`, skip issues labeled `status-in-progress` or `status-blocked`, then **sort by `rank` ascending** and present as a flat ranked list:
 
 ```
-## Backlog (Todo)
+## Backlog (Todo) — sorted by rank
 
-### P1a
-1. #20 — Audit Trail System (SEC-001)
-
-### P1b
-2. #18 — Unified Executions Dashboard (EXEC-022)
-3. #89 — Configurable retry mechanism...
-...
-
-### P1c
-N. #24 — Horizontal Agent Scalability
+ #  | Tier | Issue | Title
+----|------|-------|------
+ 1. | P1a  | #20   | Audit Trail System (SEC-001)
+ 2. | P1b  | #132  | bug: APScheduler max_instances=1 causes skipped executions
+ 3. | P1b  | #61   | bug: Orphaned Claude processes accumulate after timeout
 ...
 
 Which issue should I work on? (number or #issue)
 ```
+
+**Important**: Always sort by `rank` field, not by tier or issue number. The rank reflects the actual board priority order set by the user.
 
 **GATE: Wait for user to select an issue.**
 
