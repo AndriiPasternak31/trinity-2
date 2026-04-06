@@ -66,17 +66,36 @@ Automate the complete Trinity development workflow:
 gh issue view ${ARGUMENTS#\#} --repo abilityai/trinity --json number,title,body,labels,state
 ```
 
-**If no argument — auto-select from backlog:**
+**If no argument — present backlog for user selection:**
+
+> **Limitation**: The GitHub Projects API does not expose board position (drag-and-drop order) within columns. Auto-selection cannot reliably determine the top item. Instead, present the Todo items grouped by tier and let the user pick.
+
 ```bash
-# Get ranked P1 pipeline from Trinity Roadmap project
-gh project item-list 6 --owner abilityai --format json --limit 20
+# Get Todo items from Trinity Roadmap project, grouped by tier
+gh project item-list 6 --owner abilityai --format json --limit 50
 ```
 
-Selection criteria (in order):
-1. **Status = Todo** (skip Done, In Progress)
-2. **Tier P1a first**, then P1b, then P1c
-3. **Lowest rank number** within tier (rank 1 = highest priority)
-4. Skip issues labeled `status-in-progress` or `status-blocked`
+Filter to `Status = Todo`, skip issues labeled `status-in-progress` or `status-blocked`, then present grouped by tier:
+
+```
+## Backlog (Todo)
+
+### P1a
+1. #20 — Audit Trail System (SEC-001)
+
+### P1b
+2. #18 — Unified Executions Dashboard (EXEC-022)
+3. #89 — Configurable retry mechanism...
+...
+
+### P1c
+N. #24 — Horizontal Agent Scalability
+...
+
+Which issue should I work on? (number or #issue)
+```
+
+**GATE: Wait for user to select an issue.**
 
 Present the selected issue to the user:
 
