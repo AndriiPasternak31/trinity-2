@@ -69,8 +69,8 @@ gh issue view ${ARGUMENTS#\#} --repo abilityai/trinity --json number,title,body,
 **If no argument — present backlog for user selection:**
 
 ```bash
-# Get Todo items from Trinity Roadmap project, sorted by rank
-gh project item-list 6 --owner abilityai --format json --limit 50
+# Get ALL Todo items from Trinity Roadmap project, sorted by rank
+gh project item-list 6 --owner abilityai --format json --limit 200
 ```
 
 The API returns `rank` (board position) and `tier` (P1a/P1b/P1c) fields per item. Filter to `Status = Todo`, skip issues labeled `status-in-progress` or `status-blocked`, then **sort by `rank` ascending** and present as a flat ranked list:
