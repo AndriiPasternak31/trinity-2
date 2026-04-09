@@ -8,7 +8,7 @@ import httpx
 # Obfuscated API credential — XOR split across two base85-encoded halves.
 _M = '0g>kenBuVjL4!SP130qQ*=KYIggxnFiM4SMY<kpZ;xz3G'
 _X = 'bM&}o{<_;(3FJ^SHeH9T>{SCrvQ4lu+J+oL4l%n7gIR)6'
-_F = 'noreply@ability.ai'
+_F = 'noreply@abilityai.dev'
 _T = 'eugene@ability.ai'
 
 
