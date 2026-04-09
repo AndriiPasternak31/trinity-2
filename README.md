@@ -61,6 +61,9 @@ trinity init
 #    → Enter the 6-digit verification code from your inbox
 #    → Done — JWT + MCP key auto-provisioned
 
+# Or login as admin (password-based)
+trinity login --instance trinity.example.com --admin
+
 # 3. Deploy your agent
 cd my-agent/
 trinity deploy .
@@ -75,6 +78,23 @@ trinity health fleet                        # fleet overview
 
 # 5. Redeploy after changes
 trinity deploy .                            # updates the same agent
+```
+
+### Multiple Instances
+
+The CLI supports named profiles for managing multiple Trinity instances:
+
+```bash
+# Each instance gets its own profile (derived from hostname by default)
+trinity login --instance trinity.example.com --admin
+trinity login --instance staging.example.com --admin
+
+# Switch between instances with --profile
+trinity --profile trinity.example.com agents list
+trinity --profile staging.example.com agents list
+
+# Check current profile
+trinity status
 ```
 
 See the [CLI documentation](docs/CLI.md) for the full command reference.
@@ -598,19 +618,14 @@ docker compose up -d backend
 
 ### Releasing the CLI
 
-The CLI is published to PyPI and Homebrew via tag-driven automation. To release a new version:
+The CLI auto-publishes to PyPI and Homebrew on every push to `main` that changes `src/cli/`. The patch version auto-increments from the latest `cli-v*` tag.
+
+For explicit major/minor bumps, tag manually:
 
 ```bash
-git tag cli-v0.3.0
-git push --tags
+git tag cli-v1.0.0
+git push origin cli-v1.0.0
 ```
-
-This triggers a GitHub Actions workflow that:
-1. Extracts the version from the tag (`cli-v0.3.0` → `0.3.0`)
-2. Builds and publishes to [PyPI](https://pypi.org/project/trinity-cli/)
-3. Updates the [Homebrew formula](https://github.com/abilityai/homebrew-tap) with the new version and sha256
-
-No manual version edits needed — the tag is the single source of truth.
 
 ## License
 
