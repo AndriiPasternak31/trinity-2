@@ -54,6 +54,9 @@ You need: a Trinity instance running somewhere (localhost or remote) and a local
 # 1. Install the CLI
 pip install trinity-cli                     # or: brew install abilityai/tap/trinity-cli
 
+# Upgrade to latest version
+pip install --upgrade trinity-cli           # or: brew upgrade abilityai/tap/trinity-cli
+
 # 2. Connect to your Trinity instance
 trinity init
 #    → Enter instance URL (e.g. trinity.example.com — bare domains work)
