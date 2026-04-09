@@ -106,13 +106,14 @@
             >
               <!-- User Avatar -->
               <div
-                v-if="authStore.userPicture"
+                v-if="authStore.userPicture && !avatarError"
                 class="w-8 h-8 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
               >
                 <img
                   :src="authStore.userPicture"
                   :alt="authStore.userName"
                   class="w-full h-full object-cover"
+                  @error="avatarError = true"
                 />
               </div>
               <div
@@ -254,6 +255,7 @@ const setTheme = (theme) => {
 // User menu state
 const showUserMenu = ref(false)
 const userMenuRef = ref(null)
+const avatarError = ref(false)
 
 onMounted(async () => {
   // Add click outside listener

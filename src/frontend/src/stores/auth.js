@@ -156,7 +156,6 @@ export const useAuthStore = defineStore('auth', {
           sub: `local|${username}`,
           email: `${username}@localhost`,
           name: username,
-          picture: 'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
           email_verified: true
         }
 
