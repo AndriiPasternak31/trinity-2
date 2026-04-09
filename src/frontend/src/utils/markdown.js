@@ -13,13 +13,15 @@ marked.setOptions({
   gfm: true
 })
 
-// Custom renderer: open links in new tab
-const renderer = new marked.Renderer()
-renderer.link = (href, title, text) => {
-  const titleAttr = title ? ` title="${title}"` : ''
-  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
-}
-marked.use({ renderer })
+// Custom renderer: open links in new tab (marked v5+ token object API)
+marked.use({
+  renderer: {
+    link({ href, title, text }) {
+      const titleAttr = title ? ` title="${title}"` : ''
+      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+    }
+  }
+})
 
 // Allow target and rel attributes for links (DOMPurify strips them by default)
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
