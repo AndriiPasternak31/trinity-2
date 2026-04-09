@@ -230,14 +230,16 @@ def status(ctx):
 @click.command()
 @click.option("--profile", "profile_opt", default=None,
               help="Profile name (default: derived from instance hostname)")
+@click.option("--admin", is_flag=True, help="Login as admin with password instead of email")
 @click.pass_context
-def init(ctx, profile_opt):
+def init(ctx, profile_opt, admin):
     """Set up Trinity CLI: configure instance, request access, and log in.
 
     One command to go from zero to authenticated. Creates a named profile
     for the instance (defaults to hostname).
 
     If you don't have an instance URL, leave it blank to request access.
+    Use --admin to authenticate with admin password instead of email.
     """
     url = click.prompt(
         "Trinity instance URL (leave blank to request access)", default="", show_default=False
@@ -280,48 +282,68 @@ def init(ctx, profile_opt):
     # Determine profile name
     profile_name = profile_opt or _get_profile_name(ctx) or profile_name_from_url(url)
 
-    email = click.prompt("Email")
-
-    # Request access (auto-approve endpoint)
-    try:
-        client.post_unauthenticated("/api/access/request", {"email": email})
-        click.echo("Access granted")
-    except TrinityAPIError as e:
-        if e.status_code == 409:
-            click.echo("Already registered")
-        else:
-            click.echo(f"Access request failed: {e.detail}", err=True)
+    if admin:
+        # Admin password login
+        password = click.prompt("Admin password", hide_input=True)
+        try:
+            result = client.post_form("/api/token", {
+                "username": "admin",
+                "password": password,
+            })
+        except TrinityAPIError as e:
+            click.echo(f"Admin login failed: {e.detail}", err=True)
             raise SystemExit(1)
 
-    # Send verification code
-    try:
-        client.post_unauthenticated("/api/auth/email/request", {"email": email})
-    except TrinityAPIError as e:
-        click.echo(f"Error requesting code: {e.detail}", err=True)
-        raise SystemExit(1)
+        token = result["access_token"]
+        authed_client = TrinityClient(base_url=url, token=token)
+        try:
+            user = authed_client.get("/api/users/me")
+        except TrinityAPIError:
+            user = {"username": "admin", "role": "admin"}
+    else:
+        email = click.prompt("Email")
 
-    click.echo(f"Verification code sent to {email}")
-    code = click.prompt("Enter 6-digit code")
+        # Request access (auto-approve endpoint)
+        try:
+            client.post_unauthenticated("/api/access/request", {"email": email})
+            click.echo("Access granted")
+        except TrinityAPIError as e:
+            if e.status_code == 409:
+                click.echo("Already registered")
+            else:
+                click.echo(f"Access request failed: {e.detail}", err=True)
+                raise SystemExit(1)
 
-    # Verify and get token
-    try:
-        result = client.post_unauthenticated("/api/auth/email/verify", {
-            "email": email,
-            "code": code,
-        })
-    except TrinityAPIError as e:
-        click.echo(f"Verification failed: {e.detail}", err=True)
-        raise SystemExit(1)
+        # Send verification code
+        try:
+            client.post_unauthenticated("/api/auth/email/request", {"email": email})
+        except TrinityAPIError as e:
+            click.echo(f"Error requesting code: {e.detail}", err=True)
+            raise SystemExit(1)
 
-    token = result["access_token"]
-    user = result.get("user")
+        click.echo(f"Verification code sent to {email}")
+        code = click.prompt("Enter 6-digit code")
+
+        # Verify and get token
+        try:
+            result = client.post_unauthenticated("/api/auth/email/verify", {
+                "email": email,
+                "code": code,
+            })
+        except TrinityAPIError as e:
+            click.echo(f"Verification failed: {e.detail}", err=True)
+            raise SystemExit(1)
+
+        token = result["access_token"]
+        user = result.get("user")
 
     set_auth(url, token, user, profile_name=profile_name)
-    name = user.get("name") or user.get("email") or user.get("username") if user else email
+    name = user.get("name") or user.get("email") or user.get("username") if user else "admin"
     click.echo(f"Logged in as {name} [profile: {profile_name}]")
 
     # Auto-provision MCP API key and write .mcp.json
-    authed_client = TrinityClient(base_url=url, token=token)
+    if not admin:
+        authed_client = TrinityClient(base_url=url, token=token)
     mcp_key = _provision_mcp_key(authed_client, profile_name)
     if mcp_key:
         _write_mcp_json(url, mcp_key)
