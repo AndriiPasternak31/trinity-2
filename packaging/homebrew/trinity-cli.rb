@@ -3,8 +3,8 @@ class TrinityCli < Formula
 
   desc "CLI for the Trinity Autonomous Agent Orchestration Platform"
   homepage "https://github.com/abilityai/trinity"
-  url "https://files.pythonhosted.org/packages/source/t/trinity-cli/trinity_cli-0.1.0.tar.gz"
-  sha256 "b6a51bd672f09198219ee53c11be69c8b32368b79e1854e7e41f311f8e27819f"
+  url "https://files.pythonhosted.org/packages/2b/f8/937f88acbfeb2a0ff6769267954099d5979898f169a4032a2c09a4c55512/trinity_cli-0.2.0.tar.gz"
+  sha256 "c5232321bd6cd64815706e0e5f15da13a252026a4aa5d050ae4702013b366d59"
   license "MIT"
 
   depends_on "python@3.12"
@@ -54,9 +54,19 @@ class TrinityCli < Formula
     sha256 "bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba"
   end
 
+  resource "pyyaml" do
+    url "https://files.pythonhosted.org/packages/05/8e/961c0007c59b8dd7729d542c61a4d537767a59645b82a0b521206e1e25c2/pyyaml-6.0.3.tar.gz"
+    sha256 "d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f"
+  end
+
   resource "pygments" do
     url "https://files.pythonhosted.org/packages/c3/b2/bc9c9196916376152d655522fdcebac55e66de6603a76a02bca1b6414f6c/pygments-2.20.0.tar.gz"
     sha256 "6757cd03768053ff99f3039c1a36d6c0aa0b263438fcab17520b30a303a82b5f"
+  end
+
+  resource "sniffio" do
+    url "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz"
+    sha256 "f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc"
   end
 
   resource "rich" do
