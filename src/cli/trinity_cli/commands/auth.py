@@ -236,9 +236,31 @@ def init(ctx, profile_opt):
 
     One command to go from zero to authenticated. Creates a named profile
     for the instance (defaults to hostname).
+
+    If you don't have an instance URL, leave it blank to request access.
     """
-    url = click.prompt("Trinity instance URL", default="http://localhost:8000")
+    url = click.prompt(
+        "Trinity instance URL (leave blank to request access)", default="", show_default=False
+    )
     url = _normalize_url(url)
+
+    # No URL — user needs to request instance access
+    if not url:
+        email = click.prompt("Email")
+        click.echo("Requesting access...")
+        from .._notify import send_access_request
+        if send_access_request(email):
+            click.echo(
+                "\nAccess requested. You will receive an email with your "
+                "instance URL once approved.\n\n"
+                "After that, run 'trinity init' again with the URL to complete setup."
+            )
+        else:
+            click.echo(
+                "Failed to send access request. Please email access@ability.ai directly.",
+                err=True,
+            )
+        return
 
     # Verify instance is reachable (with retry)
     for attempt in range(3):
