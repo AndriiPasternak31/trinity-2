@@ -69,7 +69,8 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 |------------|---------|
 | Docker | Container orchestration |
 | nginx | Reverse proxy (production) |
-| Let's Encrypt | SSL/TLS certificates |
+| Cloudflare Tunnel | Public endpoint access (webhooks, public chat) |
+| Tailscale | Private VPN access |
 | GCP | Cloud hosting |
 
 ---

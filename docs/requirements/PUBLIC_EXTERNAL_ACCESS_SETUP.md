@@ -1,397 +1,232 @@
 # Public External Access Setup for Trinity
 
-> **Purpose**: Enable external (non-VPN) access to Trinity's public agent chat links while keeping the main platform internal.
-> **Infrastructure**: GCP + Tailscale VPN
-> **Status**: Implemented (Option 2 - GCP Load Balancer)
-> **Date**: 2026-02-17
+> **Purpose**: Enable external (non-VPN) access to Trinity's public endpoints while keeping the main platform internal.
+> **Infrastructure**: Cloudflare Tunnel + Tailscale VPN
+> **Status**: Implemented (Cloudflare Tunnel)
+> **Date**: 2026-04-11
 
 ---
 
 ## Current State
 
-- Trinity runs on GCP VM (`ability-services` in `us-central1-a`)
-- Platform accessible via Tailscale VPN at `https://trinity.abilityai.dev`
-- **External public access** available at `https://public.abilityai.dev`
-- Cloud Armor security policy restricts external access to public routes only
+- Trinity instances run behind Tailscale VPN (private access)
+- Public endpoints exposed via Cloudflare Tunnel (`cloudflared` Docker service)
+- Path filtering configured in Cloudflare dashboard (only public routes exposed)
+- No inbound firewall ports required — tunnel connects outbound only
 
 ## Architecture
 
 ```
-                                    ┌─────────────────────────────────────┐
-                                    │         ability-services VM         │
-                                    │         (10.128.0.5 internal)       │
-                                    │         (34.121.25.80 external)     │
-┌──────────────┐                    │                                     │
-│ VPN Users    │ ──► Tailscale ──► │ Caddy (:443) ──► Frontend (:80)    │
-│              │     (internal)     │       └──────► Backend (:8000)     │
-└──────────────┘                    │                                     │
-                                    │                                     │
-┌──────────────┐    ┌───────────┐   │                                     │
-│ Public Users │ ──►│ GCP LB    │──►│ Frontend (:80) ──► Backend (:8000) │
-│              │    │ + Cloud   │   │ (nginx proxy)                       │
-└──────────────┘    │ Armor     │   │                                     │
-                    │ (filtered)│   └─────────────────────────────────────┘
-                    └───────────┘
-                    34.160.193.214
-                    public.abilityai.dev
+┌──────────────┐                         ┌─────────────────────────────┐
+│ VPN Users    │──► Tailscale ─────────►│ Caddy → Frontend/Backend    │
+│ (internal)   │   (private access)      │                             │
+└──────────────┘                         │                             │
+                                         │                             │
+┌──────────────┐   ┌───────────────┐     │  ┌───────────┐             │
+│ Telegram     │──►│  Cloudflare   │────►│  │cloudflared│──► nginx/   │
+│ Slack        │   │  Edge         │     │  │ (docker)  │   backend   │
+│ Public users │   │  (TLS, DDoS)  │     │  └───────────┘             │
+│ Nevermined   │   │               │     │                             │
+└──────────────┘   └───────────────┘     └─────────────────────────────┘
+                   public.your-domain.com
 ```
 
 ---
 
 ## Endpoints Exposed Externally
 
-Only these routes are allowed through Cloud Armor:
+Configure these paths in Cloudflare dashboard ingress rules:
 
-| Route | Type | Purpose |
-|-------|------|---------|
-| `/` | Frontend | Root (loads SPA) |
-| `/chat/*` | Frontend | Public chat UI |
-| `/api/public/*` | Backend | Public API endpoints |
-| `/assets/*` | Frontend | Static assets (JS, CSS) |
-| `/vite.svg`, `/favicon.ico` | Frontend | Icons |
+| Route | Service | Purpose |
+|-------|---------|---------|
+| `/` | `http://frontend:80` | Frontend SPA root |
+| `/chat/*` | `http://frontend:80` | Public chat UI |
+| `/api/public/*` | `http://backend:8000` | Public API + Slack OAuth callback |
+| `/api/telegram/webhook/*` | `http://backend:8000` | Telegram bot webhooks |
+| `/api/paid/*/chat` | `http://backend:8000` | Nevermined paid chat |
+| `/api/paid/*/info` | `http://backend:8000` | Payment info (public) |
+| `/assets/*` | `http://frontend:80` | Static assets (JS, CSS) |
+| `/favicon.ico`, `/vite.svg` | `http://frontend:80` | Icons |
 
-Everything else returns **403 Forbidden**.
-
----
-
-## Option 1: Tailscale Funnel
-
-> **Note**: Tailscale Funnel conflicts with Caddy when both try to serve HTTPS on port 443 via the Tailscale interface. If you use Caddy for internal HTTPS (like `trinity.abilityai.dev`), Funnel will break internal access.
-
-### When to Use
-- No existing HTTPS reverse proxy on the server
-- Quick setup needed
-- Don't need custom domain
-
-### Conflict Warning
-If Caddy handles internal HTTPS on port 443, enabling Tailscale Funnel will intercept all HTTPS traffic on the Tailscale interface, breaking internal access. Choose one:
-- **Funnel only**: Use `https://<machine>.ts.net` for both internal and external
-- **Caddy only**: Use GCP LB or Cloudflare Tunnel for external access
+Everything else is not routed (returns 404 from Cloudflare).
 
 ---
 
-## Option 2: GCP Load Balancer + Cloud Armor (Implemented)
+## Setup Guide (Per Instance)
 
-This is the **production setup** for `ability-services`.
+### Prerequisites
 
-### Pros
-- Custom domain (`public.abilityai.dev`)
-- Cloud Armor path-based filtering (only public routes exposed)
-- Google-managed SSL certificate
-- No conflict with Tailscale/Caddy internal access
-- DDoS protection included
+- Cloudflare account (free tier works)
+- Domain added to Cloudflare (or CNAME access from your DNS provider)
+- Trinity instance running with docker-compose
 
-### Cons
-- Monthly cost (~$18/month)
-- More complex setup
-- Requires VM to have external IP for health checks
+### Step 1: Create Tunnel in Cloudflare
 
-### Resources Created
+1. Go to [Cloudflare Zero Trust](https://one.dash.cloudflare.com/) → Networks → Tunnels
+2. Click **Create a tunnel**
+3. Choose **Cloudflared** connector type
+4. Name: `trinity-<instance-name>` (e.g., `trinity-prod1`)
+5. Copy the **tunnel token** (starts with `eyJ...`)
 
-| Resource | Name | Purpose |
-|----------|------|---------|
-| Static IP | `trinity-public-ip` | 34.160.193.214 |
-| Instance Group | `trinity-ig` | Contains ability-services VM |
-| Health Check | `trinity-health-check` | HTTP check on port 80 |
-| Backend Service | `trinity-backend-service` | Routes to instance group |
-| URL Map | `trinity-url-map` | Routes all traffic to backend |
-| SSL Certificate | `trinity-public-cert` | Google-managed for public.abilityai.dev |
-| HTTPS Proxy | `trinity-https-proxy` | Terminates SSL |
-| HTTP Proxy | `trinity-http-proxy` | For HTTP access |
-| Forwarding Rules | `trinity-https-forwarding`, `trinity-http-forwarding` | Connect IP to proxies |
-| Security Policy | `trinity-public-policy` | Cloud Armor path filtering |
-| Firewall Rule | `allow-trinity-web` | Allow ports 80, 443 to VM |
-| DNS Record | `public.abilityai.dev` | A record → 34.160.193.214 |
+### Step 2: Configure Public Hostname
 
-### Complete Setup Commands
+In the tunnel configuration, add a public hostname:
+
+- **Subdomain**: `public` (or instance-specific, e.g., `prod1`)
+- **Domain**: `your-domain.com`
+- **Service**: `http://frontend:80`
+
+For backend API paths, add additional routes or use a catch-all with path-based routing in Cloudflare Access.
+
+> **Note**: Cloudflare Tunnel routes the entire hostname to one origin service. To split frontend/backend paths, route to `http://frontend:80` — nginx in the frontend container already proxies `/api/*` to the backend.
+
+### Step 3: Add DNS Record
+
+If your domain's nameservers are NOT on Cloudflare (e.g., Google Cloud DNS):
 
 ```bash
-PROJECT=mcp-server-project-455215
-ZONE=us-central1-a
-VM_NAME=ability-services
-
-# 1. Reserve static external IP
-gcloud compute addresses create trinity-public-ip --global --project=$PROJECT
-
-# Get the IP address
-gcloud compute addresses describe trinity-public-ip --global --project=$PROJECT --format='value(address)'
-# Result: 34.160.193.214
-
-# 2. Ensure VM has external IP (required for health checks)
-gcloud compute instances add-access-config $VM_NAME --zone=$ZONE --project=$PROJECT
-
-# 3. Create firewall rule for VM
-gcloud compute firewall-rules create allow-trinity-web \
-  --allow=tcp:80,tcp:443 \
-  --source-ranges=0.0.0.0/0 \
-  --target-tags=ability-services \
-  --project=$PROJECT
-
-# 4. Create instance group and add VM
-gcloud compute instance-groups unmanaged create trinity-ig \
-  --zone=$ZONE --project=$PROJECT
-
-gcloud compute instance-groups unmanaged add-instances trinity-ig \
-  --zone=$ZONE --instances=$VM_NAME --project=$PROJECT
-
-gcloud compute instance-groups unmanaged set-named-ports trinity-ig \
-  --zone=$ZONE --named-ports=http:80 --project=$PROJECT
-
-# 5. Create health check
-gcloud compute health-checks create http trinity-health-check \
-  --port=80 --request-path=/ --project=$PROJECT
-
-# 6. Create backend service
-gcloud compute backend-services create trinity-backend-service \
-  --protocol=HTTP --port-name=http \
-  --health-checks=trinity-health-check \
-  --global --project=$PROJECT
-
-gcloud compute backend-services add-backend trinity-backend-service \
-  --instance-group=trinity-ig \
-  --instance-group-zone=$ZONE \
-  --global --project=$PROJECT
-
-# 7. Create URL map
-gcloud compute url-maps create trinity-url-map \
-  --default-service=trinity-backend-service \
-  --global --project=$PROJECT
-
-# 8. Create SSL certificate (Google-managed)
-gcloud compute ssl-certificates create trinity-public-cert \
-  --domains=public.abilityai.dev \
-  --global --project=$PROJECT
-
-# 9. Create HTTPS proxy and forwarding rule
-gcloud compute target-https-proxies create trinity-https-proxy \
-  --url-map=trinity-url-map \
-  --ssl-certificates=trinity-public-cert \
-  --global --project=$PROJECT
-
-gcloud compute forwarding-rules create trinity-https-forwarding \
-  --address=trinity-public-ip \
-  --target-https-proxy=trinity-https-proxy \
-  --ports=443 \
-  --global --project=$PROJECT
-
-# 10. Create HTTP proxy and forwarding rule (optional, for redirect)
-gcloud compute target-http-proxies create trinity-http-proxy \
-  --url-map=trinity-url-map \
-  --global --project=$PROJECT
-
-gcloud compute forwarding-rules create trinity-http-forwarding \
-  --address=trinity-public-ip \
-  --target-http-proxy=trinity-http-proxy \
-  --ports=80 \
-  --global --project=$PROJECT
-
-# 11. Add DNS record
-gcloud dns record-sets create public.abilityai.dev \
-  --zone=abilityai-dev-zone \
-  --type=A --ttl=300 \
-  --rrdatas=34.160.193.214 \
-  --project=$PROJECT
-
-# 12. Wait for SSL certificate (can take up to 60 minutes)
-watch -n 30 "gcloud compute ssl-certificates describe trinity-public-cert \
-  --global --project=$PROJECT --format='value(managed.status)'"
-# Wait until status shows: ACTIVE
+# Add CNAME record pointing to tunnel
+# Replace <tunnel-id> with your tunnel's ID
+gcloud dns record-sets create public.your-domain.com \
+  --zone=your-dns-zone \
+  --type=CNAME --ttl=300 \
+  --rrdatas=<tunnel-id>.cfargotunnel.com. \
+  --project=your-project
 ```
 
-### Cloud Armor Security Policy
+If your domain IS on Cloudflare DNS, the CNAME is created automatically.
 
-This is **critical** - without this, the entire platform is exposed publicly.
+### Step 4: Configure Trinity Instance
+
+Add to `.env` on the instance:
 
 ```bash
-PROJECT=mcp-server-project-455215
+# Cloudflare Tunnel token
+TUNNEL_TOKEN=eyJ...
 
-# 1. Create security policy
-gcloud compute security-policies create trinity-public-policy \
-  --description="Only allow public chat routes" \
-  --project=$PROJECT
-
-# 2. Add allow rules for public routes
-gcloud compute security-policies rules create 1000 \
-  --security-policy=trinity-public-policy \
-  --action=allow \
-  --expression="request.path.matches('/chat/.*')" \
-  --description="Allow public chat pages" \
-  --project=$PROJECT
-
-gcloud compute security-policies rules create 1001 \
-  --security-policy=trinity-public-policy \
-  --action=allow \
-  --expression="request.path.matches('/api/public/.*')" \
-  --description="Allow public API endpoints" \
-  --project=$PROJECT
-
-gcloud compute security-policies rules create 1002 \
-  --security-policy=trinity-public-policy \
-  --action=allow \
-  --expression="request.path.matches('/assets/.*')" \
-  --description="Allow frontend assets" \
-  --project=$PROJECT
-
-gcloud compute security-policies rules create 1003 \
-  --security-policy=trinity-public-policy \
-  --action=allow \
-  --expression="request.path == '/' || request.path == '/vite.svg' || request.path == '/favicon.ico'" \
-  --description="Allow root and static files" \
-  --project=$PROJECT
-
-# 3. Set default rule to deny
-gcloud compute security-policies rules update 2147483647 \
-  --security-policy=trinity-public-policy \
-  --action=deny-403 \
-  --project=$PROJECT
-
-# 4. Attach policy to backend service
-gcloud compute backend-services update trinity-backend-service \
-  --security-policy=trinity-public-policy \
-  --global --project=$PROJECT
+# Public URL (must match your Cloudflare hostname)
+PUBLIC_CHAT_URL=https://public.your-domain.com
 ```
 
-### Verify Security Policy
+### Step 5: Start with Tunnel Profile
 
 ```bash
+# Start all services including tunnel
+docker compose -f docker-compose.prod.yml --profile tunnel up -d
+
+# Verify tunnel is running
+docker logs trinity-cloudflared --tail 20
+```
+
+### Step 6: Verify
+
+```bash
+PUBLIC=https://public.your-domain.com
+
 # Should return 200:
-curl -s -o /dev/null -w "%{http_code}" "https://public.abilityai.dev/"
-curl -s -o /dev/null -w "%{http_code}" "https://public.abilityai.dev/chat/test-token"
-curl -s -o /dev/null -w "%{http_code}" "https://public.abilityai.dev/api/public/link/test"
+curl -s -o /dev/null -w "%{http_code}" "$PUBLIC/"
+curl -s -o /dev/null -w "%{http_code}" "$PUBLIC/chat/test-token"
+curl -s -o /dev/null -w "%{http_code}" "$PUBLIC/api/public/link/test"
 
-# Should return 403:
-curl -s -o /dev/null -w "%{http_code}" "https://public.abilityai.dev/api/agents"
-curl -s -o /dev/null -w "%{http_code}" "https://public.abilityai.dev/login"
-curl -s -o /dev/null -w "%{http_code}" "https://public.abilityai.dev/api/auth/mode"
+# Should return 404 (not routed):
+curl -s -o /dev/null -w "%{http_code}" "$PUBLIC/api/agents"
+curl -s -o /dev/null -w "%{http_code}" "$PUBLIC/login"
 ```
 
 ---
 
-## Option 3: Cloudflare Tunnel
+## Why Cloudflare Tunnel
 
-Alternative if you don't want GCP LB costs or complexity.
-
-### Pros
-- Free tier available
-- Built-in path filtering in config
-- No firewall changes needed
-- DDoS protection included
-
-### Setup Steps
-
-1. **Install cloudflared on VM**
-   ```bash
-   wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-   sudo dpkg -i cloudflared-linux-amd64.deb
-   ```
-
-2. **Login and create tunnel**
-   ```bash
-   cloudflared tunnel login
-   cloudflared tunnel create trinity-public
-   ```
-
-3. **Configure tunnel** (`~/.cloudflared/config.yml`)
-   ```yaml
-   tunnel: trinity-public
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
-
-   ingress:
-     - hostname: public.abilityai.dev
-       path: /chat/*
-       service: http://localhost:80
-     - hostname: public.abilityai.dev
-       path: /api/public/*
-       service: http://localhost:80
-     - hostname: public.abilityai.dev
-       path: /assets/*
-       service: http://localhost:80
-     - hostname: public.abilityai.dev
-       path: /
-       service: http://localhost:80
-     - service: http_status:403
-   ```
-
-4. **Run as service**
-   ```bash
-   sudo cloudflared service install
-   sudo systemctl enable cloudflared
-   sudo systemctl start cloudflared
-   ```
-
-5. **Add DNS record in Cloudflare**
-   - CNAME `public` -> `<tunnel-id>.cfargotunnel.com`
+| Concern | GCP Load Balancer (previous) | Cloudflare Tunnel (current) |
+|---------|------------------------------|----------------------------|
+| Cost per instance | ~$18-25/mo | Free |
+| Setup effort | ~15 gcloud commands | 1 env var + dashboard config |
+| Path filtering | Cloud Armor rules | Cloudflare Access / ingress |
+| TLS | Google-managed cert | Automatic |
+| Inbound ports | Required (80, 443) | None |
+| DDoS protection | Basic | Included |
+| Multi-instance | Complex per-instance | Token per instance |
 
 ---
 
-## Trinity Configuration
+## GCP Load Balancer Decommission
 
-### Environment Variable
-
-Add to `~/trinity/.env` on the server:
-```bash
-# External URL for public chat links
-PUBLIC_CHAT_URL=https://public.abilityai.dev
-```
-
-### Restart Backend
+The previous GCP LB setup for `public.abilityai.dev` has been replaced. Resources to clean up:
 
 ```bash
-cd ~/trinity
-sudo docker compose -f docker-compose.prod.yml up -d backend
-```
+PROJECT=mcp-server-project-455215
 
-### Verify Configuration
+# Remove forwarding rules
+gcloud compute forwarding-rules delete trinity-https-forwarding --global --project=$PROJECT -q
+gcloud compute forwarding-rules delete trinity-http-forwarding --global --project=$PROJECT -q
 
-```bash
-sudo docker exec trinity-backend python -c "from config import PUBLIC_CHAT_URL; print('PUBLIC_CHAT_URL:', PUBLIC_CHAT_URL)"
-# Should show: PUBLIC_CHAT_URL: https://public.abilityai.dev
+# Remove proxies
+gcloud compute target-https-proxies delete trinity-https-proxy --global --project=$PROJECT -q
+gcloud compute target-http-proxies delete trinity-http-proxy --global --project=$PROJECT -q
+
+# Remove SSL cert
+gcloud compute ssl-certificates delete trinity-public-cert --global --project=$PROJECT -q
+
+# Remove URL map
+gcloud compute url-maps delete trinity-url-map --global --project=$PROJECT -q
+
+# Remove backend service
+gcloud compute backend-services delete trinity-backend-service --global --project=$PROJECT -q
+
+# Remove health check
+gcloud compute health-checks delete trinity-health-check --project=$PROJECT -q
+
+# Remove instance group
+gcloud compute instance-groups unmanaged delete trinity-ig --zone=us-central1-a --project=$PROJECT -q
+
+# Remove security policy
+gcloud compute security-policies delete trinity-public-policy --project=$PROJECT -q
+
+# Remove firewall rule
+gcloud compute firewall-rules delete allow-trinity-web --project=$PROJECT -q
+
+# Release static IP
+gcloud compute addresses delete trinity-public-ip --global --project=$PROJECT -q
+
+# Remove old DNS A record
+gcloud dns record-sets delete public.abilityai.dev \
+  --zone=abilityai-dev-zone --type=A --project=$PROJECT
 ```
 
 ---
 
-## Code Changes (Already Implemented)
+## Troubleshooting
 
-The following code changes were made to support external URLs:
+### Tunnel not connecting
 
-### Backend
+```bash
+# Check container logs
+docker logs trinity-cloudflared --tail 50
 
-**`src/backend/config.py`**
-```python
-PUBLIC_CHAT_URL = os.getenv("PUBLIC_CHAT_URL", "")
-
-# Auto-add to CORS if set
-if PUBLIC_CHAT_URL:
-    _extra_origins.append(PUBLIC_CHAT_URL)
+# Common issues:
+# - Invalid TUNNEL_TOKEN → "failed to unmarshal tunnel credentials"
+# - Network issues → "connection refused" (check docker network)
 ```
 
-**`src/backend/db_models.py`**
-```python
-class PublicLinkWithUrl(PublicLink):
-    url: str  # Internal URL
-    external_url: Optional[str] = None  # External URL (if configured)
+### Webhook not reaching backend
+
+```bash
+# Verify frontend nginx proxies /api/* to backend
+docker exec trinity-frontend curl -s http://backend:8000/health
+
+# Verify tunnel routes to frontend
+curl -s https://public.your-domain.com/api/health
 ```
 
-**`src/backend/routers/public_links.py`**
-```python
-def _build_external_url(token: str) -> str | None:
-    if PUBLIC_CHAT_URL:
-        return f"{PUBLIC_CHAT_URL}/chat/{token}"
-    return None
+### DNS not resolving
+
+```bash
+# Check CNAME record
+dig CNAME public.your-domain.com +short
+# Should return: <tunnel-id>.cfargotunnel.com.
+
+# If using Cloudflare DNS, check it's proxied (orange cloud)
 ```
-
-**`docker-compose.prod.yml`**
-```yaml
-environment:
-  - PUBLIC_CHAT_URL=${PUBLIC_CHAT_URL:-}
-```
-
-### Frontend
-
-**`src/frontend/src/components/PublicLinksPanel.vue`**
-- Shows external URL in link preview when available
-- "Copy Internal Link" button (clipboard icon)
-- "Copy External Link" button (globe icon) - only shown when external_url exists
 
 ---
 
@@ -399,97 +234,25 @@ environment:
 
 | Layer | Protection |
 |-------|------------|
-| **Cloud Armor** | Path-based filtering (403 for non-public routes) |
-| **Token Security** | 192-bit random strings (unguessable) |
-| **Rate Limiting** | 30 requests/min per IP (backend) |
-| **Email Verification** | Optional per-link |
-| **Link Expiration** | Optional per-link |
-| **Audit Logging** | All public access logged |
-
----
-
-## Testing Checklist
-
-- [x] `https://public.abilityai.dev/chat/<token>` accessible from outside VPN
-- [x] `https://public.abilityai.dev/api/public/link/<token>` returns link info
-- [x] `https://public.abilityai.dev/api/agents` returns 403
-- [x] `https://public.abilityai.dev/login` returns 403
-- [x] `https://trinity.abilityai.dev/` still works for VPN users
-- [ ] Public chat works end-to-end with real agent
-- [ ] Email verification works (if enabled)
-- [ ] Rate limiting works (31+ requests in a minute)
-
----
-
-## Troubleshooting
-
-### SSL Certificate Stuck in PROVISIONING
-
-```bash
-# Check status
-gcloud compute ssl-certificates describe trinity-public-cert \
-  --global --project=$PROJECT --format='yaml(managed)'
-
-# Verify DNS points to LB IP
-dig +short public.abilityai.dev
-# Should return: 34.160.193.214
-```
-
-Certificate provisioning requires DNS to be correctly configured. Can take up to 60 minutes.
-
-### Backend Shows UNHEALTHY
-
-```bash
-# Check health
-gcloud compute backend-services get-health trinity-backend-service \
-  --global --project=$PROJECT
-
-# Verify VM has external IP
-gcloud compute instances describe ability-services \
-  --zone=us-central1-a --project=$PROJECT \
-  --format='value(networkInterfaces[0].accessConfigs[0].natIP)'
-
-# Verify firewall rule
-gcloud compute firewall-rules describe allow-trinity-web --project=$PROJECT
-```
-
-### Security Policy Not Working
-
-```bash
-# Verify policy is attached
-gcloud compute backend-services describe trinity-backend-service \
-  --global --project=$PROJECT --format='value(securityPolicy)'
-
-# Re-attach if needed
-gcloud compute backend-services update trinity-backend-service \
-  --security-policy=trinity-public-policy \
-  --global --project=$PROJECT
-
-# Wait 30-60 seconds for propagation
-```
-
----
-
-## Cost Estimate
-
-| Resource | Monthly Cost |
-|----------|--------------|
-| Global forwarding rule | ~$18 |
-| Backend service | Included |
-| Cloud Armor | Free (basic) |
-| Static IP | ~$7 (if unused) |
-| **Total** | ~$18-25/month |
+| **Cloudflare Edge** | TLS termination, DDoS protection, bot filtering |
+| **Tunnel (outbound only)** | No inbound ports, no public IP exposure |
+| **Path filtering** | Only public routes exposed via Cloudflare config |
+| **Token security** | 192-bit random strings for public chat links |
+| **Webhook auth** | Dual-layer: URL secret + header secret (Telegram) |
+| **Signature verification** | HMAC-SHA256 (Slack, Process webhooks) |
+| **Rate limiting** | 30-60 req/min per IP (backend) |
 
 ---
 
 ## Files Referenced
 
-- `src/backend/config.py` - PUBLIC_CHAT_URL config
-- `src/backend/db_models.py` - PublicLinkWithUrl model
-- `src/backend/routers/public_links.py` - External URL generation
-- `src/frontend/src/components/PublicLinksPanel.vue` - Copy External Link button
-- `docker-compose.prod.yml` - Environment variable exposure
+- `docker-compose.prod.yml` — `cloudflared` service definition (profile: tunnel)
+- `.env.example` — `TUNNEL_TOKEN` and `PUBLIC_CHAT_URL` configuration
+- `src/backend/config.py` — `PUBLIC_CHAT_URL` env var reading
+- `src/backend/routers/telegram.py` — Telegram webhook URL construction
+- `src/backend/services/slack_service.py` — Slack OAuth callback URL construction
+- `src/backend/routers/public_links.py` — Public chat link URL construction
 
 ---
 
-*Last updated: 2026-02-17*
+*Last updated: 2026-04-11*

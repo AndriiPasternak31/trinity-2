@@ -238,6 +238,30 @@ services:
       retries: 3
       start_period: 10s
 
+  # Cloudflare Tunnel - public endpoint access (Telegram webhooks, public chat, Slack OAuth)
+  # Only starts when explicitly enabled via: docker compose --profile tunnel up -d
+  # Requires TUNNEL_TOKEN from Cloudflare Zero Trust dashboard
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: trinity-cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - trinity-network
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    profiles:
+      - tunnel
+
   # OpenTelemetry Collector - receives metrics from Claude Code agents
   # Using contrib image for deltatocumulative processor (required for Prometheus export)
   otel-collector:
