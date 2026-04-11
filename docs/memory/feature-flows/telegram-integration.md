@@ -278,7 +278,7 @@ The message router restricts public channel users to `WebSearch,WebFetch` by def
 ### Prerequisites
 - Backend running (`./scripts/deploy/start.sh`)
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- `public_chat_url` setting configured (Settings page or API)
+- `public_chat_url` setting configured (Settings page → Platform section, or `PUT /api/settings/public_chat_url`)
 - At least one agent running
 
 ### Test Steps
@@ -339,7 +339,7 @@ binding = {
 | Access denied (403) | "Only the agent owner can manage..." |
 | Disconnected | Token input (`type="password"`) + "Connect Bot" button + BotFather link |
 | Connected | Green dot, `@bot_username`, t.me link, Verify + Disconnect buttons |
-| Connected (no webhook) | Yellow warning: "Bot connected but webhook not registered..." |
+| Connected (no webhook) | Yellow warning: "Bot connected but webhook not registered..." with `router-link` to `/settings` |
 
 **API calls** (via `api.js` — Invariant #7):
 - `GET /api/agents/{name}/telegram` → load binding status

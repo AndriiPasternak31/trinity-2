@@ -19,6 +19,77 @@
 
         <!-- Settings Content -->
         <div v-else class="space-y-6">
+          <!-- Platform Section -->
+          <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 class="text-lg font-medium text-gray-900 dark:text-white">Platform</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Core platform configuration.
+              </p>
+            </div>
+
+            <div class="px-6 py-4">
+              <div class="space-y-4">
+                <!-- Public URL -->
+                <div>
+                  <label for="public-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Public URL
+                  </label>
+                  <div class="mt-1 flex gap-2">
+                    <input
+                      type="url"
+                      id="public-url"
+                      v-model="publicUrl"
+                      :placeholder="publicUrlCurrent || 'https://your-domain.com'"
+                      :disabled="savingPublicUrl"
+                      class="block flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white text-sm"
+                    />
+                    <button
+                      @click="savePublicUrl"
+                      :disabled="!publicUrl || savingPublicUrl"
+                      class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg v-if="savingPublicUrl" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Save
+                    </button>
+                  </div>
+                  <!-- Status -->
+                  <div class="mt-2 flex items-center text-sm">
+                    <template v-if="publicUrlSaveSuccess">
+                      <svg class="h-4 w-4 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span class="text-green-600 dark:text-green-400">Saved</span>
+                    </template>
+                    <template v-else-if="publicUrlCurrent">
+                      <svg class="h-4 w-4 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span class="text-green-600 dark:text-green-400">
+                        {{ publicUrlCurrent }}
+                      </span>
+                    </template>
+                    <template v-else>
+                      <svg class="h-4 w-4 text-amber-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span class="text-amber-600 dark:text-amber-400">
+                        Not configured — required for Telegram bots and public links
+                      </span>
+                    </template>
+                  </div>
+                  <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    The externally-accessible URL of this Trinity instance (e.g. <code class="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">https://your-domain.com</code>).
+                    Used for Telegram webhooks, Slack OAuth callbacks, and shareable public links.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- API Keys Section -->
           <div class="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900 rounded-lg">
             <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -1510,6 +1581,12 @@ const githubTemplatesDirty = computed(() => {
 const trinityPrompt = ref('')
 const originalPrompt = ref('')
 
+// Public URL state
+const publicUrl = ref('')
+const publicUrlCurrent = ref('')
+const savingPublicUrl = ref(false)
+const publicUrlSaveSuccess = ref(false)
+
 // API Key state
 const anthropicKey = ref('')
 const showApiKey = ref(false)
@@ -1641,6 +1718,9 @@ async function loadSettings() {
     await settingsStore.fetchSettings()
     trinityPrompt.value = settingsStore.trinityPrompt || ''
     originalPrompt.value = trinityPrompt.value
+
+    // Load public URL
+    await loadPublicUrl()
 
     // Load API keys status
     await loadApiKeyStatus()
@@ -1796,6 +1876,40 @@ async function saveGithubPat() {
     error.value = e.response?.data?.detail || 'Failed to save GitHub PAT'
   } finally {
     savingGithubPat.value = false
+  }
+}
+
+// Public URL methods
+async function loadPublicUrl() {
+  try {
+    const value = await settingsStore.getSetting('public_chat_url')
+    publicUrlCurrent.value = value || ''
+  } catch (e) {
+    console.error('Failed to load public URL:', e)
+  }
+}
+
+async function savePublicUrl() {
+  if (!publicUrl.value) return
+
+  savingPublicUrl.value = true
+  publicUrlSaveSuccess.value = false
+  error.value = null
+
+  try {
+    // Strip trailing slash
+    const url = publicUrl.value.replace(/\/+$/, '')
+    await settingsStore.updateSetting('public_chat_url', url)
+    publicUrlCurrent.value = url
+    publicUrl.value = ''
+    publicUrlSaveSuccess.value = true
+    setTimeout(() => {
+      publicUrlSaveSuccess.value = false
+    }, 3000)
+  } catch (e) {
+    error.value = e.response?.data?.detail || 'Failed to save public URL'
+  } finally {
+    savingPublicUrl.value = false
   }
 }
 

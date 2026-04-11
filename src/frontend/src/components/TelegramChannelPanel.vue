@@ -61,7 +61,7 @@
 
       <!-- Webhook Warning -->
       <div v-if="!binding.webhook_url" class="p-3 rounded-lg text-sm bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
-        Bot connected but webhook not registered. Set a public URL in Settings for Telegram messages to reach this agent.
+        Bot connected but webhook not registered. Set a <router-link to="/settings" class="underline font-medium hover:text-yellow-800 dark:hover:text-yellow-200">Public URL in Settings</router-link> for Telegram messages to reach this agent.
       </div>
     </div>
 
