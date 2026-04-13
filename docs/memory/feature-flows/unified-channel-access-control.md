@@ -63,7 +63,9 @@ After #311, all three channels share one gate, one allow-list (`agent_sharing`),
 |---------|---------------------------------|------------------|
 | Telegram | `telegram_chat_links.verified_email` (set by `/login`) | HTML message with `/login` instructions |
 | Slack | `slack_service.get_user_email(bot_token, user_id)` (workspace OAuth) | Default text (rarely triggered — OAuth always resolves) |
-| Web public link (TBD #252) | TBD — existing per-link verification will plug in here | TBD |
+| Web public link | Session token's verified email (6-digit email verification, see [public-agent-links.md](public-agent-links.md)) | Public chat page prompts for email verification before chat is enabled |
+
+Web public-chat runs the same gate inline in `src/backend/routers/public.py` (it doesn't go through the `ChannelMessageRouter`), but uses the identical decision tree and the same `db.email_has_agent_access` / `db.upsert_access_request` primitives. The trigger is the agent-level `agent_ownership.require_email` flag (via `db.get_access_policy`), not a per-link flag.
 
 ---
 
@@ -118,7 +120,7 @@ New ops class (not a mixin — `access_requests` is its own domain table):
 
 | Method | Behavior |
 |--------|----------|
-| `upsert_pending(agent_name, email, channel)` | Inserts a new pending request, or — on UNIQUE collision — resets an existing approved/denied row back to `pending` and refreshes timestamp + channel. Returns the row dict. |
+| `upsert_pending(agent_name, email, channel)` | Inserts a new pending request, or — on UNIQUE collision — resets an existing approved/denied row back to `pending` and refreshes timestamp + channel. Returns the row dict. `channel` values: `"web"`, `"telegram"`, `"slack"`. |
 | `list_for_agent(agent_name, status="pending")` | Returns rows ordered by `requested_at DESC`. |
 | `get(request_id)` | Single-row lookup. |
 | `decide(request_id, approve, decided_by_user_id)` | Sets `status` to `approved` or `denied`, stamps `decided_by` and `decided_at`. |
@@ -272,6 +274,8 @@ No `prompt_auth` override is needed — the default text reply is the fallback f
 ---
 
 ## Router Gate (`src/backend/adapters/message_router.py:210-264`)
+
+**Also applied by** `src/backend/routers/public.py` for web public-chat — same decision tree, same primitives (`db.email_has_agent_access`, `db.upsert_access_request`), just invoked inline after the session token resolves the verified email (see `_agent_requires_email` and the gate around line 420–450).
 
 The gate is inserted between step 5 (verification) and step 6 (session creation) in `_handle_message_inner`:
 
@@ -530,16 +534,16 @@ sqlite3 ~/trinity-data/trinity.db "SELECT COUNT(*) FROM access_requests WHERE ag
 
 ## Follow-ups
 
-- **#252 — apply the same gate to web public links.** The web public chat path currently has its own per-link verification model; the plan is to plug `resolve_verified_email` into a `WebAdapter` so the same gate applies.
 - **Access requests via UI for non-Telegram channels.** Pending requests already work uniformly server-side; we may want richer "where did this user come from" metadata in the requests panel.
 
 ---
 
 ## Status
-Working. Telegram and Slack adapters wired through; web public links to follow in #252.
+Working. Telegram, Slack, and web public-chat all run the same gate.
 
 ## Revision History
 
 | Date | Changes |
 |------|---------|
 | 2026-04-12 | Initial implementation (#311). New migration `access_control`, `AccessPolicyMixin`, `AccessRequestOperations`, ABC additions, Telegram `/login` state machine, Slack `users.info` resolver, four owner endpoints, SharingPanel UI. |
+| 2026-04-13 | Web public-chat unified. `routers/public.py` now runs the same gate as `message_router.py`, keyed on `agent_ownership.require_email` instead of per-link `agent_public_links.require_email`. New migration `public_link_require_email_unified` ORs legacy per-link flags into the agent-level flag. Access requests from web use `channel="web"`. Closes the #252 follow-up. |

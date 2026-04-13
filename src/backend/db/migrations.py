@@ -1047,6 +1047,32 @@ def _migrate_access_control(cursor, conn):
     conn.commit()
 
 
+def _migrate_public_link_require_email_unified(cursor, conn):
+    """Unify per-link require_email into agent-level policy (follow-up to #311).
+
+    Before: `agent_public_links.require_email` gated email verification for
+    public web chat, while `agent_ownership.require_email` gated Slack/Telegram.
+    Two flags, two code paths — and the agent-level Channel Access Policy UI
+    falsely claimed to cover web.
+
+    This migration ORs any legacy per-link require_email=1 into the agent's
+    `agent_ownership.require_email` so existing email-required links stay
+    email-required under the unified gate in routers/public.py. The per-link
+    column is retained (Slack legacy connection joins still read it) but is
+    no longer written or consulted by the public chat flow.
+    """
+    cursor.execute("""
+        UPDATE agent_ownership
+        SET require_email = 1
+        WHERE agent_name IN (
+            SELECT DISTINCT agent_name
+            FROM agent_public_links
+            WHERE require_email = 1
+        )
+    """)
+    conn.commit()
+
+
 def _migrate_telegram_group_configs(cursor, conn):
     """Create Telegram group configuration table (TGRAM-GROUP)."""
 
@@ -1119,4 +1145,5 @@ MIGRATIONS = [
     ("subscription_usage_tracking", _migrate_subscription_usage_tracking),
     ("telegram_group_configs", _migrate_telegram_group_configs),
     ("access_control", _migrate_access_control),
+    ("public_link_require_email_unified", _migrate_public_link_require_email_unified),
 ]

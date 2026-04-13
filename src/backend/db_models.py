@@ -324,9 +324,12 @@ class SystemSettingUpdate(BaseModel):
 # =========================================================================
 
 class PublicLinkCreate(BaseModel):
-    """Request model for creating a public link."""
+    """Request model for creating a public link.
+
+    Email verification is driven by the agent-level access policy
+    (`agent_ownership.require_email`, #311), not per-link.
+    """
     name: Optional[str] = None  # Friendly name for the link
-    require_email: bool = False  # Whether email verification is required
     expires_at: Optional[str] = None  # ISO timestamp for expiration
 
 
@@ -334,7 +337,6 @@ class PublicLinkUpdate(BaseModel):
     """Request model for updating a public link."""
     name: Optional[str] = None
     enabled: Optional[bool] = None
-    require_email: Optional[bool] = None
     expires_at: Optional[str] = None
 
 
@@ -348,7 +350,6 @@ class PublicLink(BaseModel):
     expires_at: Optional[datetime] = None
     enabled: bool = True
     name: Optional[str] = None
-    require_email: bool = False
 
 
 class PublicLinkWithUrl(PublicLink):

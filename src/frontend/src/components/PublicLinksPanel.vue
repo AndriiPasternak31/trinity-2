@@ -67,12 +67,6 @@
               >
                 {{ link.enabled ? 'Active' : 'Disabled' }}
               </span>
-              <span
-                v-if="link.require_email"
-                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300"
-              >
-                Email Required
-              </span>
             </div>
 
             <!-- URL preview -->
@@ -238,20 +232,11 @@
                   />
                 </div>
 
-                <!-- Require email -->
-                <div class="flex items-center">
-                  <input
-                    id="require-email"
-                    v-model="formData.require_email"
-                    type="checkbox"
-                    class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                  />
-                  <label for="require-email" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                    Require email verification
-                  </label>
-                </div>
-                <p v-if="formData.require_email" class="text-xs text-gray-500 dark:text-gray-400 -mt-2 ml-6">
-                  Users will need to verify their email before chatting.
+                <!-- Access policy notice (email verification / open access is managed at the agent level, #311) -->
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                  Email verification and allow-list are controlled by the agent's
+                  <span class="font-medium">Channel Access Policy</span> above —
+                  the same policy applies across web, Telegram, and Slack.
                 </p>
 
                 <!-- Expiration -->
@@ -399,7 +384,6 @@ const slackLoading = ref({})      // { linkId: true/false }
 // Form
 const formData = ref({
   name: '',
-  require_email: false,
   expires_at: '',
   enabled: true
 })
@@ -431,7 +415,6 @@ const saveLink = async () => {
   try {
     const payload = {
       name: formData.value.name || null,
-      require_email: formData.value.require_email
     }
 
     if (formData.value.expires_at) {
@@ -485,7 +468,6 @@ const editLink = (link) => {
   editingLink.value = link
   formData.value = {
     name: link.name || '',
-    require_email: link.require_email,
     expires_at: link.expires_at ? link.expires_at.slice(0, 16) : '',
     enabled: link.enabled
   }
@@ -623,7 +605,6 @@ const closeModal = () => {
   editingLink.value = null
   formData.value = {
     name: '',
-    require_email: false,
     expires_at: '',
     enabled: true
   }

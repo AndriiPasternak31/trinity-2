@@ -164,7 +164,7 @@ The test suite covers:
 - **System Manifest** (test_systems.py) - Multi-agent deployment from YAML, permissions, folders, schedules, tags (Req 10.7, ORG-001)
 - **System Views** (test_system_views.py) - [TESTS NEEDED] System view CRUD, agent_count, auto-creation from manifest (ORG-001)
 - **Local Deployment** (test_deploy_local.py) - Deploy local agents via MCP (Req 11.2)
-- **Public Links** (test_public_links.py) - Public agent sharing with email verification (Req 11.3)
+- **Public Links** (test_public_links.py) - Public agent sharing; email verification is driven by agent-level access policy (#311 follow-up, 2026-04-13) (Req 11.3)
 - **Public User Memory** (test_public_user_memory.py) - Per-user persistent memory for email-verified public sessions (MEM-001) [SMOKE]
 
 ### Operations & Observability
@@ -246,6 +246,24 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 - **Healthy**: >90% pass rate, 0 critical failures
 - **Warning**: 75-90% pass rate, <5 failures
 - **Critical**: <75% pass rate or >5 failures
+
+## Recent Test Additions (2026-04-13)
+
+| Test File | Description | Tests Added |
+|-----------|-------------|-------------|
+| `test_public_links.py` | `TestUnifiedAccessPolicy` class — public web chat now honors agent-level `require_email` / `open_access` (unified with Slack/Telegram, #311 follow-up) | 6 tests (all smoke) |
+
+**Unified public-chat access policy** (`test_public_links.py::TestUnifiedAccessPolicy`):
+
+- `test_create_link_response_has_no_require_email` — `PublicLinkWithUrl` no longer exposes the per-link flag
+- `test_public_link_info_mirrors_agent_policy_false/true` — `GET /api/public/link/{token}` returns `require_email` sourced from `agent_ownership.require_email`
+- `test_chat_requires_session_token_when_agent_policy_on` — toggling agent policy flips chat gating live (401 without session token)
+- `test_verify_request_rejected_when_agent_policy_off` — verify/request returns 400 when the agent's policy doesn't require email
+- `test_ignores_legacy_require_email_payload` — callers passing the removed field don't break, and it's not round-tripped in the response
+
+Also updated the existing `TestPublicLinkLifecycle` and `TestEmailVerification` fixtures to stop sending/asserting the per-link `require_email` field; the email-required fixture now sets `agent_ownership.require_email` via `PUT /api/agents/{name}/access-policy` and restores the prior policy on teardown.
+
+---
 
 ## Recent Test Additions (2026-03-19)
 

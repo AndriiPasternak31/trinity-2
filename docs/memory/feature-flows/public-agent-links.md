@@ -1,8 +1,12 @@
 # Feature Flow: Public Agent Links (12.2)
 
+**Last Updated**: 2026-04-13
+
 ## Overview
 
-Public Agent Links allow agent owners to generate shareable URLs that enable unauthenticated users to chat with their agents. This feature supports optional email verification, usage tracking, and rate limiting.
+Public Agent Links allow agent owners to generate shareable URLs that enable unauthenticated users to chat with their agents. This feature supports usage tracking and rate limiting, and honors the agent-level **Channel Access Policy** (`require_email`, `open_access`) which is shared with Slack/Telegram — see [unified-channel-access-control.md](unified-channel-access-control.md).
+
+> **Refactor (2026-04-13)**: The per-link `require_email` flag has been removed from the API/UI. Public web chat now uses the agent-level policy (`agent_ownership.require_email` / `agent_ownership.open_access`) as the single source of truth. The `agent_public_links.require_email` column still exists in the schema (unused by public chat; retained for the legacy `slack_link_connections` join in `db/slack.py`). Existing email-required links were preserved by ORing the flag into `agent_ownership.require_email` via migration `public_link_require_email_unified`.
 
 ## User Stories
 
@@ -87,6 +91,8 @@ Owner (AgentDetail) -> POST /api/agents/{name}/public-links
 
 ### 2. Public Chat (No Email Required)
 
+> **Note (2026-04-13)**: `require_email` in the `PublicLinkInfo` response now reflects the agent-level policy (`agent_ownership.require_email`) via helper `_agent_requires_email(agent_name)` in `routers/public.py`. It is no longer a per-link flag.
+
 ```
 Public User -> GET /api/public/link/{token}
             -> Backend returns {valid: true, require_email: false}
@@ -121,10 +127,13 @@ Background -> TaskExecutionService.execute_task(triggered_by="public")
 
 > **THINK-001 (2026-03-04)**: Public chat uses async mode with SSE streaming for real-time status labels. The frontend submits with `async_mode: true`, subscribes to the SSE stream for status updates (same `execution-status.js` utilities as authenticated chat), and polls for completion.
 
-### 3. Public Chat (Email Required)
+### 3. Public Chat (Email Required — Agent Policy)
+
+> **Refactor (2026-04-13)**: The trigger for the email verification flow is now the **agent-level policy** (`agent_ownership.require_email`), not a per-link flag. After email verification succeeds, `public_chat` runs the same unified access gate used by Slack/Telegram (see [unified-channel-access-control.md](unified-channel-access-control.md)).
 
 ```
 Public User -> GET /api/public/link/{token}
+            -> _agent_requires_email(agent_name) reads agent_ownership.require_email
             -> Backend returns {valid: true, require_email: true}
 
 Public User -> POST /api/public/verify/request
@@ -139,9 +148,20 @@ Public User -> POST /api/public/verify/confirm
 
 Public User -> POST /api/public/chat/{token}
               {message: "...", session_token: "..."}
-            -> Backend validates session
+            -> Backend validates session -> verified email
+            -> Unified access gate (routers/public.py, same rules as message_router):
+                 1. db.email_has_agent_access(agent_name, email)  -> allow
+                 2. else agent_ownership.open_access              -> allow
+                 3. else db.upsert_access_request(agent, email, "web")
+                          -> 403 "pending approval"
             -> Chat proceeds as normal
 ```
+
+**Gate helpers** (`routers/public.py`, near top of module):
+- `_agent_requires_email(agent_name)` — reads `agent_ownership.require_email`
+- `_agent_allows_open_access(agent_name)` — reads `agent_ownership.open_access`
+
+**Owner/admin/shared** users in `agent_sharing` are admitted by step (1). Everyone else falls through to `open_access` (public-by-default) or creates a pending row in `access_requests` which the owner can approve from the Access Requests UI.
 
 ## Frontend Layer
 
@@ -155,6 +175,8 @@ Public User -> POST /api/public/chat/{token}
 | `src/frontend/src/views/PublicChat.vue` | 1-786 | Public chat interface (PUB-003 intro, PUB-004 header metadata, PUB-005 session persistence, PUB-006 bottom-aligned messages, THINK-001 dynamic status) |
 
 > **Note (2026-02-18)**: AgentDetail.vue no longer directly renders PublicLinksPanel. The component is now embedded within SharingPanel.vue.
+
+> **Note (2026-04-13)**: `PublicLinksPanel.vue` no longer shows the "Require email verification" checkbox in the create/edit modal and no longer renders the "Email Required" badge on link rows. A small pointer directs owners to the agent-level **Channel Access Policy** section for those settings. See [unified-channel-access-control.md](unified-channel-access-control.md).
 
 ### PublicLinksPanel.vue Methods
 
@@ -286,6 +308,8 @@ import { getStatusFromStreamEvent, MIN_LABEL_DISPLAY_MS, HEARTBEAT_TIMEOUT_MS } 
 | `PublicChatRequest` | `db_models.py:364` | Chat message request (includes `async_mode` for THINK-001) |
 | `PublicChatResponse` | `db_models.py:370` | Chat message response |
 
+> **Note (2026-04-13)**: `PublicLinkCreate`, `PublicLinkUpdate`, `PublicLink`, and `PublicLinkWithUrl` no longer carry a `require_email` field. The owner UI sets email-required-ness via the agent-level Channel Access Policy (see [unified-channel-access-control.md](unified-channel-access-control.md)), not per-link. `PublicLinkInfo.require_email` remains but is populated from `agent_ownership.require_email`.
+
 ## Database Schema
 
 ### agent_public_links
@@ -300,7 +324,7 @@ import { getStatusFromStreamEvent, MIN_LABEL_DISPLAY_MS, HEARTBEAT_TIMEOUT_MS } 
 | expires_at | TEXT | Optional expiration |
 | enabled | INTEGER | 1=active, 0=disabled |
 | name | TEXT | Optional friendly name |
-| require_email | INTEGER | 1=yes, 0=no |
+| require_email | INTEGER | **DEPRECATED (2026-04-13)** — retained for the legacy `slack_link_connections` join in `db/slack.py`; no longer read by public web chat. Source of truth is `agent_ownership.require_email`. Migration `public_link_require_email_unified` ORed any legacy `1` values into the agent-level flag. |
 
 ### public_link_verifications
 
@@ -333,8 +357,8 @@ import { getStatusFromStreamEvent, MIN_LABEL_DISPLAY_MS, HEARTBEAT_TIMEOUT_MS } 
 ### WebSocket Broadcasts
 
 ```javascript
-// Link created
-{ "event": "public_link_created", "data": { "agent_name": "...", "link_id": "...", "require_email": true/false } }
+// Link created (note: require_email removed from payload as of 2026-04-13 — agent-level policy is the source of truth)
+{ "event": "public_link_created", "data": { "agent_name": "...", "link_id": "..." } }
 
 // Link updated
 { "event": "public_link_updated", "data": { "agent_name": "...", "link_id": "...", "enabled": true/false } }
@@ -417,6 +441,7 @@ PUBLIC_CHAT_URL=
 | Permission denied | 403 | Only the agent owner can... |
 | Session required | 401 | Session token required for this link |
 | Session expired | 401 | Invalid or expired session |
+| Access not granted (pending approval) | 403 | Creates/updates a pending `access_requests` row for `(agent, email, "web")`; owner must approve before chat is allowed. Enforced by the unified gate in `routers/public.py` (2026-04-13). |
 | Rate limited | 429 | Too many requests |
 | Agent at capacity | 429 | Agent is busy (all parallel task slots occupied) |
 | Agent unavailable | 503 | Agent is not available |
@@ -433,7 +458,7 @@ PUBLIC_CHAT_URL=
 |------|-------------|
 | `src/backend/db/public_links.py` | Database operations class (includes MEM-001 memory methods at lines 439-522) |
 | `src/backend/db/schema.py` | Table definitions including `public_user_memory` (lines 360-371) and index (line 694) |
-| `src/backend/db/migrations.py` | Migration #28 `_migrate_public_user_memory_table` |
+| `src/backend/db/migrations.py` | Migration #28 `_migrate_public_user_memory_table`; `_migrate_public_link_require_email_unified` (2026-04-13) — ORs legacy per-link `require_email=1` into `agent_ownership.require_email=1` |
 | `src/backend/services/platform_prompt_service.py` | `format_user_memory_block()` helper (line 97) |
 | `src/backend/routers/public_links.py` | Owner CRUD endpoints (206 lines) |
 | `src/backend/routers/public_links.py:30-39` | URL builders: `_build_public_url()`, `_build_external_url()` |
@@ -691,10 +716,11 @@ const copyLink = async (link, external = false) => {
   "url": "http://localhost/chat/xyz789...",
   "external_url": "https://public.example.com/chat/xyz789...",
   "enabled": true,
-  "require_email": false,
   "usage_stats": { "total_messages": 42, "unique_users": 5 }
 }
 ```
+
+> **Note (2026-04-13)**: `PublicLinkWithUrl` no longer carries `require_email`. To see whether email verification is required for an agent, call `GET /api/public/link/{token}` (which returns agent-level policy) or use the owner-facing access policy endpoints described in [unified-channel-access-control.md](unified-channel-access-control.md).
 
 ### Infrastructure Requirements
 
@@ -857,7 +883,7 @@ async def get_public_link_info(token: str, request: Request):
 class PublicLinkInfo(BaseModel):
     """Public-facing link information (no sensitive data)."""
     valid: bool
-    require_email: bool = False
+    require_email: bool = False  # 2026-04-13: now sourced from agent_ownership.require_email, not the link
     agent_available: bool = True
     reason: Optional[str] = None
     # Agent metadata (only populated when valid)
@@ -1478,7 +1504,7 @@ Slack can be connected to a public link as an additional delivery channel. Users
 
 - **1:1 mapping**: One Slack workspace connects to one public link
 - **Session reuse**: `public_chat_sessions` with `identifier_type='slack'`, `session_identifier='{team_id}:{user_id}'`
-- **Email verification**: Follows same require_email setting as web link
+- **Email verification**: Follows the agent-level `agent_ownership.require_email` policy (same as web and Telegram). As of 2026-04-13, this is no longer a per-link flag — see [unified-channel-access-control.md](unified-channel-access-control.md).
 - **UI location**: Slack section in PublicLinksPanel.vue (lines 125-181)
 
 ### New Database Tables

@@ -43,10 +43,14 @@ class PublicLinkOperations:
         agent_name: str,
         created_by: str,
         name: Optional[str] = None,
-        require_email: bool = False,
         expires_at: Optional[str] = None
     ) -> dict:
-        """Create a new public link for an agent."""
+        """Create a new public link for an agent.
+
+        Email verification is agent-level (agent_ownership.require_email).
+        The legacy `require_email` column on agent_public_links is left at
+        its DEFAULT (0) and read by the Slack legacy connection join only.
+        """
         link_id = secrets.token_urlsafe(16)
         token = secrets.token_urlsafe(24)
         now = datetime.utcnow().isoformat()
@@ -55,9 +59,9 @@ class PublicLinkOperations:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO agent_public_links
-                (id, agent_name, token, created_by, created_at, expires_at, enabled, name, require_email)
-                VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-            """, (link_id, agent_name, token, created_by, now, expires_at, name, 1 if require_email else 0))
+                (id, agent_name, token, created_by, created_at, expires_at, enabled, name)
+                VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+            """, (link_id, agent_name, token, created_by, now, expires_at, name))
             conn.commit()
 
         return self.get_public_link(link_id)
@@ -68,7 +72,7 @@ class PublicLinkOperations:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, agent_name, token, created_by, created_at, expires_at,
-                       enabled, name, require_email
+                       enabled, name
                 FROM agent_public_links
                 WHERE id = ?
             """, (link_id,))
@@ -85,7 +89,7 @@ class PublicLinkOperations:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, agent_name, token, created_by, created_at, expires_at,
-                       enabled, name, require_email
+                       enabled, name
                 FROM agent_public_links
                 WHERE token = ?
             """, (token,))
@@ -102,7 +106,7 @@ class PublicLinkOperations:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, agent_name, token, created_by, created_at, expires_at,
-                       enabled, name, require_email
+                       enabled, name
                 FROM agent_public_links
                 WHERE agent_name = ?
                 ORDER BY created_at DESC
@@ -116,10 +120,12 @@ class PublicLinkOperations:
         link_id: str,
         name: Optional[str] = None,
         enabled: Optional[bool] = None,
-        require_email: Optional[bool] = None,
         expires_at: Optional[str] = None
     ) -> Optional[dict]:
-        """Update a public link."""
+        """Update a public link.
+
+        Email verification is agent-level (agent_ownership.require_email).
+        """
         updates = []
         values = []
 
@@ -129,9 +135,6 @@ class PublicLinkOperations:
         if enabled is not None:
             updates.append("enabled = ?")
             values.append(1 if enabled else 0)
-        if require_email is not None:
-            updates.append("require_email = ?")
-            values.append(1 if require_email else 0)
         if expires_at is not None:
             updates.append("expires_at = ?")
             values.append(expires_at)
@@ -554,5 +557,4 @@ class PublicLinkOperations:
             "expires_at": row[5],
             "enabled": bool(row[6]),
             "name": row[7],
-            "require_email": bool(row[8])
         }

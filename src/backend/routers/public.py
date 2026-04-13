@@ -176,6 +176,21 @@ def _validate_public_link(token: str) -> dict:
     return link
 
 
+def _agent_requires_email(agent_name: str) -> bool:
+    """Agent-level email requirement (unified cross-channel policy, #311).
+
+    Replaces the per-public-link require_email flag. Source of truth is
+    `agent_ownership.require_email` — same policy applied by the channel
+    message router for Slack/Telegram.
+    """
+    return bool(db.get_access_policy(agent_name).get("require_email"))
+
+
+def _agent_allows_open_access(agent_name: str) -> bool:
+    """Agent-level open-access flag: any verified email may chat without approval."""
+    return bool(db.get_access_policy(agent_name).get("open_access"))
+
+
 @router.get("/link/{token}", response_model=PublicLinkInfo)
 async def get_public_link_info(token: str, request: Request):
     """
@@ -233,7 +248,7 @@ async def get_public_link_info(token: str, request: Request):
 
     return PublicLinkInfo(
         valid=True,
-        require_email=link["require_email"],
+        require_email=_agent_requires_email(agent_name),
         agent_available=agent_available,
         reason=None,
         agent_display_name=agent_display_name,
@@ -298,7 +313,7 @@ async def request_verification_code(
     check_public_link_rate_limit(client_ip)
     link = _validate_public_link(verification.token)
 
-    if not link["require_email"]:
+    if not _agent_requires_email(link["agent_name"]):
         raise HTTPException(
             status_code=400,
             detail="This link does not require email verification"
@@ -401,8 +416,11 @@ async def public_chat(
     identifier_type = None
     verified_email = None
 
-    if link["require_email"]:
-        # Email-required link: use verified email as identifier
+    agent_name = link["agent_name"]
+    require_email = _agent_requires_email(agent_name)
+
+    if require_email:
+        # Email-required: use verified email as identifier
         if not chat_request.session_token:
             raise HTTPException(
                 status_code=401,
@@ -418,8 +436,25 @@ async def public_chat(
         verified_email = email
         session_identifier = email.lower()
         identifier_type = "email"
+
+        # Unified cross-channel access gate (#311) — same logic as
+        # adapters.message_router for Slack/Telegram. Owner/admin/shared
+        # always pass; otherwise honor open_access or queue an access request.
+        if db.email_has_agent_access(agent_name, verified_email):
+            pass
+        elif _agent_allows_open_access(agent_name):
+            pass
+        else:
+            try:
+                db.upsert_access_request(agent_name, verified_email, "web")
+            except Exception as e:
+                logger.error(f"Failed to upsert access_request for {verified_email}: {e}")
+            raise HTTPException(
+                status_code=403,
+                detail="Your access request is pending approval. You'll be notified once the agent owner responds."
+            )
     else:
-        # Anonymous link: use provided session_id or generate new one
+        # Anonymous: use provided session_id or generate new one
         if chat_request.session_id:
             session_identifier = chat_request.session_id
         else:
@@ -443,14 +478,12 @@ async def public_chat(
         )
 
     # Check agent is available
-    container = get_agent_container(link["agent_name"])
+    container = get_agent_container(agent_name)
     if not container or container.status != "running":
         raise HTTPException(
             status_code=503,
             detail="Agent is not available. Please try again later."
         )
-
-    agent_name = link["agent_name"]
 
     # Get or create chat session
     chat_session = db.get_or_create_public_chat_session(
@@ -613,7 +646,7 @@ async def get_agent_intro(
     link = _validate_public_link(token)
 
     # Verify session if email required
-    if link["require_email"]:
+    if _agent_requires_email(link["agent_name"]):
         if not session_token:
             raise HTTPException(
                 status_code=401,
@@ -693,10 +726,12 @@ async def get_public_chat_history(
     check_public_link_rate_limit(client_ip)
     link = _validate_public_link(token)
 
+    require_email = _agent_requires_email(link["agent_name"])
+
     # Determine session identifier
     session_identifier = None
 
-    if link["require_email"]:
+    if require_email:
         if not session_token:
             raise HTTPException(
                 status_code=401,
@@ -729,7 +764,7 @@ async def get_public_chat_history(
     if not chat_session:
         return PublicChatHistoryResponse(
             messages=[],
-            session_id=session_identifier if not link["require_email"] else "",
+            session_id=session_identifier if not require_email else "",
             message_count=0
         )
 
@@ -745,7 +780,7 @@ async def get_public_chat_history(
             }
             for msg in messages
         ],
-        session_id=session_identifier if not link["require_email"] else "",
+        session_id=session_identifier if not require_email else "",
         message_count=chat_session.message_count
     )
 
@@ -768,10 +803,12 @@ async def clear_public_session(
     check_public_link_rate_limit(client_ip)
     link = _validate_public_link(token)
 
+    require_email = _agent_requires_email(link["agent_name"])
+
     # Determine session identifier
     session_identifier = None
 
-    if link["require_email"]:
+    if require_email:
         if not session_token:
             raise HTTPException(
                 status_code=401,
@@ -802,9 +839,9 @@ async def clear_public_session(
     if chat_session:
         db.clear_public_chat_session(chat_session.id)
 
-    # For anonymous links, generate new session_id
+    # For anonymous sessions, generate new session_id
     new_session_id = None
-    if not link["require_email"]:
+    if not require_email:
         new_session_id = secrets.token_urlsafe(16)
 
     return ClearSessionResponse(

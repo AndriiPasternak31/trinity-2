@@ -56,7 +56,6 @@ def _link_to_response(link: dict, include_usage: bool = True) -> PublicLinkWithU
         expires_at=datetime.fromisoformat(link["expires_at"]) if link.get("expires_at") else None,
         enabled=link["enabled"],
         name=link.get("name"),
-        require_email=link["require_email"],
         url=_build_public_url(link["token"]),
         external_url=_build_external_url(link["token"]),
         usage_stats=usage_stats
@@ -81,7 +80,6 @@ async def create_public_link(
         agent_name=agent_name,
         created_by=current_user.username,
         name=link_request.name,
-        require_email=link_request.require_email,
         expires_at=link_request.expires_at
     )
 
@@ -92,7 +90,6 @@ async def create_public_link(
             "data": {
                 "agent_name": agent_name,
                 "link_id": link["id"],
-                "require_email": link["require_email"]
             }
         }))
 
@@ -156,7 +153,6 @@ async def update_public_link(
         link_id=link_id,
         name=update_request.name,
         enabled=update_request.enabled,
-        require_email=update_request.require_email,
         expires_at=update_request.expires_at
     )
 

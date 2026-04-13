@@ -297,14 +297,11 @@ class TestPublicLinkLifecycle:
         """Test create, list, update, delete link lifecycle."""
         agent_name = running_agent
 
-        # 1. Create a public link
+        # 1. Create a public link (require_email is now agent-level, #311 follow-up)
         create_response = httpx.post(
             f"{BASE_URL}/api/agents/{agent_name}/public-links",
             headers=auth_headers,
-            json={
-                "name": "Test Link for Lifecycle",
-                "require_email": False
-            }
+            json={"name": "Test Link for Lifecycle"}
         )
 
         if create_response.status_code == 403:
@@ -318,7 +315,8 @@ class TestPublicLinkLifecycle:
         assert "url" in created_link
         assert created_link["name"] == "Test Link for Lifecycle"
         assert created_link["enabled"] == True
-        assert created_link["require_email"] == False
+        # require_email is no longer a per-link field — it's on the agent policy
+        assert "require_email" not in created_link
 
         link_id = created_link["id"]
         token = created_link["token"]
@@ -396,7 +394,13 @@ class TestEmailVerification:
 
     @pytest.fixture
     def link_with_email_required(self, auth_headers):
-        """Create a link that requires email verification."""
+        """Create a link whose agent requires email verification.
+
+        Email verification is now agent-level (agent_ownership.require_email,
+        unified with Slack/Telegram via #311 follow-up). We create a link
+        then set the agent's access policy to require_email=True, and
+        reset both on teardown.
+        """
         # Find a running agent
         import subprocess
         result = subprocess.run(
@@ -408,23 +412,44 @@ class TestEmailVerification:
             pytest.skip("No running agents found")
         agent_name = agents[0]
 
-        # Create link with email required
+        # Remember prior policy so we can restore it
+        policy_before = httpx.get(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+        )
+        if policy_before.status_code != 200:
+            pytest.skip(f"Could not read access policy: {policy_before.text}")
+        prior_policy = policy_before.json()
+
+        # Create the link
         response = httpx.post(
             f"{BASE_URL}/api/agents/{agent_name}/public-links",
             headers=auth_headers,
-            json={
-                "name": "Email Required Link",
-                "require_email": True
-            }
+            json={"name": "Email Required Link"}
         )
-
         if response.status_code != 200:
             pytest.skip(f"Could not create link: {response.text}")
-
         link = response.json()
+        link["agent_name"] = agent_name  # for teardown
+
+        # Set agent policy to require email
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={"require_email": True, "open_access": prior_policy.get("open_access", False)},
+        )
+
         yield link
 
-        # Cleanup
+        # Restore policy and delete link
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={
+                "require_email": bool(prior_policy.get("require_email", False)),
+                "open_access": bool(prior_policy.get("open_access", False)),
+            },
+        )
         httpx.delete(
             f"{BASE_URL}/api/agents/{agent_name}/public-links/{link['id']}",
             headers=auth_headers
@@ -520,10 +545,7 @@ class TestPublicChat:
         response = httpx.post(
             f"{BASE_URL}/api/agents/{agent_name}/public-links",
             headers=auth_headers,
-            json={
-                "name": "Chat Test Link",
-                "require_email": False
-            }
+            json={"name": "Chat Test Link"}
         )
 
         if response.status_code != 200:
@@ -567,6 +589,180 @@ class TestPublicChat:
         assert response.status_code == 200, f"Chat failed: {response.text}"
         data = response.json()
         assert "response" in data
+
+
+@pytest.mark.smoke
+class TestUnifiedAccessPolicy:
+    """Public web chat honors the agent-level access policy (#311 follow-up, 2026-04-13).
+
+    The per-link `require_email` flag was retired in favor of
+    `agent_ownership.require_email` — the same policy that drives
+    Slack and Telegram via adapters.message_router. These tests cover
+    the unified behavior from the public-link side.
+    """
+
+    @pytest.fixture
+    def agent_name(self):
+        """Pick a running agent to host the link."""
+        import subprocess
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "name=agent-", "--format", "{{.Names}}"],
+            capture_output=True, text=True,
+        )
+        agents = [n.replace("agent-", "") for n in result.stdout.strip().split("\n") if n]
+        if not agents:
+            pytest.skip("No running agents found")
+        return agents[0]
+
+    @pytest.fixture
+    def scoped_link(self, auth_headers, agent_name):
+        """Create a link and snapshot the agent's policy; restore + delete on teardown."""
+        prior = httpx.get(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+        )
+        if prior.status_code != 200:
+            pytest.skip(f"Could not read access policy: {prior.text}")
+        prior_policy = prior.json()
+
+        resp = httpx.post(
+            f"{BASE_URL}/api/agents/{agent_name}/public-links",
+            headers=auth_headers,
+            json={"name": "Unified Policy Test"},
+        )
+        if resp.status_code != 200:
+            pytest.skip(f"Could not create link: {resp.text}")
+        link = resp.json()
+
+        yield {"agent_name": agent_name, "link": link, "prior_policy": prior_policy}
+
+        # Restore policy and delete link
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={
+                "require_email": bool(prior_policy.get("require_email", False)),
+                "open_access": bool(prior_policy.get("open_access", False)),
+            },
+        )
+        httpx.delete(
+            f"{BASE_URL}/api/agents/{agent_name}/public-links/{link['id']}",
+            headers=auth_headers,
+        )
+
+    def test_create_link_response_has_no_require_email(self, scoped_link):
+        """Per-link require_email was dropped from the API surface."""
+        link = scoped_link["link"]
+        assert "require_email" not in link, (
+            "PublicLinkWithUrl must not expose require_email anymore; "
+            "the flag is on the agent's access policy"
+        )
+
+    def test_public_link_info_mirrors_agent_policy_false(
+        self, auth_headers, scoped_link
+    ):
+        """PublicLinkInfo.require_email reflects agent policy when policy is off."""
+        agent_name = scoped_link["agent_name"]
+        token = scoped_link["link"]["token"]
+
+        # Ensure policy is OFF
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={"require_email": False, "open_access": False},
+        )
+
+        resp = httpx.get(f"{BASE_URL}/api/public/link/{token}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is True
+        assert data["require_email"] is False
+
+    def test_public_link_info_mirrors_agent_policy_true(
+        self, auth_headers, scoped_link
+    ):
+        """Toggling agent policy flips PublicLinkInfo.require_email live."""
+        agent_name = scoped_link["agent_name"]
+        token = scoped_link["link"]["token"]
+
+        # Flip policy ON
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={"require_email": True, "open_access": False},
+        )
+
+        resp = httpx.get(f"{BASE_URL}/api/public/link/{token}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is True
+        assert data["require_email"] is True
+
+    def test_chat_requires_session_token_when_agent_policy_on(
+        self, auth_headers, scoped_link
+    ):
+        """With agent policy require_email=True, chat without session_token is 401."""
+        agent_name = scoped_link["agent_name"]
+        token = scoped_link["link"]["token"]
+
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={"require_email": True, "open_access": False},
+        )
+
+        resp = httpx.post(
+            f"{BASE_URL}/api/public/chat/{token}",
+            json={"message": "hi"},
+        )
+        assert resp.status_code == 401
+        assert "Session token required" in resp.json()["detail"]
+
+    def test_verify_request_rejected_when_agent_policy_off(
+        self, auth_headers, scoped_link
+    ):
+        """verify/request returns 400 if the agent doesn't require email."""
+        agent_name = scoped_link["agent_name"]
+        token = scoped_link["link"]["token"]
+
+        httpx.put(
+            f"{BASE_URL}/api/agents/{agent_name}/access-policy",
+            headers=auth_headers,
+            json={"require_email": False, "open_access": False},
+        )
+
+        resp = httpx.post(
+            f"{BASE_URL}/api/public/verify/request",
+            json={"token": token, "email": "unified-test@example.com"},
+        )
+        assert resp.status_code == 400
+        assert "does not require email verification" in resp.json()["detail"]
+
+    def test_ignores_legacy_require_email_payload(
+        self, auth_headers, agent_name
+    ):
+        """Callers passing the removed require_email field are ignored gracefully.
+
+        Pydantic v2 silently drops unknown fields by default, so old clients
+        don't break. The created link MUST NOT expose require_email in the
+        response (proves the field isn't being round-tripped via another path).
+        """
+        resp = httpx.post(
+            f"{BASE_URL}/api/agents/{agent_name}/public-links",
+            headers=auth_headers,
+            json={"name": "Legacy Payload", "require_email": True},
+        )
+        if resp.status_code == 403:
+            pytest.skip(f"User doesn't own agent {agent_name}")
+        assert resp.status_code == 200, resp.text
+        link = resp.json()
+        try:
+            assert "require_email" not in link
+        finally:
+            httpx.delete(
+                f"{BASE_URL}/api/agents/{agent_name}/public-links/{link['id']}",
+                headers=auth_headers,
+            )
 
 
 if __name__ == "__main__":
