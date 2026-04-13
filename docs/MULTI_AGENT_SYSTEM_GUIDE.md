@@ -1,6 +1,6 @@
 # Multi-Agent System Guide for Trinity
 
-> **Comprehensive guide** for designing, building, and deploying multi-agent systems on the Trinity Deep Agent Orchestration Platform.
+> **Comprehensive guide** for designing, building, and deploying multi-agent systems on the Trinity autonomous agent platform.
 >
 > This document covers architecture patterns, communication strategies, deployment workflows, and best practices for systems where multiple agents collaborate to achieve complex goals.
 
@@ -1932,7 +1932,7 @@ Use this template for documenting your multi-agent system:
 # [System Name] - System Definition
 
 > **Version**: X.Y.Z
-> **Platform**: Trinity Deep Agent Orchestration Platform
+> **Platform**: Trinity Autonomous Agent Platform
 > **Status**: Development | Testing | Production
 > **Last Updated**: YYYY-MM-DD
 

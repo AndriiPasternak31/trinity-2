@@ -47,12 +47,11 @@ async def get_fleet_status(
     """
     Get status of all agents in the fleet.
 
-    Returns a comprehensive list of all agents with their:
-    - Container status (running/stopped)
-    - Context usage (if running)
-    - Last activity time
-    - System agent flag
+    Admin-only. Returns a comprehensive list of all agents with their
+    container status, context usage, last activity time, and system agent flag.
     """
+    require_admin(current_user)
+
     agents = list_all_agents_fast()
 
     fleet_status = []
@@ -126,11 +125,11 @@ async def get_fleet_health(
     """
     Get health check for all agents.
 
-    Identifies unhealthy agents based on:
-    - Context usage > 90%
-    - Container errors
-    - No activity for > 30 minutes (for running agents)
+    Admin-only. Identifies unhealthy agents based on context usage,
+    container errors, and idle time.
     """
+    require_admin(current_user)
+
     agents = list_all_agents_fast()
 
     # Health thresholds (from settings or defaults)
@@ -436,9 +435,11 @@ async def list_all_schedules(
     """
     List all schedules across all agents.
 
-    Returns schedule information including next run times and recent execution status.
-    This endpoint is used by the system agent for schedule overview and management.
+    Admin-only. Returns schedule information including next run times
+    and recent execution status.
     """
+    require_admin(current_user)
+
     schedules = db.list_all_schedules()
 
     # Apply filters
@@ -701,8 +702,10 @@ async def list_alerts(
     """
     List recent operational alerts.
 
-    Alerts are derived from platform events (errors, health checks, etc.).
+    Admin-only. Alerts are derived from platform events.
     """
+    require_admin(current_user)
+
     # TODO: Implement dedicated alerts table
     # For now, return placeholder - check fleet health for issues
 
@@ -721,7 +724,11 @@ async def acknowledge_alert(
 ):
     """
     Acknowledge an alert.
+
+    Admin-only.
     """
+    require_admin(current_user)
+
     # TODO: Implement when alerts table is added
     return {
         "success": True,
@@ -746,14 +753,11 @@ async def get_ops_costs(
     """
     Get cost and usage metrics for platform operations.
 
-    This endpoint provides an ops-focused view of OTel metrics:
-    - Total platform cost with threshold analysis
-    - Token usage by model
-    - Productivity metrics (commits, PRs, lines)
-    - Cost alerts if thresholds exceeded
-
-    Returns {enabled: false} when OTel is not configured.
+    Admin-only. Returns OTel metrics including cost breakdown,
+    token usage, and productivity metrics.
     """
+    require_admin(current_user)
+
     if not OTEL_ENABLED:
         return {
             "enabled": False,
@@ -939,13 +943,10 @@ async def get_auth_report(
     """
     Get authentication status report for all agents.
 
-    Shows how many agents are using:
-    - Subscription (Claude Max/Pro OAuth)
-    - API Key (Platform ANTHROPIC_API_KEY)
-    - Not configured
-
-    Useful for tracking subscription usage and migration progress.
+    Admin-only. Shows subscription/API key usage across the fleet.
     """
+    require_admin(current_user)
+
     agents = list_all_agents_fast()
 
     # Track auth modes

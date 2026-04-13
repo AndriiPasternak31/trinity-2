@@ -25,7 +25,9 @@ RUN pip install --no-cache-dir \
     psutil==6.1.1 \
     payments-py==1.2.1 \
     Pillow==11.1.0 \
-    google-genai==1.12.1
+    google-genai==1.12.1 \
+    "slack_sdk[socket-mode]==3.41.0" \
+    aiohttp
 
 # Copy all backend source files
 COPY ../../src/backend/main.py /app/
@@ -39,6 +41,7 @@ COPY ../../src/backend/logging_config.py /app/
 # Copy module directories
 COPY ../../src/backend/routers /app/routers/
 COPY ../../src/backend/services /app/services/
+COPY ../../src/backend/adapters /app/adapters/
 COPY ../../src/backend/utils /app/utils/
 COPY ../../src/backend/db /app/db/
 
@@ -48,10 +51,10 @@ COPY ../../config/process-templates /app/config/process-templates/
 
 # Ensure all files are readable
 RUN chmod -R 644 /app/*.py && \
-    chmod -R 755 /app/routers /app/services /app/utils /app/db && \
-    find /app/routers /app/services /app/utils /app/db -name "*.py" -exec chmod 644 {} \;
+    chmod -R 755 /app/routers /app/services /app/adapters /app/utils /app/db && \
+    find /app/routers /app/services /app/adapters /app/utils /app/db -name "*.py" -exec chmod 644 {} \;
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header"]
 

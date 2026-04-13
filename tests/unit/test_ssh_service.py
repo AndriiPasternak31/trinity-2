@@ -6,6 +6,7 @@ Docker exec operations via the async docker_utils wrappers.
 
 Module: src/backend/services/ssh_service.py
 Issue: https://github.com/abilityai/trinity/issues/42
+Security: https://github.com/abilityai/trinity/issues/175
 """
 
 import pytest
@@ -45,44 +46,6 @@ def get_ssh_service():
     mock_docker_utils = Mock()
     mock_docker_utils.container_exec_run = mock_container_exec_run
 
-    # Create mock cryptography module structure
-    mock_serialization = Mock()
-    mock_serialization.Encoding = Mock()
-    mock_serialization.Encoding.PEM = "PEM"
-    mock_serialization.Encoding.OpenSSH = "OpenSSH"
-    mock_serialization.PrivateFormat = Mock()
-    mock_serialization.PrivateFormat.OpenSSH = "OpenSSH"
-    mock_serialization.PublicFormat = Mock()
-    mock_serialization.PublicFormat.OpenSSH = "OpenSSH"
-    mock_serialization.NoEncryption = Mock(return_value=None)
-
-    mock_ed25519 = Mock()
-    mock_private_key = Mock()
-    mock_public_key = Mock()
-    mock_private_key.public_key = Mock(return_value=mock_public_key)
-    mock_private_key.private_bytes = Mock(return_value=b"-----BEGIN OPENSSH PRIVATE KEY-----\ntest\n-----END OPENSSH PRIVATE KEY-----")
-    mock_public_key.public_bytes = Mock(return_value=b"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAtest")
-    mock_ed25519.Ed25519PrivateKey = Mock()
-    mock_ed25519.Ed25519PrivateKey.generate = Mock(return_value=mock_private_key)
-
-    mock_primitives = Mock()
-    mock_primitives.serialization = mock_serialization
-    mock_primitives.asymmetric = Mock()
-    mock_primitives.asymmetric.ed25519 = mock_ed25519
-
-    mock_hazmat = Mock()
-    mock_hazmat.primitives = mock_primitives
-    mock_hazmat.primitives.serialization = mock_serialization
-    mock_hazmat.primitives.asymmetric = Mock()
-    mock_hazmat.primitives.asymmetric.ed25519 = mock_ed25519
-
-    mock_cryptography = Mock()
-    mock_cryptography.hazmat = mock_hazmat
-    mock_cryptography.hazmat.primitives = mock_primitives
-    mock_cryptography.hazmat.primitives.serialization = mock_serialization
-    mock_cryptography.hazmat.primitives.asymmetric = Mock()
-    mock_cryptography.hazmat.primitives.asymmetric.ed25519 = mock_ed25519
-
     # Create mock crypt module (removed in Python 3.13+)
     mock_crypt = Mock()
     mock_crypt.METHOD_SHA512 = "$6$"
@@ -93,12 +56,6 @@ def get_ssh_service():
     with patch.dict('sys.modules', {
         'redis': mock_redis,
         'crypt': mock_crypt,
-        'cryptography': mock_cryptography,
-        'cryptography.hazmat': mock_hazmat,
-        'cryptography.hazmat.primitives': mock_primitives,
-        'cryptography.hazmat.primitives.serialization': mock_serialization,
-        'cryptography.hazmat.primitives.asymmetric': Mock(ed25519=mock_ed25519),
-        'cryptography.hazmat.primitives.asymmetric.ed25519': mock_ed25519,
         'services.docker_service': Mock(get_agent_container=mock_get_agent_container),
         'services.docker_utils': mock_docker_utils,
     }):
@@ -126,31 +83,12 @@ def get_ssh_service():
             'get_agent_container': mock_get_agent_container,
             'container_exec_run': mock_container_exec_run,
             'container': mock_container,
-            'mock_private_key': mock_private_key,
-            'mock_public_key': mock_public_key,
         }
 
 
 @pytest.mark.unit
-class TestSshKeyGeneration:
-    """Test SSH key pair generation (synchronous, no Docker)."""
-
-    def test_generate_ssh_keypair_returns_valid_keys(self):
-        """generate_ssh_keypair() returns private key, public key, and comment."""
-        ssh_service, mocks = get_ssh_service()
-        service = ssh_service.SshService()
-
-        keypair = service.generate_ssh_keypair("test-agent")
-
-        assert "private_key" in keypair
-        assert "public_key" in keypair
-        assert "comment" in keypair
-
-        # Verify the mocked key format is present
-        assert "-----BEGIN OPENSSH PRIVATE KEY-----" in keypair["private_key"]
-        assert "ssh-ed25519" in keypair["public_key"]
-        # Comment should contain agent name
-        assert "test-agent" in keypair["comment"]
+class TestSshPasswordGeneration:
+    """Test SSH password generation (synchronous, no Docker)."""
 
     def test_generate_password_returns_secure_string(self):
         """generate_password() returns alphanumeric password of correct length."""

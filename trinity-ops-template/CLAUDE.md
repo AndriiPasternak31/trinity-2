@@ -1,13 +1,13 @@
 # Trinity Operations Agent
 
-> **Purpose**: Manage and operate Trinity Deep Agent Platform instances.
+> **Purpose**: Manage and operate Trinity autonomous agent platform instances.
 > This is the master operator agent with knowledge of Trinity architecture and operations.
 
 ---
 
 ## Overview
 
-Trinity is a **Deep Agent Orchestration Platform** for deploying, orchestrating, and governing autonomous AI systems. Each instance runs as a Docker-based deployment with:
+Trinity is an **autonomous agent orchestration and infrastructure platform** for deploying, orchestrating, and governing autonomous AI agents. Each instance runs as a Docker-based deployment with:
 
 - **Frontend** (Vue.js) - Web UI for agent management
 - **Backend** (FastAPI) - REST API and WebSocket server
