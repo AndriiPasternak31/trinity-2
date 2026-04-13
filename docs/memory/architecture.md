@@ -572,12 +572,16 @@ Services that run continuously in the backend process:
 | GET | `/api/templates/env-template` | Get env template |
 | POST | `/api/templates/refresh` | Refresh cache |
 
-### Sharing (3 endpoints)
+### Sharing & Access Control (6 endpoints)
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/agents/{name}/share` | Share agent |
 | DELETE | `/api/agents/{name}/share/{email}` | Remove share |
 | GET | `/api/agents/{name}/shares` | List shares |
+| GET | `/api/agents/{name}/access-policy` | Get cross-channel access policy (#311) |
+| PUT | `/api/agents/{name}/access-policy` | Set `require_email` / `open_access` flags |
+| GET | `/api/agents/{name}/access-requests` | List pending access requests |
+| POST | `/api/agents/{name}/access-requests/{id}/decide` | Approve (auto-shares) or reject |
 
 ### Schedules (9 endpoints)
 | Method | Path | Description |
@@ -744,11 +748,13 @@ CREATE TABLE agent_ownership (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     max_parallel_tasks INTEGER DEFAULT 3,          -- CAPACITY-001
     execution_timeout_seconds INTEGER DEFAULT 900, -- TIMEOUT-001 (15 min)
+    require_email INTEGER DEFAULT 0,               -- #311: gate channels on verified email
+    open_access INTEGER DEFAULT 0,                 -- #311: anyone with verified email can chat
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 ```
 
-**agent_sharing:**
+**agent_sharing:** (cross-channel allow-list — same email admits the user on web, Telegram, and Slack)
 ```sql
 CREATE TABLE agent_sharing (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -760,6 +766,34 @@ CREATE TABLE agent_sharing (
     FOREIGN KEY (shared_by_id) REFERENCES users(id)
 );
 ```
+
+**access_requests:** (#311 — Unified Channel Access Control)
+```sql
+CREATE TABLE access_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_name TEXT NOT NULL,
+    email TEXT NOT NULL,                  -- verified email of requester
+    channel TEXT NOT NULL,                -- 'web' | 'telegram' | 'slack'
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected
+    decided_by TEXT,                      -- user_id of approver
+    decided_at TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(agent_name, email)
+);
+```
+
+**telegram_chat_links:** (#311 — verified-email binding for Telegram identities)
+```sql
+-- New columns added by access_control migration:
+ALTER TABLE telegram_chat_links ADD COLUMN verified_email TEXT;
+ALTER TABLE telegram_chat_links ADD COLUMN verified_at TEXT;
+```
+
+**Access Control Flow:**
+- `ChannelAdapter.resolve_verified_email()` translates native channel identity → verified email.
+- `message_router` runs a single gate: owner/admin/`agent_sharing` → `open_access` → upsert pending `access_requests` row.
+- Approving a request inserts into `agent_sharing` and (if email auth is enabled) whitelists the email.
+- Group chats bypass the gate; agents with both policy flags off retain legacy permissive behavior (backward compatibility).
 
 **mcp_api_keys:**
 ```sql
