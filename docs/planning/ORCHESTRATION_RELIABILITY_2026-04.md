@@ -3,7 +3,7 @@
 **Date:** 2026-04-13
 **Status:** Proposed sequencing for execution-time orchestration, event subscriptions, and multi-agent reliability.
 
-**Progress:** Sprint A — **4/6 shipped**: #95 (PR #320), #285 (PR #322), #226 (PR #323), #286 (PR #324). Remaining: #61, #132, #56.
+**Progress:** Sprint A — **5/6 shipped**: #95 (PR #320), #285 (PR #322), #226 (PR #323), #286 (PR #324), #61 (PR #326). Remaining: #132, #56.
 
 ---
 
@@ -22,8 +22,8 @@ Shipping #260 on top of today's foundation would produce a *persistent* backlog 
 ## Sequencing
 
 ```
-Sprint A (unblock):     #95 ✅, #285 ✅, #226 ✅, #286 ✅
-                        remaining: #61, #132, #56
+Sprint A (unblock):     #95 ✅, #285 ✅, #226 ✅, #286 ✅, #61 ✅
+                        remaining: #132, #56
 Sprint B (trace):       #305
 Sprint C (orchestrate): #260 → #271 → #294 → #264 → #291
 Sprint D (push telemetry): #306, #307
@@ -55,7 +55,7 @@ Sprint E (scale):       #24, #18
 |---|-------|---------------|
 | ~~#95~~ ✅ | ~~Route async task mode through `TaskExecutionService`~~ | **Shipped** on `feature/95-unified-async-executor`. `_execute_task_background()` deleted. Async `/task` now delegates to `execute_task(slot_already_held=True)` via `_run_async_task_with_persistence` thin wrapper. 429-upfront preserved via router-side pre-acquire. Service gained `parent_activity_id`, `extra_activity_details`, `slot_already_held` params. Sync+async share `_persist_chat_session` helper. E3 fix: `subscription_id` now snapshotted on pre-created execution record. |
 | ~~#285~~ ✅ | ~~Expired subscription tokens cause hour-long zombie executions~~ | **Shipped** in PR #322. Added stderr scanner in `TaskExecutionService` that detects auth failure patterns (`unauthorized`, `invalid.*token`, `expired.*credential`, etc.) and aborts early. Execution marked failed with `auth_failure` error type. No more hour-long zombies from expired tokens. |
-| #61 | Backend cleanup doesn't invoke agent termination | Agent already has SIGINT→SIGKILL in `docker/base-image/agent_server/services/process_registry.py:84-140`. Gap is that backend timeout/cleanup paths don't always call the agent's `/api/executions/{id}/terminate`. Wire the existing endpoint, don't build new PID infrastructure. |
+| ~~#61~~ ✅ | ~~Backend cleanup doesn't invoke agent termination~~ | **Shipped** in PR #326. Added `terminate_execution_on_agent()` helper to `TaskExecutionService` that calls agent's `/api/executions/{id}/terminate` endpoint. Wired into timeout handler and cleanup service slot reclaim path. Best-effort with watchdog safety net. 8 unit tests. |
 | ~~#226~~ ✅ | ~~Stale-slot cleanup ignores per-agent TTL on the standalone path~~ | **Shipped** in PR #323. `cleanup_stale_slots()` now accepts `agent_timeouts` dict and uses per-agent TTL (timeout + 5min buffer) instead of fixed 20-min default. Cleanup service passes `db.get_all_execution_timeouts()` to slot service. |
 | ~~#286~~ ✅ | ~~Cleanup overwrites real error~~ | **Shipped** in PR #324. Added `/api/executions/{id}/last-error` agent endpoint + `ProcessRegistry.get_last_error()` to extract error from log buffer. `_recover_execution()` now fetches original error before marking failed, combines with cleanup reason (`"{original}. Cleanup: {reason}"`), sanitizes via `sanitize_text()`, truncates to 2000 chars. No schema change needed — reuses existing `error` column with richer content. |
 | #132 | APScheduler skips triggers when `max_instances=1` reached | Scheduler is a separate microservice at `src/scheduler/` (port 8001), not in the backend. Fire-and-forget dispatch already exists (`src/scheduler/service.py:823`, `SCHED-ASYNC-001`). The remaining work is tuning the skip-on-overlap policy: bump `max_instances`, add coalescing, or evict the prior run via the new termination wiring (#61). Rescope before estimating. |
