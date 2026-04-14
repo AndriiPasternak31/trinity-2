@@ -463,6 +463,17 @@ Trinity is autonomous agent orchestration and infrastructure — sovereign infra
 - **Description**: Admin-configurable prompt injected at runtime via `--append-system-prompt` on every Claude Code invocation
 - **Flow**: `docs/memory/feature-flows/system-wide-trinity-prompt.md`
 
+### 12.6.1 Execution Context Injection (#171)
+- **Status**: ✅ Implemented (2026-04-14)
+- **Description**: Dynamic per-invocation `## Execution Context` block appended to every agent system prompt so agents can self-calibrate. Carries mode (chat vs autonomous task), trigger source, model, timeout budget, own name, permitted collaborators, schedule metadata, and timestamp.
+- **Key Features**:
+  - Single composition seam (`platform_prompt_service.compose_system_prompt`) for all invocation paths (chat / task / schedule / mcp / agent-to-agent / fan-out / paid / public)
+  - Behavioral guidance per mode: chat mode permits clarifying questions; task mode enforces execute-to-completion
+  - User-controlled metadata (schedule name, MCP key name) sanitized before rendering — strips control chars, backticks, and markdown heading markers, caps length — to prevent prompt-injection via metadata fields
+  - Builder failures never fail a request: always falls back to the base platform prompt
+  - Operator kill-switch via `trinity_execution_context_enabled` setting (default enabled)
+- **Flow**: `docs/memory/feature-flows/execution-context-injection.md`
+
 ### 12.7 Vector Memory
 - **Status**: ❌ Removed (2025-12-24)
 - **Reason**: Templates should define their own memory. Platform should not inject agent capabilities.

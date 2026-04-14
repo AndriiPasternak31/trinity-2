@@ -26,6 +26,10 @@ per-agent prompt engineering.
 - **Backend — task / schedule / mcp / agent / fan-out / paid / public**: `src/backend/services/task_execution_service.py` `execute_task()`
 - **Backend — scheduler plumb-through**: `src/backend/routers/internal.py` `/api/internal/execute-task` (`InternalTaskExecutionRequest`)
 
+## Frontend Layer
+
+None — backend-only feature. The execution context block is assembled server-side and delivered to the agent container via the existing `system_prompt` field on `/api/chat` and `/api/task`. No UI surface, no user-visible controls beyond the operator kill-switch (which reuses the existing Settings page via the `trinity_execution_context_enabled` key).
+
 ## Context Block Format
 
 ```
@@ -162,6 +166,34 @@ redeploy. Lives alongside the existing `trinity_prompt` operator setting.
 No schema changes. Reads from existing:
 - `agent_permissions` (collaborators)
 - `settings` (`public_chat_url`, `trinity_execution_context_enabled`)
+
+## Side Effects
+
+- Increases the prompt token count of every invocation by ~150–250 tokens (the rendered context block plus mode guidance line). At low invocation rates the cost is negligible; at high rates the operator can disable via the kill-switch.
+- Two read-only DB queries per invocation: `agent_permissions` lookup (collaborators) and `settings` lookup (`public_chat_url`). Both are local SQLite, sub-millisecond, indexed.
+- No new WebSocket events, no new audit entries, no notifications.
+
+## Error Handling
+
+| Failure | Behavior |
+|---|---|
+| `build_execution_context` raises any exception | Caught inside the builder; returns `""`; the wrapping caller falls back to the base platform prompt. Logged at `WARNING`. |
+| `compose_system_prompt` raises | Caller-side try/except in both `chat.py` and `task_execution_service.py` falls back to `get_platform_system_prompt()` alone. Logged at `WARNING`. |
+| `db.get_permitted_agents` fails | `_resolve_collaborators` returns `[]`; collaborators line omitted. Logged at `DEBUG`. |
+| `db.get_setting_value("public_chat_url")` fails | `_resolve_platform_url` returns `None`; platform line omitted. Logged at `DEBUG`. |
+| Schedule lookup row missing | Schedule fields stay `None`; schedule block omitted entirely. No error. |
+| `execution_id` is `None` (interactive chat) | Schedule lookup never runs (gated on `triggered_by == "schedule"`). |
+| Adversarial schedule / MCP key name | Sanitizer neutralizes control chars, backticks, and markdown heading markers; truncates to the per-field cap. The string content is preserved but cannot inject structure. |
+
+**Invariant**: the execution context block is best-effort metadata. Building it can never fail an agent invocation.
+
+## Security Considerations
+
+- **No new attack surface**: no new HTTP endpoints, no new auth boundaries. `/api/internal/execute-task` is already gated by `verify_internal_secret`; this PR only adds optional fields to its Pydantic request body.
+- **Prompt injection (mitigated)**: schedule names and MCP key names are user-controlled and reach the agent system prompt verbatim. `_sanitize_field` strips `\x00–\x1f` / `\x7f` control characters (including newlines and tabs), replaces backticks with single quotes, collapses `##` → `#` and `---` → `-`, and truncates to per-field caps. Two adversarial unit tests (`test_schedule_name_injection_attempt_neutralized`, `test_mcp_key_name_injection_attempt_neutralized`) verify that crafted names cannot inject markdown structure.
+- **No credential exposure**: only metadata (user email, MCP key *name*, agent name, schedule *name*) reaches the prompt. No secret values, no key contents, no `.env` data. The user email is already visible to the agent via existing chat-history mechanisms.
+- **Auth pass-through**: the builder is called from already-authenticated paths. It performs no authorization decisions of its own.
+- **Operator kill-switch**: setting `trinity_execution_context_enabled=false` (or `0` / `off`) disables the block globally without a redeploy. Useful as a fast incident response if an unforeseen issue surfaces in production.
 
 ## Out of Scope (Deferred)
 
