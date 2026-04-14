@@ -3,7 +3,7 @@
 **Date:** 2026-04-13
 **Status:** Proposed sequencing for execution-time orchestration, event subscriptions, and multi-agent reliability.
 
-**Progress:** Sprint A — **7/7 complete**. Sprint B — **1/1 complete**. Sprint C — **2/5 complete**: #260 (PR #316), #271 (PR #332). **Next: #294.**
+**Progress:** Sprint A — **7/7 complete**. Sprint B — **1/1 complete**. Sprint C — **3/5 complete**: #260 (PR #316), #271 (PR #332), #264 (PR #334). **Next: #294.**
 
 ---
 
@@ -24,7 +24,7 @@ Shipping #260 on top of today's foundation would produce a *persistent* backlog 
 ```
 Sprint A (unblock):     #95 ✅, #285 ✅, #226 ✅, #286 ✅, #61 ✅, #132 ✅, #56 ✅  ← COMPLETE
 Sprint B (trace):       #305 ✅  ← COMPLETE
-Sprint C (orchestrate): #260 ✅ → #271 ✅ → #294 → #264 → #291
+Sprint C (orchestrate): #260 ✅ → #271 ✅ → #264 ✅ → #294 → #291
 Sprint D (push telemetry): #306, #307
 Sprint E (scale):       #24, #18
 ```
@@ -37,7 +37,7 @@ Sprint E (scale):       #24, #18
 - ~~`#271 blocked-by #285`~~ — #285 and #271 shipped.
 - `#294 blocked-by #95` — validation session reuses the unified execution path. #95 shipped; #294 unblocked.
 - ~~`#260 blocks #271, #294, #264`~~ — #260 shipped. #294 and #264 now unblocked.
-- `#294` and `#264` are independent — parallelize them.
+- ~~`#294` and `#264` are independent — parallelize them.~~ #264 shipped.
 
 ### Merge candidates (single PR surface)
 
@@ -98,7 +98,7 @@ Sprint E (scale):       #24, #18
 | ~~#260~~ ✅ | ~~Persistent task backlog (BACKLOG-001)~~ | **Shipped** in PR #316. SQLite-backed FIFO backlog with `status=queued`. Drain via `BacklogService.try_drain_one()` called on slot release. 24h stale expiry. Depth cap configurable per-agent. |
 | ~~#271~~ ✅ | ~~Retry mechanism for scheduled executions~~ | **Shipped** in PR #332. Configurable `max_retries` (0-5, default 1) and `retry_delay_seconds` (30-600, default 60). Rate-limited (429) failures use 2x delay. Retries persist to DB and survive scheduler restart via `_recover_pending_retries()`. New status: `pending_retry`. |
 | #294 | Business task validation (VALIDATE-001) | Clean-context auditor session after execution. Reuses unified executor (#95). Writes `business_status` separate from technical `status`. |
-| #264 | Self-execute during chat (SELF-EXEC-001) | Thin layer: detect source==target, flag `X-Self-Task`, optionally `inject_result` back into chat session. Uses backlog for overflow. |
+| ~~#264~~ ✅ | ~~Self-execute during chat (SELF-EXEC-001)~~ | **Shipped** in PR #334. Detects source==target, sets `X-Self-Task` header, optionally injects result back into chat session via `inject_result` parameter. Uses backlog for overflow when at capacity. |
 | #291 | Agent webhook triggers (WEBHOOK-001) | External → agent dispatch. HMAC-signed URL. **Distinct from existing process-engine webhooks** (`routers/triggers.py`) which trigger BPMN process executions. Before building, decide: reuse the process-engine trigger surface (lower surface area) or ship a parallel agent-scoped trigger surface (clearer mental model, but exactly the parallel-paths problem this plan exists to fix). Default recommendation: reuse, with an `agent_task` shortcut process. |
 
 ### Architectural shift
@@ -212,7 +212,7 @@ APScheduler fire-and-forget, async status consumer
 WebSocket ◄── Redis Streams (XADD/XREAD) with replay
 ```
 
-### After Tier 2 (partial — #260 + #271 shipped)
+### After Tier 2 (partial — #260, #271, #264 shipped)
 
 ```
 request at capacity ─► try slot.acquire()
@@ -232,7 +232,7 @@ Scheduler failure ─► _maybe_schedule_retry()  ✅ #271
 
 New triggers, all funnel into the same executor:
   • Webhook         ─► schedule dispatch (HMAC-signed URL)        [#291 pending]
-  • Self-execute    ─► X-Self-Task, optional inject_result        [#264 pending]
+  • Self-execute    ─► X-Self-Task, optional inject_result        ✅ #264
   • Retry           ─► new execution with retry_of_execution_id   ✅ #271
   • Validation      ─► auditor session, writes business_status    [#294 pending]
   • Event sub       ─► (already funnels)
@@ -251,4 +251,4 @@ New triggers, all funnel into the same executor:
 6. ~~Rescope #132 against `src/scheduler/service.py`~~ — ✅ Shipped in PR #328.
 7. ~~Re-estimate #56~~ — ✅ Shipped in PR #329.
 8. Decide #291 direction: reuse process-engine triggers (recommended) vs. parallel agent-scoped trigger surface.
-9. **Next:** Pick up #294 (validation) or #264 (self-execute) — they can parallelize.
+9. **Next:** Pick up #294 (validation). #264 shipped in PR #334.
