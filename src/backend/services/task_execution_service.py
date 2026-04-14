@@ -31,7 +31,12 @@ from models import ActivityState, ActivityType, TaskExecutionStatus
 from services.activity_service import activity_service
 from services.slot_service import get_slot_service
 from utils.credential_sanitizer import sanitize_execution_log, sanitize_response
-from services.platform_prompt_service import get_platform_system_prompt
+from services.platform_prompt_service import (
+    ExecutionContext,
+    compose_system_prompt,
+    get_platform_system_prompt,
+    is_execution_context_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +244,8 @@ class TaskExecutionService:
         parent_activity_id: Optional[str] = None,
         extra_activity_details: Optional[dict] = None,
         slot_already_held: bool = False,
+        schedule_context: Optional[dict] = None,
+        attempt: Optional[int] = None,
     ) -> TaskExecutionResult:
         """
         Execute a task on an agent container with full lifecycle management.
@@ -358,12 +365,36 @@ class TaskExecutionService:
                     logger.warning(f"[TaskExecService] Failed to mark execution dispatched: {e}")
 
             # ---- 4. Call agent with retry --------------------------------
-            # Prepend platform instructions to any caller-provided system_prompt
-            platform_prompt = get_platform_system_prompt()
-            if system_prompt:
-                effective_system_prompt = platform_prompt + "\n\n" + system_prompt
-            else:
-                effective_system_prompt = platform_prompt
+            # Compose platform prompt + execution context (#171) + caller system_prompt.
+            # Never let context-building fail the request.
+            try:
+                exec_ctx = ExecutionContext(
+                    agent_name=agent_name,
+                    mode=ExecutionContext.derive_mode(triggered_by),
+                    triggered_by=triggered_by,
+                    source_user_email=source_user_email,
+                    source_agent_name=source_agent_name,
+                    source_mcp_key_name=source_mcp_key_name,
+                    model=model,
+                    timeout_seconds=timeout_seconds,
+                    attempt=attempt,
+                    schedule_name=(schedule_context or {}).get("name"),
+                    schedule_cron=(schedule_context or {}).get("cron"),
+                    schedule_next_run=(schedule_context or {}).get("next_run"),
+                )
+                effective_system_prompt = compose_system_prompt(
+                    execution_context=exec_ctx,
+                    caller_prompt=system_prompt,
+                    include_execution_context=is_execution_context_enabled(),
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[TaskExecService] execution context build failed, falling back: {e}"
+                )
+                platform_prompt = get_platform_system_prompt()
+                effective_system_prompt = (
+                    platform_prompt + "\n\n" + system_prompt if system_prompt else platform_prompt
+                )
 
             payload = {
                 "message": message,
