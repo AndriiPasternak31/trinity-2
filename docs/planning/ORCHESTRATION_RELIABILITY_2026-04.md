@@ -3,7 +3,7 @@
 **Date:** 2026-04-13
 **Status:** Proposed sequencing for execution-time orchestration, event subscriptions, and multi-agent reliability.
 
-**Progress:** Sprint A — **7/7 complete**. Sprint B — **1/1 complete**: #305 (PR #330). **Sprint C next: #260.**
+**Progress:** Sprint A — **7/7 complete**. Sprint B — **1/1 complete**. Sprint C — **2/5 complete**: #260 (PR #316), #271 (PR #332). **Next: #294.**
 
 ---
 
@@ -24,7 +24,7 @@ Shipping #260 on top of today's foundation would produce a *persistent* backlog 
 ```
 Sprint A (unblock):     #95 ✅, #285 ✅, #226 ✅, #286 ✅, #61 ✅, #132 ✅, #56 ✅  ← COMPLETE
 Sprint B (trace):       #305 ✅  ← COMPLETE
-Sprint C (orchestrate): #260 → #271 → #294 → #264 → #291
+Sprint C (orchestrate): #260 ✅ → #271 ✅ → #294 → #264 → #291
 Sprint D (push telemetry): #306, #307
 Sprint E (scale):       #24, #18
 ```
@@ -33,11 +33,11 @@ Sprint E (scale):       #24, #18
 
 ### Dependency edges to enforce on the board
 
-- `#260 blocked-by #95` — backlog drain must call unified executor, not re-implement launch logic.
-- ~~`#271 blocked-by #285`~~ — #285 shipped; #271 unblocked.
-- `#294 blocked-by #95` — validation session reuses the unified execution path.
-- `#260 blocks #271, #294, #264` — retry/validation/self-execute all benefit from uniform overflow semantics; landing them first creates divergent queue behavior.
-- Inside Sprint C, `#294` and `#264` are independent of each other once `#260` lands — parallelize them instead of serializing the whole tier.
+- ~~`#260 blocked-by #95`~~ — #95 and #260 shipped.
+- ~~`#271 blocked-by #285`~~ — #285 and #271 shipped.
+- `#294 blocked-by #95` — validation session reuses the unified execution path. #95 shipped; #294 unblocked.
+- ~~`#260 blocks #271, #294, #264`~~ — #260 shipped. #294 and #264 now unblocked.
+- `#294` and `#264` are independent — parallelize them.
 
 ### Merge candidates (single PR surface)
 
@@ -95,8 +95,8 @@ Sprint E (scale):       #24, #18
 
 | # | Title | Why it's here |
 |---|-------|---------------|
-| #260 | Persistent task backlog (BACKLOG-001) | Async requests at capacity go to `status=queued` instead of 429. `SlotService.release_slot` publishes via Redis pub/sub (`PUBLISH slot:released:{agent}`) → any subscribing worker calls `BacklogService.drain_next` and claims the next row atomically. **Do not ship an in-process callback** — see multi-worker note below. |
-| #271 | Retry mechanism for scheduled executions | Pairs with #285 (need fast-fail first). Retries flow through backlog, not bypass it. Scheduler `date` trigger survives restart. |
+| ~~#260~~ ✅ | ~~Persistent task backlog (BACKLOG-001)~~ | **Shipped** in PR #316. SQLite-backed FIFO backlog with `status=queued`. Drain via `BacklogService.try_drain_one()` called on slot release. 24h stale expiry. Depth cap configurable per-agent. |
+| ~~#271~~ ✅ | ~~Retry mechanism for scheduled executions~~ | **Shipped** in PR #332. Configurable `max_retries` (0-5, default 1) and `retry_delay_seconds` (30-600, default 60). Rate-limited (429) failures use 2x delay. Retries persist to DB and survive scheduler restart via `_recover_pending_retries()`. New status: `pending_retry`. |
 | #294 | Business task validation (VALIDATE-001) | Clean-context auditor session after execution. Reuses unified executor (#95). Writes `business_status` separate from technical `status`. |
 | #264 | Self-execute during chat (SELF-EXEC-001) | Thin layer: detect source==target, flag `X-Self-Task`, optionally `inject_result` back into chat session. Uses backlog for overflow. |
 | #291 | Agent webhook triggers (WEBHOOK-001) | External → agent dispatch. HMAC-signed URL. **Distinct from existing process-engine webhooks** (`routers/triggers.py`) which trigger BPMN process executions. Before building, decide: reuse the process-engine trigger surface (lower surface area) or ship a parallel agent-scoped trigger surface (clearer mental model, but exactly the parallel-paths problem this plan exists to fix). Default recommendation: reuse, with an `agent_task` shortcut process. |
@@ -121,12 +121,12 @@ Retry and validation are **not new infrastructure** — they're just new trigger
 
 ### Considerations
 
-- **Backlog depth cap**: default 50, hard cap 200. Unbounded queues mask capacity problems.
-- **FIFO only for v1**: priority can come later. Don't ship two ordering systems before one is proven.
-- **Stale expiry**: 24h. Queued items older than that are unlikely to still be relevant.
-- **Retry should enqueue, not dispatch directly**: ensures retries respect capacity and the "one path" invariant.
+- ✅ **Backlog depth cap**: Shipped with configurable per-agent depth, default 50 (#260).
+- ✅ **FIFO only for v1**: Shipped. Priority deferred to v2 (#260).
+- ✅ **Stale expiry**: 24h expiry shipped. Maintenance task cleans expired entries (#260).
+- ✅ **Retry should enqueue, not dispatch directly**: Shipped — retries create new execution records and flow through the unified executor (#271).
 - **Validation session is an agent call to itself**: no new execution machinery needed — it's just a task with an auditor prompt. Keeps the surface small.
-- **Multi-worker drain coordination**: with multiple uvicorn workers, the worker that releases a slot may not hold the in-process queue. The release → drain handoff must go through Redis pub/sub (`PUBLISH slot:released:{agent}`) and any worker that subscribes can claim the next row via `SELECT … FOR UPDATE` / atomic UPDATE. Don't ship an in-process callback — it works in dev and silently stalls in production.
+- **Multi-worker drain coordination**: `BacklogService.try_drain_one()` uses atomic SQLite UPDATE with `queued_at` ordering. Single-writer model with cleanup service as fallback drainer.
 
 ---
 
@@ -192,7 +192,7 @@ WebSocket: in-process broadcast, except: pass, no replay
 Tracing: none. Heartbeat: 30s backend poll.
 ```
 
-### After Tier 0 + 1
+### After Tier 0 + 1 (CURRENT — April 2026)
 
 ```
 All entry paths ─► TaskExecutionService (single path)
@@ -212,23 +212,29 @@ APScheduler fire-and-forget, async status consumer
 WebSocket ◄── Redis Streams (XADD/XREAD) with replay
 ```
 
-### After Tier 2
+### After Tier 2 (partial — #260 + #271 shipped)
 
 ```
 request at capacity ─► try slot.acquire()
                         ├─ success → execute
-                        ├─ slot full → backlog.enqueue() → 202 queued
+                        ├─ slot full → backlog.enqueue() → 202 queued  ✅ #260
                         └─ backlog full → 429
 
-slot.release_slot() ── callback ──► backlog.drain_next()
-                                    ├─ atomic claim (SELECT + UPDATE)
-                                    └─ TaskExecutionService.execute_task_async()
+slot.release_slot() ── try_drain_one() ──► BacklogService
+                                           ├─ atomic claim (UPDATE with queued_at order)
+                                           └─ TaskExecutionService.execute_task_async()
+
+Scheduler failure ─► _maybe_schedule_retry()  ✅ #271
+                     ├─ check max_retries, attempt_number
+                     ├─ calculate delay (2x for 429)
+                     ├─ persist retry_scheduled_at to DB
+                     └─ APScheduler DateTrigger → _execute_retry()
 
 New triggers, all funnel into the same executor:
-  • Webhook         ─► schedule dispatch (HMAC-signed URL)
-  • Self-execute    ─► X-Self-Task, optional inject_result
-  • Retry           ─► new execution with retry_of_execution_id
-  • Validation      ─► auditor session, writes business_status
+  • Webhook         ─► schedule dispatch (HMAC-signed URL)        [#291 pending]
+  • Self-execute    ─► X-Self-Task, optional inject_result        [#264 pending]
+  • Retry           ─► new execution with retry_of_execution_id   ✅ #271
+  • Validation      ─► auditor session, writes business_status    [#294 pending]
   • Event sub       ─► (already funnels)
   • Fan-out         ─► (already funnels)
 ```
@@ -237,11 +243,12 @@ New triggers, all funnel into the same executor:
 
 ## What to do next on the board
 
-1. ~~Add `blocked-by` links: #260 ← #95, #271 ← #285, #294 ← #95.~~ #95 landed; #260 and #294 now have only the remaining Tier 0 dependencies (none direct from #95).
-2. ~~Bump #95 to `status-ready` with a "do this first, alone" note.~~ ✅ Done — PR pending merge.
-3. Merge-candidate tag on #226 + #61 (single PR for container process lifecycle, both wire backend cleanup into the existing agent terminate endpoint).
-4. ~~Merge-candidate tag on #305 + #286~~ — #286 shipped (PR #324). #305 can now build on the preserved error context.
-5. Confirm scope cuts for #260: FIFO-only v1, depth 50 default, 24h expiry. Defer priority levels and WebSocket completion pings to v2.
-6. Rescope #132 against `src/scheduler/service.py` — fire-and-forget already exists; the open work is the skip-on-overlap policy.
-7. Re-estimate #56 — at least 5–7 distinct call sites with three formulas; not "trivial."
+1. ~~Add `blocked-by` links: #260 ← #95, #271 ← #285, #294 ← #95.~~ All shipped.
+2. ~~Bump #95 to `status-ready` with a "do this first, alone" note.~~ ✅ Shipped.
+3. ~~Merge-candidate tag on #226 + #61~~ — Both shipped (PRs #323, #326).
+4. ~~Merge-candidate tag on #305 + #286~~ — Both shipped (PRs #324, #330).
+5. ~~Confirm scope cuts for #260: FIFO-only v1, depth 50 default, 24h expiry.~~ ✅ Shipped with these cuts in PR #316.
+6. ~~Rescope #132 against `src/scheduler/service.py`~~ — ✅ Shipped in PR #328.
+7. ~~Re-estimate #56~~ — ✅ Shipped in PR #329.
 8. Decide #291 direction: reuse process-engine triggers (recommended) vs. parallel agent-scoped trigger surface.
+9. **Next:** Pick up #294 (validation) or #264 (self-execute) — they can parallelize.

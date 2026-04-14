@@ -202,6 +202,7 @@ The test suite covers:
 - **Async Dispatch** (scheduler_tests/test_async_dispatch.py) - Fire-and-forget dispatch, DB polling, status overwrite guard (SCHED-ASYNC-001)
 - **Model Selection** (scheduler_tests/test_model_selection.py) - Schedule model configuration, fallback behavior
 - **Skipped Executions** (scheduler_tests/test_skipped_executions.py) - Recording skipped executions when max_instances=1
+- **Retry Mechanism** (scheduler_tests/test_retry.py) - Automatic retry for failed executions (RETRY-001)
 - **Database** (scheduler_tests/test_database.py) - Scheduler database operations
 - **Locking** (scheduler_tests/test_locking.py) - Redis lock acquisition and renewal
 - **Cron** (scheduler_tests/test_cron.py) - Cron expression parsing, next run calculation
@@ -256,9 +257,12 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 
 | Test File | Description | Tests Added |
 |-----------|-------------|-------------|
+| `scheduler_tests/test_retry.py` | Automatic retry mechanism for failed executions (RETRY-001, #271) | 18 tests |
 | `unit/test_otel_trace_logging.py` | Trace ID injection in logs for log-trace correlation (#305) | 3 tests |
 | `unit/test_context_used_formula.py` | Verify context_used equals input_tokens only (#56) | 3 tests |
 | `test_watchdog_unit.py` | Updated `_reconcile_orphaned_executions()` tests for 3-tuple return (now returns `confirmed_running_ids` set, #226) | 7 tests updated |
+
+**Scheduler Retry (RETRY-001, #271)**: Added `tests/scheduler_tests/test_retry.py` covering retry enums (`PENDING_RETRY`, `RETRY`), Schedule retry config fields (`max_retries`, `retry_delay_seconds`), execution retry tracking fields (`attempt_number`, `retry_of_execution_id`, `retry_scheduled_at`), and database operations (`schedule_retry`, `get_pending_retries`, `clear_retry_scheduled`, `get_original_execution_id`). Also updated `scheduler_tests/conftest.py` schema with RETRY-001 columns.
 
 **OTel Trace Logging (#305)**: Added `tests/unit/test_otel_trace_logging.py` to verify the JsonFormatter injects `trace_id` and `span_id` into log entries when an OpenTelemetry span is active. Tests verify correct format (32 hex for trace_id, 16 hex for span_id), absence of trace context when no span is active, and preservation of standard log fields. Part of RELIABILITY-002.
 
