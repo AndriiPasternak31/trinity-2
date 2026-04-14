@@ -53,6 +53,7 @@
 
 ## Integrations
 
+- [GitHub PAT Setup](integrations/github-pat-setup.md) — Personal Access Token configuration for GitHub features
 - [GitHub Sync](integrations/github-sync.md) — Source mode, working branch mode, branch selection
 - [Slack Integration](integrations/slack-integration.md) — Multi-agent channels, DMs, thread routing
 - [MCP Server](integrations/mcp-server.md) — 62 MCP tools, API keys, tool categories
