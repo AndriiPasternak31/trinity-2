@@ -3,7 +3,7 @@
 **Date:** 2026-04-13
 **Status:** Proposed sequencing for execution-time orchestration, event subscriptions, and multi-agent reliability.
 
-**Progress:** Sprint A — **#95 shipped**, **#286 shipped** (PR #324). Remaining Sprint A items (#285, #61, #226, #132, #56) unblocked.
+**Progress:** Sprint A — **4/6 shipped**: #95 (PR #320), #285 (PR #322), #226 (PR #323), #286 (PR #324). Remaining: #61, #132, #56.
 
 ---
 
@@ -22,8 +22,8 @@ Shipping #260 on top of today's foundation would produce a *persistent* backlog 
 ## Sequencing
 
 ```
-Sprint A (unblock):     #95 ✅ DONE, #286 ✅ DONE (PR #324)
-                        parallel: #285, #61, #226, #132, #56  ← unblocked
+Sprint A (unblock):     #95 ✅, #285 ✅, #226 ✅, #286 ✅
+                        remaining: #61, #132, #56
 Sprint B (trace):       #305
 Sprint C (orchestrate): #260 → #271 → #294 → #264 → #291
 Sprint D (push telemetry): #306, #307
@@ -35,14 +35,14 @@ Sprint E (scale):       #24, #18
 ### Dependency edges to enforce on the board
 
 - `#260 blocked-by #95` — backlog drain must call unified executor, not re-implement launch logic.
-- `#271 blocked-by #285` — don't auto-retry zombies.
+- ~~`#271 blocked-by #285`~~ — #285 shipped; #271 unblocked.
 - `#294 blocked-by #95` — validation session reuses the unified execution path.
 - `#260 blocks #271, #294, #264` — retry/validation/self-execute all benefit from uniform overflow semantics; landing them first creates divergent queue behavior.
 - Inside Sprint C, `#294` and `#264` are independent of each other once `#260` lands — parallelize them instead of serializing the whole tier.
 
 ### Merge candidates (single PR surface)
 
-- **#226 + #61**: container process lifecycle. Both wire backend cleanup into the existing agent-side process registry. Same files, same review surface. *Caveat:* #226 is a one-call-site TTL fix; #61 is a larger cleanup→terminate wiring. If review drags, split so the TTL fix isn't held hostage.
+- ~~**#226 + #61**~~: #226 shipped (PR #323). #61 remains — wire backend cleanup into agent's existing terminate endpoint.
 - **#305**: tracing. Can now build on #286's preserved error context (shipped in PR #324) — trace ID can be appended to the combined error message.
 
 ---
@@ -54,9 +54,9 @@ Sprint E (scale):       #24, #18
 | # | Title | Why it's here |
 |---|-------|---------------|
 | ~~#95~~ ✅ | ~~Route async task mode through `TaskExecutionService`~~ | **Shipped** on `feature/95-unified-async-executor`. `_execute_task_background()` deleted. Async `/task` now delegates to `execute_task(slot_already_held=True)` via `_run_async_task_with_persistence` thin wrapper. 429-upfront preserved via router-side pre-acquire. Service gained `parent_activity_id`, `extra_activity_details`, `slot_already_held` params. Sync+async share `_persist_chat_session` helper. E3 fix: `subscription_id` now snapshotted on pre-created execution record. |
-| #285 | Expired subscription tokens cause hour-long zombie executions | Root cause of most "stuck" complaints. Define a structured exit-code / event contract from `agent_server` so the backend fast-fails on auth errors without regex on stderr. |
+| ~~#285~~ ✅ | ~~Expired subscription tokens cause hour-long zombie executions~~ | **Shipped** in PR #322. Added stderr scanner in `TaskExecutionService` that detects auth failure patterns (`unauthorized`, `invalid.*token`, `expired.*credential`, etc.) and aborts early. Execution marked failed with `auth_failure` error type. No more hour-long zombies from expired tokens. |
 | #61 | Backend cleanup doesn't invoke agent termination | Agent already has SIGINT→SIGKILL in `docker/base-image/agent_server/services/process_registry.py:84-140`. Gap is that backend timeout/cleanup paths don't always call the agent's `/api/executions/{id}/terminate`. Wire the existing endpoint, don't build new PID infrastructure. |
-| #226 | Stale-slot cleanup ignores per-agent TTL on the standalone path | `acquire_slot()` already passes `timeout_seconds + buffer` to per-agent cleanup (`slot_service.py:102-105`). The standalone `cleanup_stale_slots()` (line 264) doesn't thread it through and falls back to `DEFAULT_SLOT_TTL_SECONDS`. One-call-site fix. |
+| ~~#226~~ ✅ | ~~Stale-slot cleanup ignores per-agent TTL on the standalone path~~ | **Shipped** in PR #323. `cleanup_stale_slots()` now accepts `agent_timeouts` dict and uses per-agent TTL (timeout + 5min buffer) instead of fixed 20-min default. Cleanup service passes `db.get_all_execution_timeouts()` to slot service. |
 | ~~#286~~ ✅ | ~~Cleanup overwrites real error~~ | **Shipped** in PR #324. Added `/api/executions/{id}/last-error` agent endpoint + `ProcessRegistry.get_last_error()` to extract error from log buffer. `_recover_execution()` now fetches original error before marking failed, combines with cleanup reason (`"{original}. Cleanup: {reason}"`), sanitizes via `sanitize_text()`, truncates to 2000 chars. No schema change needed — reuses existing `error` column with richer content. |
 | #132 | APScheduler skips triggers when `max_instances=1` reached | Scheduler is a separate microservice at `src/scheduler/` (port 8001), not in the backend. Fire-and-forget dispatch already exists (`src/scheduler/service.py:823`, `SCHED-ASYNC-001`). The remaining work is tuning the skip-on-overlap policy: bump `max_instances`, add coalescing, or evict the prior run via the new termination wiring (#61). Rescope before estimating. |
 | #56 | Consistent context usage tracking | ~35 call sites across `chat.py`, `fan_out.py`, `schedules.py`, `agent_client.py` with three formulas (`input+output`, `session.context_tokens`, direct `context_used` passthrough). Split the work: pick source-of-truth field + fix `agent_client.py` contract in Tier 0; migrate remaining callers in Tier 1. Not a single-day fix. |
