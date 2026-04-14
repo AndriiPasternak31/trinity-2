@@ -160,7 +160,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 *System:*
 - `system_agent.py` - System agent management
 
-**Services (`services/`)** — 22 service modules + Process Engine:
+**Services (`services/`)** — 23 service modules + Process Engine:
 
 *Core:*
 - `docker_service.py` - Docker container management
@@ -172,6 +172,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 *Execution & Scheduling:*
 - `task_execution_service.py` - Unified task execution lifecycle (slot mgmt, activity tracking, sanitization) (EXEC-024)
 - `slot_service.py` - Parallel execution slot management with dynamic TTL (CAPACITY-001)
+- `backlog_service.py` - Persistent SQLite-backed FIFO backlog for async tasks at capacity (BACKLOG-001)
 - `execution_queue.py` - Redis-based execution queueing
 - `scheduler_service.py` - APScheduler-based scheduling service
 - `cleanup_service.py` - Active watchdog reconciliation + passive stale recovery for executions, activities, and slots (CLEANUP-001, #129)
@@ -447,6 +448,7 @@ Services that run continuously in the backend process:
 | **Operator Queue Sync** | `operator_queue_service.py` | Polls running agents every 5s, reads `~/.trinity/operator-queue.json`, syncs to DB, writes responses back. (OPS-001) |
 | **Monitoring Service** | `monitoring_service.py` | Fleet-wide health checks on configurable interval. (MON-001) |
 | **Scheduler Service** | `scheduler_service.py` | APScheduler-based cron job execution. Async fire-and-forget with DB polling for status. |
+| **Backlog Maintenance** | `backlog_service.py` | Expires stale queued tasks (>24h) and drains orphans after restart. Runs every 60s. (BACKLOG-001) |
 
 ---
 
@@ -853,8 +855,14 @@ CREATE TABLE schedule_executions (
     error TEXT,
     triggered_by TEXT NOT NULL,
     model_used TEXT,                             -- MODEL-001: Which model was used
+    queued_at TEXT,                              -- BACKLOG-001: When task entered backlog
+    backlog_metadata TEXT,                       -- BACKLOG-001: JSON identity/request for drain replay
     FOREIGN KEY (schedule_id) REFERENCES agent_schedules(id)
 );
+
+-- BACKLOG-001: Partial index for cheap atomic FIFO claim
+CREATE INDEX idx_executions_queued ON schedule_executions(agent_name, queued_at)
+    WHERE status = 'queued';
 ```
 
 **agent_activities:** (Phase 9.7 - Unified Activity Stream)
