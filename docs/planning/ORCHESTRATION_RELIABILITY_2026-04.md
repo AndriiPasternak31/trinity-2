@@ -3,7 +3,7 @@
 **Date:** 2026-04-13
 **Status:** Proposed sequencing for execution-time orchestration, event subscriptions, and multi-agent reliability.
 
-**Progress:** Sprint A — **#95 shipped** (PR pending on `feature/95-unified-async-executor`). Remaining Sprint A items (#285, #61, #226, #286, #132, #56) unblocked.
+**Progress:** Sprint A — **#95 shipped**, **#286 shipped** (PR #324). Remaining Sprint A items (#285, #61, #226, #132, #56) unblocked.
 
 ---
 
@@ -22,8 +22,8 @@ Shipping #260 on top of today's foundation would produce a *persistent* backlog 
 ## Sequencing
 
 ```
-Sprint A (unblock):     #95 ✅ DONE (PR pending)
-                        parallel: #285, #61, #226, #286, #132, #56  ← unblocked
+Sprint A (unblock):     #95 ✅ DONE, #286 ✅ DONE (PR #324)
+                        parallel: #285, #61, #226, #132, #56  ← unblocked
 Sprint B (trace):       #305
 Sprint C (orchestrate): #260 → #271 → #294 → #264 → #291
 Sprint D (push telemetry): #306, #307
@@ -43,7 +43,7 @@ Sprint E (scale):       #24, #18
 ### Merge candidates (single PR surface)
 
 - **#226 + #61**: container process lifecycle. Both wire backend cleanup into the existing agent-side process registry. Same files, same review surface. *Caveat:* #226 is a one-call-site TTL fix; #61 is a larger cleanup→terminate wiring. If review drags, split so the TTL fix isn't held hostage.
-- **#305 + #286**: tracing + preserved error context. Both change how we record "what went wrong"; landing together lets the `cleanup_reason` field carry the trace ID.
+- **#305**: tracing. Can now build on #286's preserved error context (shipped in PR #324) — trace ID can be appended to the combined error message.
 
 ---
 
@@ -57,7 +57,7 @@ Sprint E (scale):       #24, #18
 | #285 | Expired subscription tokens cause hour-long zombie executions | Root cause of most "stuck" complaints. Define a structured exit-code / event contract from `agent_server` so the backend fast-fails on auth errors without regex on stderr. |
 | #61 | Backend cleanup doesn't invoke agent termination | Agent already has SIGINT→SIGKILL in `docker/base-image/agent_server/services/process_registry.py:84-140`. Gap is that backend timeout/cleanup paths don't always call the agent's `/api/executions/{id}/terminate`. Wire the existing endpoint, don't build new PID infrastructure. |
 | #226 | Stale-slot cleanup ignores per-agent TTL on the standalone path | `acquire_slot()` already passes `timeout_seconds + buffer` to per-agent cleanup (`slot_service.py:102-105`). The standalone `cleanup_stale_slots()` (line 264) doesn't thread it through and falls back to `DEFAULT_SLOT_TTL_SECONDS`. One-call-site fix. |
-| #286 | Cleanup overwrites real error | Add `cleanup_reason` column distinct from `error`. Schema change touches **all three** kill paths in `cleanup_service.py` (stale-slot, watchdog reconcile, orphan recovery) plus the execution-history UI. Bigger surface than it looks. |
+| ~~#286~~ ✅ | ~~Cleanup overwrites real error~~ | **Shipped** in PR #324. Added `/api/executions/{id}/last-error` agent endpoint + `ProcessRegistry.get_last_error()` to extract error from log buffer. `_recover_execution()` now fetches original error before marking failed, combines with cleanup reason (`"{original}. Cleanup: {reason}"`), sanitizes via `sanitize_text()`, truncates to 2000 chars. No schema change needed — reuses existing `error` column with richer content. |
 | #132 | APScheduler skips triggers when `max_instances=1` reached | Scheduler is a separate microservice at `src/scheduler/` (port 8001), not in the backend. Fire-and-forget dispatch already exists (`src/scheduler/service.py:823`, `SCHED-ASYNC-001`). The remaining work is tuning the skip-on-overlap policy: bump `max_instances`, add coalescing, or evict the prior run via the new termination wiring (#61). Rescope before estimating. |
 | #56 | Consistent context usage tracking | ~35 call sites across `chat.py`, `fan_out.py`, `schedules.py`, `agent_client.py` with three formulas (`input+output`, `session.context_tokens`, direct `context_used` passthrough). Split the work: pick source-of-truth field + fix `agent_client.py` contract in Tier 0; migrate remaining callers in Tier 1. Not a single-day fix. |
 
@@ -65,13 +65,13 @@ Sprint E (scale):       #24, #18
 
 **Before:** Two execution code paths (sync + async) with duplicated slot/activity/sanitization logic. Backend cleanup doesn't call the agent's existing terminate endpoint, leaving processes running. Cleanup overwrites diagnostic data. Scheduler skips triggers silently when prior runs overlap.
 
-**After:** Single `TaskExecutionService` funnel. Backend timeout calls agent terminate → existing SIGINT→SIGKILL path runs. Slot TTL comes from per-slot metadata on every cleanup path. Cleanup preserves original error via new `cleanup_reason` column. Scheduler skip-on-overlap is replaced with eviction or coalescing.
+**After:** Single `TaskExecutionService` funnel. Backend timeout calls agent terminate → existing SIGINT→SIGKILL path runs. Slot TTL comes from per-slot metadata on every cleanup path. Cleanup preserves original error by fetching from agent log buffer and combining with cleanup reason in `error` field (no schema change). Scheduler skip-on-overlap is replaced with eviction or coalescing.
 
 ### Verification gates before exiting Tier 0
 
 - ✅ Grep for `_execute_task_background` returns zero hits outside docs (shipped in #95). Shadow-run deemed unnecessary for the async-path refactor: sync-mode already delegated to `execute_task()` pre-#95, and public/internal async paths had been using the same `execute_task(execution_id=...)` pattern in production; the refactor is a code-path unification rather than a semantics change. Parity tests cover the two observable invariants (429-upfront, `parallel_mode` activity flag).
-- Integration test: force a 5-second timeout on a real agent task, assert (a) zero orphan `claude` processes inside the container, (b) execution row has `cleanup_reason` populated and `error` preserved, (c) slot is released within TTL+buffer.
-- Execution history rows show distinct `error` and `cleanup_reason` fields across all three cleanup paths.
+- Integration test: force a 5-second timeout on a real agent task, assert (a) zero orphan `claude` processes inside the container, (b) execution row `error` field contains both original error context and cleanup reason (combined format), (c) slot is released within TTL+buffer.
+- ✅ Execution `error` field now contains combined message: original error from agent log buffer + cleanup reason. Sanitized and truncated to 2000 chars (#286 shipped).
 - Scheduler log has zero "max_instances reached → skipped" events across a 24h soak.
 
 ---
@@ -187,7 +187,7 @@ Schedule         ─► APScheduler ─► HTTP /task ─► poll status up-to-1
 Event emit       ─► SQLite row ─► trigger matching subs
 Webhook          ─── none ───
 
-Slot ZSET (fixed 20-min TTL) ◄── cleanup overwrites errors
+Slot ZSET (fixed 20-min TTL) ◄── cleanup now preserves errors (#286 shipped)
 Container (orphaned claude PID accumulates on timeout)
 WebSocket: in-process broadcast, except: pass, no replay
 Tracing: none. Heartbeat: 30s backend poll.
@@ -208,7 +208,7 @@ agent container ── heartbeat push 5s ──► Redis (TTL 15s)
                 ── OTel trace ──► collector
 
 Slot ZSET (per-agent TTL from metadata)
-cleanup_service preserves error + cleanup_reason + kills PID
+cleanup_service preserves original error (fetched from agent log buffer) + cleanup reason in combined `error` field
 APScheduler fire-and-forget, async status consumer
 WebSocket ◄── Redis Streams (XADD/XREAD) with replay
 ```
@@ -241,7 +241,7 @@ New triggers, all funnel into the same executor:
 1. ~~Add `blocked-by` links: #260 ← #95, #271 ← #285, #294 ← #95.~~ #95 landed; #260 and #294 now have only the remaining Tier 0 dependencies (none direct from #95).
 2. ~~Bump #95 to `status-ready` with a "do this first, alone" note.~~ ✅ Done — PR pending merge.
 3. Merge-candidate tag on #226 + #61 (single PR for container process lifecycle, both wire backend cleanup into the existing agent terminate endpoint).
-4. Merge-candidate tag on #305 + #286 (trace ID in `cleanup_reason`).
+4. ~~Merge-candidate tag on #305 + #286~~ — #286 shipped (PR #324). #305 can now build on the preserved error context.
 5. Confirm scope cuts for #260: FIFO-only v1, depth 50 default, 24h expiry. Defer priority levels and WebSocket completion pings to v2.
 6. Rescope #132 against `src/scheduler/service.py` — fire-and-forget already exists; the open work is the skip-on-overlap policy.
 7. Re-estimate #56 — at least 5–7 distinct call sites with three formulas; not "trivial."
