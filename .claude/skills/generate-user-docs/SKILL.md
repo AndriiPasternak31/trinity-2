@@ -1,7 +1,6 @@
 ---
 name: generate-user-docs
 description: Generate and update user documentation from code, feature flows, and recent changes into docs/user-docs/
-automation: gated
 allowed-tools:
   - Read
   - Write

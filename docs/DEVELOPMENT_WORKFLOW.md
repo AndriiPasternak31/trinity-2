@@ -459,4 +459,7 @@ Skills in `.claude/skills/` define HOW to approach specific tasks:
 - [ ] `/validate-architecture` — check codebase against architectural invariants
 - [ ] `/validate-schema` — check schema.py vs migrations.py vs architecture.md for drift
 - [ ] `/validate-config` — check env vars across docker-compose, .env.example, and code
-- [ ] `/groom` — audit backlog, rank issues, review priorities
+- [ ] `/generate-user-docs` — regenerate user documentation from code
+- [ ] `/groom` — audit backlog, rank issues, review priorities (manual, requires human review)
+
+> **Automated schedules**: The validation tasks and `/generate-user-docs` run automatically on the `trinity` dev agent (Mon-Thu 9:00 UTC). `/groom` remains manual as it requires human judgment for prioritization decisions.
