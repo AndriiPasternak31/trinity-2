@@ -24,7 +24,12 @@ from services.task_execution_service import (
 )
 from database import db
 from utils.credential_sanitizer import sanitize_execution_log, sanitize_response
-from services.platform_prompt_service import get_platform_system_prompt
+from services.platform_prompt_service import (
+    ExecutionContext,
+    compose_system_prompt,
+    get_platform_system_prompt,
+    is_execution_context_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -247,8 +252,24 @@ async def chat_with_agent(
         payload = {"message": request.message, "stream": False}
         if request.model:
             payload["model"] = request.model
-        # Inject platform instructions into every chat request
-        payload["system_prompt"] = get_platform_system_prompt()
+        # Inject platform instructions + execution context (#171) into every chat request.
+        try:
+            exec_ctx = ExecutionContext(
+                agent_name=name,
+                mode="chat",
+                triggered_by=triggered_by,
+                source_user_email=current_user.email or current_user.username,
+                source_agent_name=x_source_agent,
+                source_mcp_key_name=x_mcp_key_name,
+                model=request.model,
+            )
+            payload["system_prompt"] = compose_system_prompt(
+                execution_context=exec_ctx,
+                include_execution_context=is_execution_context_enabled(),
+            )
+        except Exception as e:
+            logger.warning(f"[Chat] execution context build failed, falling back: {e}")
+            payload["system_prompt"] = get_platform_system_prompt()
         # Pass execution ID so agent registers process under the same ID (enables termination)
         if task_execution_id:
             payload["execution_id"] = task_execution_id

@@ -182,6 +182,22 @@ class InternalTaskExecutionRequest(BaseModel):
     allowed_tools: Optional[List[str]] = None
     execution_id: Optional[str] = None
     async_mode: bool = False
+    # #171: optional schedule metadata surfaced in the agent's execution context block.
+    schedule_name: Optional[str] = None
+    schedule_cron: Optional[str] = None
+    schedule_next_run: Optional[str] = None
+    attempt: Optional[int] = None
+
+
+def _schedule_context_from(request: "InternalTaskExecutionRequest") -> Optional[Dict]:
+    """Build the schedule_context dict passed to TaskExecutionService, or None."""
+    if not (request.schedule_name or request.schedule_cron or request.schedule_next_run):
+        return None
+    return {
+        "name": request.schedule_name,
+        "cron": request.schedule_cron,
+        "next_run": request.schedule_next_run,
+    }
 
 
 @router.post("/execute-task")
@@ -224,6 +240,8 @@ async def execute_task_internal(request: InternalTaskExecutionRequest):
             timeout_seconds=request.timeout_seconds,
             allowed_tools=request.allowed_tools,
             execution_id=request.execution_id,
+            schedule_context=_schedule_context_from(request),
+            attempt=request.attempt,
         )
 
         return {
@@ -262,6 +280,8 @@ async def _execute_task_internal_background(task_service, request: InternalTaskE
             timeout_seconds=request.timeout_seconds,
             allowed_tools=request.allowed_tools,
             execution_id=request.execution_id,
+            schedule_context=_schedule_context_from(request),
+            attempt=request.attempt,
         )
         logger.info(
             f"Async task completed for {request.agent_name}: "
