@@ -1055,16 +1055,27 @@ The Process Engine supports six step types:
 ## 20. Security & Compliance
 
 ### 20.1 Audit Trail System (SEC-001)
-- **Status**: ⏳ Pending Implementation
+- **Status**: 🚧 Phase 1 implemented (2026-04-14, Issue #20). Phases 2–4 pending.
 - **Requirement ID**: SEC-001
 - **Priority**: HIGH
 - **Description**: Comprehensive audit logging for all user and agent actions with full actor attribution. Enables investigation, compliance reporting, and accountability.
 - **Key Features**:
-  - Append-only `audit_log` table with immutability triggers
+  - Append-only `audit_log` table with immutability triggers (UPDATE blocked unconditionally; DELETE blocked within 365-day retention)
   - Full actor attribution (user, agent, MCP client, system)
   - MCP API key tracking per tool call
-  - Hash chain for tamper evidence (optional compliance mode)
-  - Query API with filters and export (CSV/JSON)
+  - Hash chain for tamper evidence (Phase 4 — code present but dormant in Phase 1)
+  - Query API with filters, pagination, and stats aggregation
+  - Distinct from Process Engine audit (`audit_entries`) — coexist intentionally
+- **Phase 1 Delivery (#20, this PR)**:
+  - `audit_log` table + indexes + immutability triggers (`db/schema.py`, migration #31)
+  - `PlatformAuditOperations` (`db/audit.py`)
+  - `PlatformAuditService` with global instance (`services/platform_audit_service.py`)
+  - Admin query API: `GET /api/audit-log`, `GET /api/audit-log/stats`, `GET /api/audit-log/{event_id}`
+  - 29 unit tests (schema, query, filters, pagination, immutability, service actor resolution, error handling, lifecycle integration shape)
+- **Phase 2a Delivery (#20, same PR — agent lifecycle smoke test)**:
+  - `routers/agents.py` emits audit rows after successful create / start / stop / delete
+  - 5 integration-shape tests asserting the exact field layout produced by the handlers
+  - End-to-end verifiable: UI agent action → row appears in `/api/audit-log`
 - **Event Categories**:
   - `AGENT_LIFECYCLE`: create, start, stop, delete, recreate
   - `EXECUTION`: task_triggered, chat_started, schedule_triggered
@@ -1076,11 +1087,13 @@ The Process Engine supports six step types:
   - `GIT_OPERATION`: sync, pull, init, commit
   - `SYSTEM`: startup, shutdown, emergency_stop
 - **Architecture**: `docs/requirements/AUDIT_TRAIL_ARCHITECTURE.md`
+- **Flow**: `docs/memory/feature-flows/audit-trail.md`
 - **Implementation Phases**:
-  1. Core infrastructure (table, service, API)
-  2. Backend integration (lifecycle, auth, permissions)
-  3. MCP integration (tool call audit)
-  4. Advanced features (hash chain, export, retention)
+  1. ✅ Core infrastructure (table, service, db ops, API, tests) — landed in this PR
+  2a. ✅ Agent lifecycle integration (create / start / stop / delete) — landed in this PR as smoke test
+  2b. ⏳ Remaining backend integration (auth, sharing, settings, credentials, rename, request_id middleware)
+  3. ⏳ MCP integration (TypeScript audit logging for tool calls)
+  4. ⏳ Advanced features (hash chain verification, CSV/JSON export, retention automation, admin UI)
 
 ### 20.2 Execution Origin Tracking (AUDIT-001)
 - **Status**: ⏳ Pending Implementation
