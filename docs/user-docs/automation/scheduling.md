@@ -55,11 +55,52 @@ Cron-based automation for agents using APScheduler. Schedule recurring tasks wit
 | `/api/agents/{name}/schedules/{id}/trigger` | POST | Manual trigger |
 | `/api/agents/{name}/schedules/{id}/executions` | GET | Execution history |
 
+## Automatic Retry
+
+Failed executions can automatically retry with configurable delay and attempt limits.
+
+### Configuration
+
+| Field | Default | Range | Description |
+|-------|---------|-------|-------------|
+| `max_retries` | 1 | 0-5 | Max retry attempts (0 = disabled) |
+| `retry_delay_seconds` | 60 | 30-600 | Delay between retries |
+
+New schedules default to 1 retry. Set `max_retries: 0` to disable.
+
+### Retry Behavior
+
+1. Execution fails (error or timeout)
+2. If `max_retries > 0` and attempts remain, scheduler waits `retry_delay_seconds`
+3. Rate-limit errors (429) use 2x delay, capped at 300 seconds
+4. Retry creates a new execution record linked to the original
+5. Process repeats until success or max retries exhausted
+
+### Execution Grouping
+
+Retries are linked to their original execution:
+
+| Field | Description |
+|-------|-------------|
+| `attempt_number` | Which attempt (1 = first try, 2 = first retry) |
+| `retry_of_execution_id` | Links to original execution |
+
+The execution list groups retries under their parent execution for clarity.
+
+### Statuses
+
+| Status | Meaning |
+|--------|---------|
+| `pending_retry` | Failed, retry scheduled but not yet fired |
+| `running` | Retry in progress |
+| `success` / `failed` | Final outcome |
+
 ## Limitations
 
 - Execution timeout is per-agent configurable (default 15 minutes, max 2 hours).
 - Parallel execution is controlled by per-agent capacity slots (default 3).
 - Missed jobs are only caught up within the 1-hour grace window.
+- Retries count against the agent's parallel capacity slots.
 
 ## See Also
 

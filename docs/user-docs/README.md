@@ -17,6 +17,7 @@
 - [Agent Files](agents/agent-files.md) — File browser, virtual filesystem, shared folders
 - [Agent Logs](agents/agent-logs.md) — Log viewing, telemetry, Vector aggregation
 - [Agent Configuration](agents/agent-configuration.md) — Autonomy, read-only, resources, timeout
+- [Agent Guardrails](agents/agent-guardrails.md) — Deterministic safety enforcement, bash deny-lists, credential protection
 
 ## Credentials
 
