@@ -139,6 +139,7 @@ The test suite covers:
 - **Agent Chat** (test_agent_chat.py) - Message sending, history, sessions, in-memory activity, model selection
 - **Agent Files** (test_agent_files.py) - File browser, downloads
 - **Agent Sharing** (test_agent_sharing.py) - Share/unshare agents, whitelist auto-add with `default_role="user"` (#314)
+- **Channel Access Control** (test_channel_access_control.py) - Per-agent access policy (require_email, open_access, group_auth_mode), access requests inbox (#311) [SMOKE + Agent]
 - **Agent Permissions** (test_agent_permissions.py) - Agent-to-agent permission CRUD, defaults, cascade delete (Req 9.10)
 - **Agent Git** (test_agent_git.py) - Git sync operations
 - **Agent Metrics** (test_agent_metrics.py) - Custom metrics endpoint (Req 9.9)
@@ -252,6 +253,22 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 - **Healthy**: >90% pass rate, 0 critical failures
 - **Warning**: 75-90% pass rate, <5 failures
 - **Critical**: <75% pass rate or >5 failures
+
+## Recent Test Additions (2026-04-15)
+
+| Test File | Description | Tests Added |
+|-----------|-------------|-------------|
+| `test_channel_access_control.py` | Added `group_auth_mode` field tests for Telegram group authentication (#311) | 3 tests added, 4 tests updated |
+
+**Group Auth Mode for Telegram Groups**: Updated `test_channel_access_control.py` to test the new `group_auth_mode` field on access policy:
+- `test_get_policy_returns_shape` — asserts `group_auth_mode` field is returned as string
+- `test_get_policy_default_values` — verifies default is `"none"`
+- `test_put_policy_sets_group_auth_mode_any_verified` — setting to `"any_verified"` persists
+- `test_put_policy_group_auth_mode_none` — can reset back to `"none"`
+- `test_put_policy_invalid_group_auth_mode_falls_back_to_none` — invalid values silently fall back to `"none"` for backwards compatibility
+- Updated existing PUT tests to verify `group_auth_mode` defaults to `"none"` when not provided
+
+---
 
 ## Recent Test Additions (2026-04-14)
 

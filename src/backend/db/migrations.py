@@ -1257,6 +1257,37 @@ def _migrate_validation_support(cursor, conn):
     conn.commit()
 
 
+def _migrate_group_auth_mode(cursor, conn):
+    """Add group_auth_mode to agent_ownership and verified_by_email to telegram_group_configs.
+
+    Supports: 'none' (default, current behavior), 'any_verified' (at least one verified member).
+    """
+    # Add group_auth_mode to agent_ownership
+    cursor.execute("PRAGMA table_info(agent_ownership)")
+    ao_cols = {row[1] for row in cursor.fetchall()}
+    if "group_auth_mode" not in ao_cols:
+        cursor.execute(
+            "ALTER TABLE agent_ownership ADD COLUMN group_auth_mode TEXT DEFAULT 'none'"
+        )
+        logger.info("Added group_auth_mode column to agent_ownership")
+
+    # Add verified_by_email to telegram_group_configs
+    cursor.execute("PRAGMA table_info(telegram_group_configs)")
+    tg_cols = {row[1] for row in cursor.fetchall()}
+    if "verified_by_email" not in tg_cols:
+        cursor.execute(
+            "ALTER TABLE telegram_group_configs ADD COLUMN verified_by_email TEXT"
+        )
+        logger.info("Added verified_by_email column to telegram_group_configs")
+    if "verified_at" not in tg_cols:
+        cursor.execute(
+            "ALTER TABLE telegram_group_configs ADD COLUMN verified_at TEXT"
+        )
+        logger.info("Added verified_at column to telegram_group_configs")
+
+    conn.commit()
+
+
 # Ordered list of all migrations. Defined at module level (after all _migrate_* functions)
 # so run_all_migrations and the health check can both reference it.
 # IMPORTANT: append-only — never reorder or remove entries.
@@ -1372,4 +1403,5 @@ MIGRATIONS = [
     ("scheduler_retry_support", _migrate_scheduler_retry_support),
     ("validation_support", _migrate_validation_support),
     ("audit_log_table", _migrate_audit_log_table),
+    ("group_auth_mode", _migrate_group_auth_mode),
 ]

@@ -272,6 +272,62 @@ class TelegramAdapter(ChannelAdapter):
             parse_mode="HTML",
         )
 
+    # =========================================================================
+    # Group Authentication (group_auth_mode support)
+    # =========================================================================
+
+    async def is_group_verified(
+        self,
+        message: NormalizedMessage,
+        agent_name: str,
+    ) -> bool:
+        """Check if this Telegram group has at least one verified member."""
+        binding = db.get_telegram_binding(agent_name)
+        if not binding:
+            return True  # No binding = allow (shouldn't happen)
+        return db.is_telegram_group_verified(binding["id"], message.channel_id)
+
+    async def set_group_verified(
+        self,
+        message: NormalizedMessage,
+        agent_name: str,
+        email: str,
+    ) -> None:
+        """Mark this Telegram group as verified by the given email."""
+        binding = db.get_telegram_binding(agent_name)
+        if not binding:
+            return
+        db.set_telegram_group_verified(binding["id"], message.channel_id, email)
+        logger.info(
+            f"Telegram group {message.channel_id} verified by {email} "
+            f"for agent {agent_name}"
+        )
+
+    async def prompt_group_auth(
+        self,
+        message: NormalizedMessage,
+        agent_name: str,
+        bot_token: Optional[str] = None,
+    ) -> None:
+        """Prompt for group verification with Telegram-specific instructions."""
+        if not bot_token:
+            bot_token = db.get_telegram_bot_token(agent_name)
+        if not bot_token:
+            return
+        text = (
+            "🔒 This agent requires at least one verified member in the group.\n\n"
+            "Send <code>/login your@email.com</code> to verify your email, "
+            "then reply with <code>/login 123456</code> to complete verification.\n\n"
+            "Once verified, everyone in this group can chat with me."
+        )
+        await self._send_message(
+            bot_token=bot_token,
+            chat_id=message.channel_id,
+            text=text,
+            reply_to_message_id=message.thread_id,
+            parse_mode="HTML",
+        )
+
     async def get_agent_name(self, message: NormalizedMessage) -> Optional[str]:
         """Resolve which agent handles this message (set by transport layer)."""
         agent_name = message.metadata.get("agent_name")

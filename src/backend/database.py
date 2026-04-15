@@ -355,8 +355,10 @@ class DatabaseManager:
     def get_access_policy(self, agent_name: str):
         return self._agent_ops.get_access_policy(agent_name)
 
-    def set_access_policy(self, agent_name: str, require_email: bool, open_access: bool):
-        return self._agent_ops.set_access_policy(agent_name, require_email, open_access)
+    def set_access_policy(
+        self, agent_name: str, require_email: bool, open_access: bool, group_auth_mode: str = "none"
+    ):
+        return self._agent_ops.set_access_policy(agent_name, require_email, open_access, group_auth_mode)
 
     def email_has_agent_access(self, agent_name: str, email: str):
         return self._agent_ops.email_has_agent_access(agent_name, email)
@@ -1466,6 +1468,20 @@ class DatabaseManager:
 
     def deactivate_telegram_group_config(self, binding_id, chat_id):
         return self._telegram_channel_ops.deactivate_group_config(binding_id, chat_id)
+
+    # Telegram Group Verification (group_auth_mode support)
+
+    def is_telegram_group_verified(self, binding_id, chat_id):
+        return self._telegram_channel_ops.is_group_verified(binding_id, chat_id)
+
+    def get_telegram_group_verified_email(self, binding_id, chat_id):
+        return self._telegram_channel_ops.get_group_verified_email(binding_id, chat_id)
+
+    def set_telegram_group_verified(self, binding_id, chat_id, email):
+        return self._telegram_channel_ops.set_group_verified(binding_id, chat_id, email)
+
+    def clear_telegram_group_verification(self, binding_id, chat_id):
+        return self._telegram_channel_ops.clear_group_verification(binding_id, chat_id)
 
     # =========================================================================
     # Nevermined Payment Integration (delegated to db/nevermined.py) - NVM-001

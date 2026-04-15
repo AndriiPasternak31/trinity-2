@@ -120,6 +120,17 @@ When a bot joins a Telegram group, Trinity automatically creates a group config.
 3. Re-add the bot to the group
 4. Wait a few seconds and send a test message
 
+### Group Authentication
+
+By default, anyone in a group can chat with the bot. To require at least one verified member before the bot responds:
+
+1. Go to Agent Detail -> **Sharing** tab -> **Channel Access Policy**
+2. Set **Group auth mode** to "Any verified member"
+3. When someone @mentions the bot in an unverified group, the bot will prompt for verification
+4. Once any group member completes `/login`, the group is unlocked for everyone
+
+This is useful for agents that handle sensitive information or have usage costs. The verifying user's email is recorded, and all subsequent messages from any group member are allowed.
+
 ### Welcome Messages
 
 Enable welcome messages to greet users who join the group:

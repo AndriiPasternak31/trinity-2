@@ -22,11 +22,13 @@ router = APIRouter(prefix="/api/agents", tags=["sharing"])
 class AccessPolicy(BaseModel):
     require_email: bool
     open_access: bool
+    group_auth_mode: str = "none"  # 'none' or 'any_verified'
 
 
 class AccessPolicyUpdate(BaseModel):
     require_email: bool
     open_access: bool
+    group_auth_mode: str = "none"  # 'none' or 'any_verified'
 
 
 class AccessRequest(BaseModel):
@@ -154,7 +156,12 @@ async def update_access_policy_endpoint(
     current_user: CurrentUser,
 ):
     """Update the per-agent channel access policy (owner-only)."""
-    db.set_access_policy(agent_name, update.require_email, update.open_access)
+    db.set_access_policy(
+        agent_name,
+        update.require_email,
+        update.open_access,
+        update.group_auth_mode,
+    )
     return AccessPolicy(**db.get_access_policy(agent_name))
 
 
