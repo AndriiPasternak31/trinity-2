@@ -1,17 +1,17 @@
 # Abilities Plugin: CLI Credential Sharing Requirements
 
 **Related issue**: abilityai/trinity#259
-**Target repo**: [abilityai/abilities](https://github.com/abilityai/abilities) (trinity-onboard plugin)
+**Target repo**: [abilityai/abilities](https://github.com/abilityai/abilities) (trinity plugin)
 
 ## Summary
 
-Update the `trinity-onboard` plugin to detect and use credentials from the Trinity CLI (`~/.trinity/config.json`) instead of requiring manual configuration. Deploy should delegate to `trinity deploy .` instead of reimplementing tar+upload via MCP.
+Update the `trinity` plugin to detect and use credentials from the Trinity CLI (`~/.trinity/config.json`) instead of requiring manual configuration. Deploy should delegate to `trinity deploy .` instead of reimplementing tar+upload via MCP.
 
 ## Requirements
 
 ### 1. Credential resolution from CLI profile
 
-**File**: `trinity-onboard/SKILL.md` (onboard skill)
+**File**: `trinity/SKILL.md` (onboard skill)
 
 When the plugin needs Trinity credentials (instance URL, API key), resolve in this order:
 
@@ -27,7 +27,7 @@ When the plugin needs Trinity credentials (instance URL, API key), resolve in th
 
 ### 2. Deploy via CLI command
 
-**File**: `trinity-onboard/SKILL.md` (onboard skill, deploy step)
+**File**: `trinity/SKILL.md` (onboard skill, deploy step)
 
 The deploy step should call `trinity deploy .` (the CLI command) instead of:
 - Manually tar+base64 encoding the directory
@@ -68,7 +68,7 @@ If `~/.trinity/config.json` has `mcp_api_key` in the active profile (provisioned
 
 ## Acceptance Criteria
 
-- [ ] `trinity-onboard:onboard` detects `~/.trinity/config.json` and skips auth prompts when profile exists
+- [ ] `trinity:onboard` detects `~/.trinity/config.json` and skips auth prompts when profile exists
 - [ ] Deploy step calls `trinity deploy .` when CLI is installed
 - [ ] Falls back to MCP deploy when CLI is not available
 - [ ] `.trinity-remote.yaml` is read/written consistently with CLI behavior

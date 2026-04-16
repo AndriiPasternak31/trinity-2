@@ -96,9 +96,10 @@ Replace `YOUR_INSTANCE` with your assigned instance (`us14` or `us15`). For a se
 **Step 3: Deploy**
 
 ```
-/trinity-onboard
+/plugin install trinity@abilityai
+/trinity:onboard
 ```
-This pushes your local agent to Trinity as a remote container. Use `/trinity-sync` for ongoing git-based synchronization.
+This pushes your local agent to Trinity as a remote container. Use `/trinity:sync` for ongoing git-based synchronization.
 
 **Best practice:** Always deploy agents through a local Claude Code agent connected to Trinity via MCP — not by manually creating agents in the UI. This gives you the twin-agent workflow (local for development, remote for autonomous execution).
 
@@ -108,9 +109,9 @@ See `docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md` for full agent structure requiremen
 
 ## Abilities SDK (Plugin Marketplace)
 
-The Abilities SDK gives your agents memory, playbooks, deployment tools, and more - 7 packages, 30 skills.
+The Abilities SDK gives your agents memory, playbooks, deployment tools, and more — 5 focused plugins covering the full agent lifecycle.
 
-**Repository:** https://github.com/Abilityai/abilities
+**Repository:** https://github.com/abilityai/abilities
 
 **Install in Claude Code:**
 ```
@@ -119,25 +120,21 @@ The Abilities SDK gives your agents memory, playbooks, deployment tools, and mor
 
 **What you get after installing:**
 
-| Package | What It Does |
-|---------|-------------|
-| **json-memory** | Structured JSON memory - agents remember across sessions |
-| **brain-memory** | Zettelkasten knowledge base - agents build long-term knowledge |
-| **file-indexing** | File system awareness - agents know what files exist |
-| **playbook-builder** | Create, capture, and iterate on structured playbooks |
-| **project-management-kit** | Multi-session project organization |
-| **utilities** | Conversation saving and exports |
-| **trinity-onboard** | Full deployment lifecycle to Trinity - onboard, sync, schedule, dashboards |
+| Plugin | What It Does |
+|--------|-------------|
+| **create-agent** | 12 wizards for agent scaffolding (prospector, chief-of-staff, webmaster, recon, receptionist, ghostwriter, kb-agent, website, custom, clone, adjust) |
+| **agent-dev** | Add skills, memory systems (JSON, Zettelkasten, file-index), GitHub backlog workflow, autonomous work loops |
+| **trinity** | Deploy to Trinity platform: connect, onboard, sync, schedules |
+| **dev-methodology** | 14 skills for implementation, testing, security, and PR validation |
+| **utilities** | Ops: incident investigation, safe deployment, Docker ops, batch processing |
 
 **Key commands after install:**
-- `/setup-memory` - Initialize agent memory
-- `/setup-brain` - Initialize knowledge base
-- `/setup-index` - Initialize file index
-- `/create-playbook` - Build a new playbook from scratch
-- `/save-playbook` - Capture a working workflow as a playbook
-- `/trinity-onboard` - Deploy agent to Trinity
-- `/trinity-sync` - Sync local agent with remote Trinity agent
-- `/trinity-schedules` - Manage scheduled tasks on Trinity
+- `/agent-dev:add-skill` - Add a new skill to your agent
+- `/agent-dev:add-memory` - Initialize agent memory (JSON, Zettelkasten, or file-index)
+- `/trinity:onboard` - Deploy agent to Trinity
+- `/trinity:sync` - Sync local agent with remote Trinity agent
+- `/trinity:schedules` - Manage scheduled tasks on Trinity
+- `/create-agent:create` - Scaffold a new agent from scratch
 
 ---
 
@@ -159,8 +156,8 @@ All templates require credentials and configuration for their respective integra
 2. Clone it locally
 3. Customize `CLAUDE.md` for your domain and business
 4. Install the Abilities SDK: `/plugin marketplace add abilityai/abilities`
-5. Initialize memory and playbooks
-6. Deploy to Trinity: `/trinity-onboard`
+5. Initialize memory: `/plugin install agent-dev@abilityai` then `/agent-dev:add-memory`
+6. Deploy to Trinity: `/plugin install trinity@abilityai` then `/trinity:onboard`
 
 ---
 
@@ -293,7 +290,7 @@ The multi-agent ideas are especially strong — they showcase Trinity's agent co
 3. **Fork templates** — Start from the closest agent template(s)
 4. **Customize** — Edit CLAUDE.md for your domain, install the Abilities SDK
 5. **Build playbooks** — One per agent, iterate until they work locally
-6. **Deploy to Trinity** — `/trinity-onboard` to push to the shared instance
+6. **Deploy to Trinity** — `/trinity:onboard` to push to the shared instance
 7. **Enable payments** — Configure each agent's Payments tab in Trinity UI
 8. **Wire agents together** — Use `chat_with_agent` MCP tool for inter-agent collaboration
 9. **Add dashboards** — Make each agent's work visible via `dashboard.yaml`

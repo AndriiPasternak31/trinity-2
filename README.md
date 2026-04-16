@@ -112,11 +112,11 @@ Already have a Claude Code agent? Deploy it with the Trinity plugin:
 
 ```bash
 /plugin marketplace add abilityai/abilities
-/plugin install trinity-onboard@abilityai
-/trinity-onboard:onboard
+/plugin install trinity@abilityai
+/trinity:onboard
 ```
 
-After onboarding you get management skills: `/trinity-sync` (push/pull code), `/trinity-remote` (execute tasks), `/trinity-schedules` (cron automation).
+After onboarding you get management skills: `/trinity:sync` (push/pull code), `/trinity:remote` (execute tasks), `/trinity:schedules` (cron automation).
 
 ### Create via Web UI
 
@@ -150,7 +150,7 @@ See the [Multi-Agent System Guide](docs/MULTI_AGENT_SYSTEM_GUIDE.md) for pattern
 If you're an AI agent given this repository:
 
 1. **This repo is a Claude Code plugin** — Run `/plugin marketplace add abilityai/abilities` to install Trinity management skills
-2. **To deploy yourself to Trinity** — Run `/trinity-onboard:onboard` after installing the plugin
+2. **To deploy yourself to Trinity** — Run `/plugin install trinity@abilityai` then `/trinity:onboard`
 3. **To interact with a Trinity instance** — Use the MCP tools (list_agents, chat_with_agent, etc.) after configuring the MCP server connection
 4. **To contribute to Trinity itself** — Read `CLAUDE.md` for development guidelines
 
@@ -397,30 +397,27 @@ These agents demonstrate:
 
 > **[abilityai/abilities](https://github.com/abilityai/abilities)** is the canonical development workflow for building and managing autonomous agents with Claude Code.
 
-It provides a curated collection of plugins covering the full agent lifecycle — from scaffolding and onboarding to deployment, scheduling, and ongoing operations:
+It provides 5 focused plugins covering the full agent lifecycle — from scaffolding and onboarding to deployment, scheduling, and ongoing operations:
 
 | Plugin | What it does |
 |--------|-------------|
-| **trinity-onboard** | Deploy any Claude Code agent to Trinity, sync code, manage schedules |
-| **agent-builder** | Scaffold a new agent from scratch on any topic |
-| **playbook-builder** | Create structured skills and playbooks with state management |
-| **dev-methodology** | Documentation-driven development, code review, and validation |
-| **utilities** | Ops workflows — deployment, incident response, Docker management |
-| **website-builder** | Scaffold and deploy Next.js sites |
-| **project-planner** | Plan and execute multi-session projects |
-| **workspace-kit** | Manage multi-project workspaces and sessions |
+| **create-agent** | 12 wizards for agent scaffolding (prospector, chief-of-staff, webmaster, recon, receptionist, ghostwriter, kb-agent, website, custom, clone, adjust) |
+| **agent-dev** | Add skills, memory systems, GitHub backlog workflow, autonomous work loops |
+| **trinity** | Deploy to Trinity platform: connect, onboard, sync |
+| **dev-methodology** | 14 skills for implementation, testing, security, and PR validation |
+| **utilities** | Ops: incident investigation, safe deployment, Docker ops, batch processing |
 
 ```bash
 # Install the abilities marketplace (one-time)
 /plugin marketplace add abilityai/abilities
 
 # Example: onboard an agent to Trinity
-/plugin install trinity-onboard@abilityai
-/trinity-onboard:onboard
+/plugin install trinity@abilityai
+/trinity:onboard
 
 # Example: scaffold a new agent
-/plugin install agent-builder@abilityai
-/create-agent
+/plugin install create-agent@abilityai
+/create-agent:create
 ```
 
 See the **[abilities repository](https://github.com/abilityai/abilities)** for full plugin documentation and installation instructions.

@@ -21,7 +21,7 @@ In Trinity's approach, **playbooks** are business processes implemented as Claud
 READ FRESH STATE → PROCESS → WRITE STATE → VERIFY
 ```
 
-Playbooks (skills) live in the agent's `.claude/skills/` directory and are self-contained, portable, traceable, and recoverable. See the [playbook-builder plugin](https://github.com/abilityai/abilities/tree/main/plugins/playbook-builder) for the full specification.
+Playbooks (skills) live in the agent's `.claude/skills/` directory and are self-contained, portable, traceable, and recoverable. See the [agent-dev plugin](https://github.com/abilityai/abilities/tree/main/plugins/agent-dev) for skill management tools.
 
 ---
 
@@ -435,7 +435,7 @@ As an agent operator, I want to see and invoke the agent's available skills dire
 
 ## Related Documents
 
-- [playbook-builder plugin](https://github.com/abilityai/abilities/tree/main/plugins/playbook-builder) - Playbook specification
+- [agent-dev plugin](https://github.com/abilityai/abilities/tree/main/plugins/agent-dev) - Skill management tools
 - [Claude Code Skills Documentation](https://docs.anthropic.com/en/docs/claude-code/skills) - Official skills spec
 - [tasks-tab.md](../memory/feature-flows/tasks-tab.md) - Task execution flow
 - [parallel-headless-execution.md](../memory/feature-flows/parallel-headless-execution.md) - `/task` endpoint

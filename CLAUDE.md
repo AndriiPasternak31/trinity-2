@@ -280,7 +280,15 @@ curl -X POST http://localhost:8000/api/agents \
 
 ### Abilities (agent development toolkit)
 
-The **[abilities](https://github.com/abilityai/abilities)** repo is the canonical development workflow for building and managing autonomous agents with Claude Code. It provides plugins covering agent scaffolding, Trinity onboarding, structured playbooks, dev methodology, ops workflows, and more.
+The **[abilities](https://github.com/abilityai/abilities)** repo is the canonical development workflow for building and managing autonomous agents with Claude Code. It provides 5 focused plugins covering the full agent lifecycle:
+
+| Plugin | What it does |
+|--------|-------------|
+| **create-agent** | 12 wizards for agent scaffolding (prospector, chief-of-staff, webmaster, recon, receptionist, ghostwriter, kb-agent, website, custom, clone, adjust) |
+| **agent-dev** | Add skills, memory systems, GitHub backlog workflow, autonomous work loops |
+| **trinity** | Deploy to Trinity platform: connect, onboard, sync |
+| **dev-methodology** | 14 skills for implementation, testing, security, and PR validation |
+| **utilities** | Ops: incident investigation, safe deployment, Docker ops, batch processing |
 
 **Installation:**
 ```bash
@@ -289,8 +297,8 @@ The **[abilities](https://github.com/abilityai/abilities)** repo is the canonica
 
 **Onboarding an agent to Trinity:**
 ```bash
-/plugin install trinity-onboard@abilityai
-/trinity-onboard:onboard
+/plugin install trinity@abilityai
+/trinity:onboard
 ```
 
 ---
