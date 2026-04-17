@@ -1,6 +1,6 @@
 ---
 name: groom
-description: Backlog grooming — audit board coverage, rank unranked issues, review priority ordering, apply changes with approval
+description: Backlog grooming — audit board coverage, rank issues, assign Epics/Themes, review priority ordering
 automation: gated
 allowed-tools: [Bash, Read, Write, Edit]
 user-invocable: true
@@ -12,23 +12,52 @@ Interactive backlog grooming session for the Trinity Roadmap GitHub Project boar
 
 ## Purpose
 
-Ensure all open issues are on the board with correct rank, tier, and priority ordering. Surfaces gaps, suggests re-prioritization, and applies rank updates after user approval.
+Ensure all open issues are on the board with correct rank, tier, Epic, and Theme. Surfaces orphans (missing Epic/Theme), suggests categorization, and applies changes after user approval.
 
 ## State Dependencies
 
 | Source | Location | Read | Write | Description |
 |--------|----------|------|-------|-------------|
 | GitHub Issues | `abilityai/trinity` | Yes | No | All open issues |
-| GitHub Project #6 | `abilityai` org, project 6 | Yes | Yes | Trinity Roadmap board — Rank, Tier, Status fields |
+| GitHub Project #6 | `abilityai` org, project 6 | Yes | Yes | Trinity Roadmap board — Rank, Tier, Status, Epic, Theme fields |
 | Project Constants | This skill | Yes | No | Project ID, field IDs |
 
 ### Project Constants
 
 ```
-PROJECT_ID    = PVT_kwDOB8r7us4BRY6-
-PROJECT_NUM   = 6
-RANK_FIELD_ID = PVTF_lADOB8r7us4BRY6-zg_O1jU
-TIER_FIELD_ID = PVTSSF_lADOB8r7us4BRY6-zg_O1kA
+PROJECT_ID     = PVT_kwDOB8r7us4BRY6-
+PROJECT_NUM    = 6
+RANK_FIELD_ID  = PVTF_lADOB8r7us4BRY6-zg_O1jU
+TIER_FIELD_ID  = PVTSSF_lADOB8r7us4BRY6-zg_O1kA
+EPIC_FIELD_ID  = PVTSSF_lADOB8r7us4BRY6-zhKSsd8
+THEME_FIELD_ID = PVTSSF_lADOB8r7us4BRY6-zhKSr-g
+```
+
+### Current Epic Options
+
+Query current options:
+```bash
+gh project field-list 6 --owner abilityai --format json | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for f in d['fields']:
+    if f['name'] == 'Epic':
+        for o in f.get('options', []):
+            print(f\"  {o['id']}: {o['name']}\")
+"
+```
+
+### Current Theme Options
+
+```bash
+gh project field-list 6 --owner abilityai --format json | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for f in d['fields']:
+    if f['name'] == 'Theme':
+        for o in f.get('options', []):
+            print(f\"  {o['id']}: {o['name']}\")
+"
 ```
 
 ## Prerequisites
@@ -120,6 +149,78 @@ for item in data['items']:
 "
 ```
 
+### Step 2b: Detect Orphans (Missing Epic/Theme)
+
+Find items without Epic or Theme assigned — these need categorization.
+
+```bash
+gh project item-list 6 --owner abilityai --format json --limit 200 | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+
+no_epic = []
+no_theme = []
+
+for item in data['items']:
+    c = item.get('content', {})
+    if not c.get('number'):
+        continue
+    if item.get('status') == 'Done':
+        continue
+    
+    epic = item.get('Epic', '')
+    theme = item.get('Theme', '')
+    labels = [l['name'] for l in c.get('labels', [])]
+    priority = next((l for l in labels if l.startswith('priority-')), 'p3')
+    row = (c['number'], c['title'][:55], priority)
+    
+    if not epic:
+        no_epic.append(row)
+    if not theme:
+        no_theme.append(row)
+
+print(f'## Orphan Issues\n')
+print(f'**Missing Epic**: {len(no_epic)} items')
+print(f'**Missing Theme**: {len(no_theme)} items\n')
+
+if no_epic:
+    print('### No Epic Assigned')
+    print('| # | Title | Priority |')
+    print('|---|-------|----------|')
+    for num, title, priority in sorted(no_epic, key=lambda x: x[0])[:15]:
+        print(f'| #{num} | {title} | {priority} |')
+    if len(no_epic) > 15:
+        print(f'... and {len(no_epic) - 15} more')
+    print()
+
+if no_theme:
+    print('### No Theme Assigned')
+    print('| # | Title | Priority |')
+    print('|---|-------|----------|')
+    for num, title, priority in sorted(no_theme, key=lambda x: x[0])[:15]:
+        print(f'| #{num} | {title} | {priority} |')
+    if len(no_theme) > 15:
+        print(f'... and {len(no_theme) - 15} more')
+"
+```
+
+**Available Epics** (for assignment):
+- #20 Audit Trail (Security)
+- #306 Event Bus (Reliability)
+- #295 File Storage (Infrastructure)
+- #291 Webhooks (Integration)
+- #350 Slack Identity (Channels)
+- #303 Cloudflare (Infrastructure)
+
+**Available Themes**:
+- Security — auth, audit, credentials, access control
+- Reliability — event bus, health checks, error handling
+- Channels — Slack, Telegram, WhatsApp integrations
+- DevEx — CLI, API ergonomics, developer tools
+- Monetization — payments, subscriptions, x402
+- Infrastructure — Docker, deployment, storage
+- UI/UX — frontend, dashboard, visualization
+
 ### Step 3: Review Current Ordering
 
 Display the full ranked Todo backlog for review.
@@ -153,13 +254,22 @@ Based on the audit, propose specific changes:
 
 1. **Rank assignments** for unranked items — slot by tier (P1a first, then P1b, then P1c, then untiered)
 2. **Tier suggestions** for items missing tier labels
-3. **Re-ordering suggestions** for items that seem mis-prioritized
-4. **Close candidates** for stale or resolved items
+3. **Epic assignments** for orphan items — match to existing epic or suggest new epic
+4. **Theme assignments** for items missing theme — categorize by strategic area
+5. **Re-ordering suggestions** for items that seem mis-prioritized
+6. **Close candidates** for stale or resolved items
 
 **Ranking strategy:**
 - Within each tier, prioritize: bugs > security > features > refactors
 - Within same type, order by issue number (older first, unless context says otherwise)
 - Use fractional ranks (e.g., 8.1, 8.2) to slot between existing ranked items without displacing them
+
+**Epic/Theme assignment strategy:**
+- Security issues → Theme: Security, Epic: #20 Audit Trail (if related)
+- Reliability issues → Theme: Reliability, Epic: #306 Event Bus (if related)
+- Slack/Telegram/WhatsApp → Theme: Channels, Epic: #350 Slack Identity (if Slack)
+- Storage/Docker/Deploy → Theme: Infrastructure, Epic: #295 File Storage (if storage)
+- Standalone features may need a new Epic created
 
 Present the proposal as a table and **wait for user approval or adjustments** before proceeding.
 
@@ -173,6 +283,18 @@ Present the proposal as a table and **wait for user approval or adjustments** be
 ### Tier Suggestions (N items)
 | Issue | Current | Proposed | Rationale |
 |-------|---------|----------|-----------|
+
+### Epic Assignments (N items)
+| Issue | Proposed Epic | Rationale |
+|-------|---------------|-----------|
+
+### Theme Assignments (N items)
+| Issue | Proposed Theme | Rationale |
+|-------|----------------|-----------|
+
+### New Epics Needed
+| Epic Name | Theme | Related Issues | Rationale |
+|-----------|-------|----------------|-----------|
 
 ### Re-ordering (N items)
 | Issue | Current Rank | Proposed Rank | Rationale |
@@ -202,12 +324,68 @@ gh api graphql -f query='mutation {
 }'
 ```
 
+**Set Epic (single-select field):**
+
+First, get the option ID for the epic name:
+```bash
+gh project field-list 6 --owner abilityai --format json | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for f in d['fields']:
+    if f['name'] == 'Epic':
+        for o in f.get('options', []):
+            print(f\"{o['name']}: {o['id']}\")
+"
+```
+
+Then set the field:
+```bash
+gh api graphql -f query='mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "PVT_kwDOB8r7us4BRY6-",
+    itemId: "ITEM_NODE_ID",
+    fieldId: "PVTSSF_lADOB8r7us4BRY6-zhKSsd8",
+    value: {singleSelectOptionId: "OPTION_ID"}
+  }) { projectV2Item { id } }
+}'
+```
+
+**Set Theme (single-select field):**
+
+```bash
+gh api graphql -f query='mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "PVT_kwDOB8r7us4BRY6-",
+    itemId: "ITEM_NODE_ID",
+    fieldId: "PVTSSF_lADOB8r7us4BRY6-zhKSr-g",
+    value: {singleSelectOptionId: "THEME_OPTION_ID"}
+  }) { projectV2Item { id } }
+}'
+```
+
+**Add new Epic option** (if creating a new epic):
+
+```bash
+gh api graphql -f query='mutation {
+  updateProjectV2Field(input: {
+    projectId: "PVT_kwDOB8r7us4BRY6-",
+    fieldId: "PVTSSF_lADOB8r7us4BRY6-zhKSsd8",
+    field: {
+      name: "Epic",
+      singleSelectOptions: [
+        {name: "#NNN New Epic Name", color: "BLUE"}
+      ]
+    }
+  }) { projectV2SingleSelectField { options { id name } } }
+}'
+```
+
 **Batch mutations** (up to 10 per GraphQL call):
 
 ```bash
 gh api graphql -f query='mutation {
   a1: updateProjectV2ItemFieldValue(input: {projectId: "...", itemId: "...", fieldId: "...", value: {number: N}}) { projectV2Item { id } }
-  a2: updateProjectV2ItemFieldValue(input: {projectId: "...", itemId: "...", fieldId: "...", value: {number: N}}) { projectV2Item { id } }
+  a2: updateProjectV2ItemFieldValue(input: {projectId: "...", itemId: "...", fieldId: "...", value: {singleSelectOptionId: "..."}}) { projectV2Item { id } }
 }'
 ```
 
@@ -239,6 +417,8 @@ After applying, re-query and display the updated backlog to confirm.
 - [ ] All open issues are on the project board
 - [ ] All Todo items have a rank
 - [ ] All Todo items have a tier (P1a/P1b/P1c) or are intentionally untiered
+- [ ] All P1 items have an Epic assigned (or flagged as standalone)
+- [ ] All items have a Theme assigned
 - [ ] P1a items ranked highest, then P1b, then P1c
 - [ ] Bugs ranked above features within same tier
 - [ ] User approved all changes before they were applied

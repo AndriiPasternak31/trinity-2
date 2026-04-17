@@ -57,6 +57,24 @@ Within P1, the **Tier** field on the project board provides sub-prioritization: 
 
 **Rule**: Work P0 first, then P1 by Tier (P1a → P1b → P1c), then by Rank (lowest number first).
 
+### Epics and Themes
+
+The project board uses two additional **single-select** fields for strategic grouping (one value per issue):
+
+| Field | Purpose | Examples |
+|-------|---------|----------|
+| **Epic** | Groups related issues into a deliverable | `#20 Audit Trail`, `#306 Event Bus` |
+| **Theme** | Strategic category | Security, Reliability, Channels, DevEx, Monetization, Infrastructure, UI/UX |
+
+- **Epic**: Links issue to one parent epic. Epics track % complete via child issue status. Pick the *primary* deliverable.
+- **Theme**: Categorizes by one strategic area. Helps balance roadmap coverage. Pick the *primary* intent.
+
+**Commands:**
+- `/roadmap epics` — epic rollup with progress bars
+- `/roadmap themes` — coverage by strategic theme  
+- `/roadmap orphans` — issues missing Epic or Theme
+- `/groom` — assign Epics/Themes to orphan issues
+
 #### Backlog Grooming
 
 Run `/groom` periodically to keep the backlog healthy. It audits board coverage, detects unranked items, reviews priority ordering, and applies rank updates after approval. Key checks:

@@ -92,9 +92,10 @@ items = [i for i in data['items'] if i.get('status') == 'Todo']
 items.sort(key=lambda x: x.get('rank') or 9999)
 for item in items[:15]:
     c = item['content']
-    tier = item.get('tier', '') or '—'
+    tier = item.get('Tier', '') or '—'
+    epic = item.get('Epic', '') or '—'
     rank = item.get('rank', '?')
-    print(f"| {rank} | {tier} | #{c['number']} | {c['title'][:60]} |")
+    print(f"| {rank} | {tier} | #{c['number']} | {c['title'][:50]} | {epic[:20]} |")
 ```
 
 Present as a ranked table:
@@ -102,11 +103,11 @@ Present as a ranked table:
 ```
 ## Backlog (Todo) — sorted by rank
 
-| Rank | Tier | Issue | Title |
-|------|------|-------|-------|
-| 1 | P1a | #20 | Audit Trail System (SEC-001) |
-| 2 | P1b | #132 | bug: APScheduler max_instances=1 causes skipped executions |
-| 3 | P1b | #61 | bug: Orphaned Claude processes accumulate after timeout |
+| Rank | Tier | Issue | Title | Epic |
+|------|------|-------|-------|------|
+| 1 | P1a | #20 | Audit Trail System (SEC-001) | — |
+| 2 | P1b | #132 | bug: APScheduler max_instances=1 | #306 Event Bus |
+| 3 | P1b | #61 | bug: Orphaned Claude processes | #306 Event Bus |
 ...
 
 Which issue should I work on? (number or #issue)
@@ -140,11 +141,57 @@ Which issue should I work on? (number or #issue)
 
 **GATE: Wait for user to select an issue.**
 
-Present the selected issue to the user:
+Present the selected issue to the user with epic context:
 
+```bash
+# Get issue details and epic context from project
+gh project item-list 6 --owner abilityai --format json --limit 200 | python3 -c "
+import json, sys
+
+ISSUE = $SELECTED_ISSUE_NUMBER
+data = json.load(sys.stdin)
+
+# Find this issue and its epic
+issue_epic = None
+issue_theme = None
+issue_tier = None
+for item in data['items']:
+    c = item.get('content', {})
+    if c.get('number') == ISSUE:
+        issue_epic = item.get('Epic', '')
+        issue_theme = item.get('Theme', '')
+        issue_tier = item.get('Tier', '')
+        break
+
+# If issue has an epic, count epic progress
+if issue_epic:
+    done = in_progress = todo = 0
+    for item in data['items']:
+        if item.get('Epic') == issue_epic:
+            status = item.get('status', 'Todo')
+            if status == 'Done':
+                done += 1
+            elif status == 'In Progress':
+                in_progress += 1
+            else:
+                todo += 1
+    total = done + in_progress + todo
+    pct = int(done / total * 100) if total else 0
+    print(f'Epic: {issue_epic} ({done}/{total} complete, {pct}%)')
+else:
+    print('Epic: — (not assigned)')
+
+print(f'Theme: {issue_theme or \"—\"}')
+print(f'Tier: {issue_tier or \"—\"}')
+"
+```
+
+Present as:
 ```
 Selected: #[number] — [title]
-Tier: [P1a/P1b/P1c]
+Epic: #20 Audit Trail (3/7 complete, 43%)
+Theme: Security
+Tier: P1a
 Labels: [labels]
 
 [First 5 lines of body]
