@@ -110,9 +110,9 @@ P0: [P0 issues or "None"]
 
 **Top 15 Backlog** (from Trinity Roadmap project, ranked):
 
-| Rank | Issue | Tier | Title |
-|------|-------|------|-------|
-| 1 | #NNN | P1a | ... |
+| Rank | Tier | Issue | Title |
+|------|------|-------|-------|
+| 1 | P1a | #NNN | ... |
 | ... | | | |
 
 **Not on Board** (open issues missing from Trinity Roadmap):
@@ -137,6 +137,14 @@ Recent: [most recent git commits]
 ## Principle
 
 Load context first, then act. Never modify code without understanding the current state.
+
+## Related Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/groom` | Audit board coverage, add missing issues, assign ranks and tiers |
+| `/sprint` | Pick an issue from the ranked backlog and implement it end-to-end |
+| `/roadmap` | Query GitHub Issues for priorities without loading full docs |
 
 ## Completion Checklist
 

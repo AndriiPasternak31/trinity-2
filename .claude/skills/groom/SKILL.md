@@ -48,10 +48,19 @@ gh issue list --repo abilityai/trinity --state open --limit 200 \
   --jq '.[] | select(.projectItems | length == 0) | "#\(.number)\t\([.labels[].name] | join(", "))\t\(.title)"'
 ```
 
-If any are found, add them to the board:
+If any are found, add them to the board using GraphQL (the CLI `gh project item-add` is unreliable):
 
 ```bash
-gh project item-add 6 --owner abilityai --url https://github.com/abilityai/trinity/issues/NNN
+# For each missing issue, get its node ID and add via GraphQL
+for issue in NNN MMM ...; do
+  node_id=$(gh issue view $issue --repo abilityai/trinity --json id --jq '.id')
+  gh api graphql -f query="mutation {
+    addProjectV2ItemById(input: {
+      projectId: \"PVT_kwDOB8r7us4BRY6-\",
+      contentId: \"$node_id\"
+    }) { item { id } }
+  }" && echo "Added #$issue" || echo "Failed #$issue"
+done
 ```
 
 Report findings:
@@ -59,9 +68,21 @@ Report findings:
 - List each with issue number, labels, title
 - Add missing issues to board before continuing
 
+**Verify** issues were added by re-querying the board before proceeding.
+
 ### Step 2: Detect Unranked Items
 
 Query all Todo items and identify those without a rank.
+
+**IMPORTANT**: Parse project items correctly. The `rank`, `status`, and `tier` fields are **top-level** on each item object — NOT nested inside `fieldValues` or extracted from labels. Example item structure:
+```json
+{
+  "rank": 1,
+  "status": "Todo",
+  "tier": "P1a",
+  "content": { "number": 128, "title": "...", "labels": [...] }
+}
+```
 
 ```bash
 gh project item-list 6 --owner abilityai --format json --limit 200 | python3 -c "
@@ -109,14 +130,14 @@ import json, sys
 data = json.load(sys.stdin)
 items = [i for i in data['items'] if i.get('status') == 'Todo']
 items.sort(key=lambda x: x.get('rank') or 9999)
-print(f'Todo backlog ({len(items)} items):\n')
-print(f'| Rank | Issue | Tier | Title |')
-print(f'|------|-------|------|-------|')
+print(f'## Todo Backlog ({len(items)} items)\n')
+print('| Rank | Tier | Issue | Title |')
+print('|------|------|-------|-------|')
 for item in items:
     c = item['content']
-    tier = item.get('tier', '')
+    tier = item.get('tier', '') or '—'
     rank = item.get('rank', '?')
-    print(f'| {rank} | #{c[\"number\"]} | {tier or \"—\"} | {c[\"title\"][:60]} |')
+    print(f'| {rank} | {tier} | #{c[\"number\"]} | {c[\"title\"][:60]} |')
 "
 ```
 
@@ -231,6 +252,14 @@ After applying, re-query and display the updated backlog to confirm.
 | Item not found | Issue may have been closed or removed from board. Skip and note |
 | Rate limit | Wait and retry. GitHub GraphQL rate limit is 5000 points/hour |
 | Pagination miss | Always check `pageInfo.hasNextPage` and follow cursors |
+
+## Related Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/sprint` | Pick an issue from the ranked backlog and implement it end-to-end |
+| `/read-docs` | Load project documentation and show current backlog state |
+| `/roadmap` | Quick query of GitHub Issues without full grooming |
 
 ## Self-Improvement
 

@@ -49,6 +49,7 @@ Automate the complete Trinity development workflow:
 
 - `$ARGUMENTS`:
   - Empty: Present backlog sorted by board rank for user selection
+  - `recent`: Show recently created open issues (last 30 days)
   - Issue number: `#68` or `68` — work on a specific issue
 
 ## Prerequisites
@@ -73,22 +74,69 @@ gh issue view ${ARGUMENTS#\#} --repo abilityai/trinity --json number,title,body,
 gh project item-list 6 --owner abilityai --format json --limit 200
 ```
 
-The API returns `rank` (board position) and `tier` (P1a/P1b/P1c) fields per item. Filter to `Status = Todo`, skip issues labeled `status-in-progress` or `status-blocked`, then **sort by `rank` ascending** and present as a flat ranked list:
+**IMPORTANT**: Parse project items correctly. The `rank`, `status`, and `tier` fields are **top-level** on each item object — NOT nested inside `fieldValues` or extracted from labels. Example item structure:
+```json
+{
+  "rank": 1,
+  "status": "Todo",
+  "tier": "P1a",
+  "content": { "number": 128, "title": "...", "labels": [...] }
+}
+```
+
+Parse with:
+```python
+import json, sys
+data = json.load(sys.stdin)
+items = [i for i in data['items'] if i.get('status') == 'Todo']
+items.sort(key=lambda x: x.get('rank') or 9999)
+for item in items[:15]:
+    c = item['content']
+    tier = item.get('tier', '') or '—'
+    rank = item.get('rank', '?')
+    print(f"| {rank} | {tier} | #{c['number']} | {c['title'][:60]} |")
+```
+
+Present as a ranked table:
 
 ```
 ## Backlog (Todo) — sorted by rank
 
- #  | Tier | Issue | Title
-----|------|-------|------
- 1. | P1a  | #20   | Audit Trail System (SEC-001)
- 2. | P1b  | #132  | bug: APScheduler max_instances=1 causes skipped executions
- 3. | P1b  | #61   | bug: Orphaned Claude processes accumulate after timeout
+| Rank | Tier | Issue | Title |
+|------|------|-------|-------|
+| 1 | P1a | #20 | Audit Trail System (SEC-001) |
+| 2 | P1b | #132 | bug: APScheduler max_instances=1 causes skipped executions |
+| 3 | P1b | #61 | bug: Orphaned Claude processes accumulate after timeout |
 ...
 
 Which issue should I work on? (number or #issue)
 ```
 
-**Important**: Always sort by `rank` field, not by tier or issue number. The rank reflects the actual board priority order set by the user.
+**Important**: Always sort by `rank` field, not by tier or issue number. The rank reflects the actual board priority order set by the user. Tier (P1a/P1b/P1c) comes from the project field, NOT from issue labels.
+
+**If `$ARGUMENTS` is "recent" — show recently created open issues:**
+
+```bash
+# Get open issues created in the last 30 days, sorted by creation date (newest first)
+gh issue list --repo abilityai/trinity --state open --limit 30 \
+  --json number,title,labels,createdAt \
+  --jq 'sort_by(.createdAt) | reverse'
+```
+
+Present as:
+```
+## Recently Created Issues (last 30 days)
+
+| # | Created | Issue | Title |
+|---|---------|-------|-------|
+| 1 | 2026-04-15 | #380 | feat: New dashboard widget |
+| 2 | 2026-04-14 | #379 | bug: Login fails on Safari |
+...
+
+Which issue should I work on? (number or #issue)
+```
+
+**Note**: If many issues are missing from the project board, run `/groom` first to add them and assign ranks.
 
 **GATE: Wait for user to select an issue.**
 
