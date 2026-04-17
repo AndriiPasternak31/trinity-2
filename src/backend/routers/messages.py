@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from database import db
-from dependencies import get_current_user, AuthorizedAgent
+from dependencies import get_current_user, AuthorizedAgentByName
 from db_models import User
 from services.proactive_message_service import (
     proactive_message_service,
@@ -81,9 +81,8 @@ class ProactiveSharesResponse(BaseModel):
 
 @router.post("/{agent_name}/messages", response_model=SendMessageResponse)
 async def send_proactive_message(
-    agent_name: str,
     request: SendMessageRequest,
-    agent: AuthorizedAgent,
+    agent_name: AuthorizedAgentByName,
 ):
     """
     Send a proactive message to a user from this agent.
@@ -94,8 +93,6 @@ async def send_proactive_message(
 
     Rate limited to 10 messages per recipient per hour.
     """
-    if agent.name != agent_name:
-        raise HTTPException(status_code=403, detail="Agent name mismatch")
 
     try:
         result = await proactive_message_service.send_message(
