@@ -83,7 +83,7 @@ class ProactiveSharesResponse(BaseModel):
 async def send_proactive_message(
     agent_name: str,
     request: SendMessageRequest,
-    agent: AuthorizedAgent = Depends(),
+    agent: AuthorizedAgent,
 ):
     """
     Send a proactive message to a user from this agent.
