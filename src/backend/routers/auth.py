@@ -468,7 +468,7 @@ async def request_access(request: Request):
 
     # Parse request
     body = await request.json()
-    email = body.get("email", "").lower().strip()
+    email = (body.get("email") or "").lower().strip()
     if not email or "@" not in email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

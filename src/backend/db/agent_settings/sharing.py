@@ -203,7 +203,7 @@ class SharingMixin:
         owner = self.get_agent_owner(agent_name)
         if owner:
             owner_user = self._user_ops.get_user_by_username(owner["owner_username"])
-            if owner_user and owner_user.get("email", "").lower() == email.lower():
+            if owner_user and (owner_user.get("email") or "").lower() == email.lower():
                 return True
 
         # Check sharing with allow_proactive flag
