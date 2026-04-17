@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl git libmag
 RUN pip install --no-cache-dir \
     fastapi==0.115.6 \
     uvicorn[standard]==0.37.0 \
-    "pydantic>=2.10.4,<3" \
+    "pydantic[email]>=2.10.4,<3" \
     python-jose[cryptography]==3.3.0 \
     passlib[bcrypt]==1.7.4 \
     bcrypt==4.2.1 \
