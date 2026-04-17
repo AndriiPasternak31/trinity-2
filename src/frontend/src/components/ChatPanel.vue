@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full relative">
     <!-- Header with session selector -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+    <div class="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
       <div class="flex items-center space-x-3">
         <!-- Session selector dropdown -->
         <div class="relative" ref="dropdownRef">
@@ -95,7 +95,7 @@
       <!-- Resume mode banner (EXEC-023) -->
       <div
         v-if="isResumeMode"
-        class="mx-4 mt-2 px-4 py-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between"
+        class="mx-6 mt-3 px-4 py-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between"
       >
         <div class="flex items-center space-x-2">
           <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@
         :messages="messages"
         :loading="loading"
         :loading-text="loadingText"
-        class="flex-1 px-2"
+        class="flex-1 px-6"
       >
         <template #empty>
           <div class="text-center py-12">
@@ -144,7 +144,7 @@
       </ChatMessages>
 
       <!-- Error message -->
-      <div v-if="error" class="mx-4 mb-2 p-3 rounded-lg" :class="isRateLimitError ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800' : 'bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800'">
+      <div v-if="error" class="mx-6 mb-2 p-3 rounded-lg" :class="isRateLimitError ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800' : 'bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800'">
         <p v-if="isRateLimitError" class="text-sm font-medium text-amber-700 dark:text-amber-400 mb-1">Subscription Usage Limit</p>
         <p class="text-sm" :class="isRateLimitError ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'">{{ error }}</p>
       </div>
@@ -156,7 +156,7 @@
       />
 
       <!-- Input area -->
-      <div class="px-4 pb-4">
+      <div class="px-6 pb-6">
         <ChatInput
           ref="chatInputRef"
           v-model="message"
