@@ -237,9 +237,10 @@ class TestListProactiveShares:
 
         assert_status(response, 200)
         data = response.json()
-        assert "shares" in data or isinstance(data, list)
-        shares = data.get("shares", data) if isinstance(data, dict) else data
-        assert isinstance(shares, list)
+        # Response format: {"agent_name": "...", "emails": [...]}
+        assert "emails" in data
+        assert isinstance(data["emails"], list)
+        assert len(data["emails"]) == 0
 
     def test_list_proactive_shares_with_opted_in(
         self,
@@ -270,10 +271,10 @@ class TestListProactiveShares:
 
             assert_status(response, 200)
             data = response.json()
-            shares = data.get("shares", data) if isinstance(data, dict) else data
+            # Response format: {"agent_name": "...", "emails": ["email1", ...]}
+            emails = data.get("emails", [])
 
             # Should include our email
-            emails = [s.get("email") or s.get("shared_with_email") for s in shares]
             assert share_email in emails
 
         finally:
@@ -304,10 +305,10 @@ class TestListProactiveShares:
 
             assert_status(response, 200)
             data = response.json()
-            shares = data.get("shares", data) if isinstance(data, dict) else data
+            # Response format: {"agent_name": "...", "emails": ["email1", ...]}
+            emails = data.get("emails", [])
 
-            # Should NOT include our email
-            emails = [s.get("email") or s.get("shared_with_email") for s in shares]
+            # Should NOT include our email (not opted in)
             assert share_email not in emails
 
         finally:
