@@ -148,7 +148,7 @@ async def voice_status(
     return {
         "enabled": VOICE_ENABLED,
         "available": voice_service.is_available(),
-        "voice_prompt_set": bool(db.agents.get_voice_system_prompt(name)),
+        "voice_prompt_set": bool(db.get_voice_system_prompt(name)),
     }
 
 
@@ -158,7 +158,7 @@ async def get_voice_prompt(
     current_user: User = Depends(get_current_user),
 ):
     """Get the agent's voice system prompt."""
-    prompt = db.agents.get_voice_system_prompt(name)
+    prompt = db.get_voice_system_prompt(name)
     return {"voice_system_prompt": prompt}
 
 
@@ -170,7 +170,7 @@ async def set_voice_prompt(
 ):
     """Set the agent's voice system prompt."""
     prompt = (body or {}).get("voice_system_prompt", "")
-    db.agents.set_voice_system_prompt(name, prompt)
+    db.set_voice_system_prompt(name, prompt)
     return {"ok": True, "voice_system_prompt": prompt}
 
 
@@ -297,7 +297,7 @@ async def _get_voice_system_prompt(agent_name: str) -> str:
     3. Error if neither exists
     """
     # 1. Check DB override
-    prompt = db.agents.get_voice_system_prompt(agent_name)
+    prompt = db.get_voice_system_prompt(agent_name)
     if prompt:
         return prompt
 

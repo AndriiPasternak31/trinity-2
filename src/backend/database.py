@@ -568,6 +568,16 @@ class DatabaseManager:
         return self._agent_ops.has_agent_github_pat(agent_name)
 
     # =========================================================================
+    # Voice System Prompt (delegated to db/agents.py) - VOICE-005
+    # =========================================================================
+
+    def get_voice_system_prompt(self, agent_name: str):
+        return self._agent_ops.get_voice_system_prompt(agent_name)
+
+    def set_voice_system_prompt(self, agent_name: str, prompt: str):
+        return self._agent_ops.set_voice_system_prompt(agent_name, prompt)
+
+    # =========================================================================
     # MCP API Key Management (delegated to db/mcp_keys.py)
     # =========================================================================
 
