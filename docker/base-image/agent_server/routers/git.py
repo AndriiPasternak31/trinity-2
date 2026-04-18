@@ -3,15 +3,68 @@ Git sync endpoints for GitHub bidirectional sync.
 """
 import subprocess
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 
 from ..models import GitSyncRequest, GitPullRequest
+from ..utils.git_conflict import classify_conflict
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _compute_ahead_behind(home_dir: Path, branch: str) -> tuple[int, int]:
+    """Best-effort ahead/behind counts vs origin/<branch>.
+
+    Returns (0, 0) on any failure — the classifier only uses these to pick
+    AHEAD_ONLY vs BEHIND_ONLY when stderr is empty, and every real 409 path
+    here has non-empty stderr, so a failure to resolve counts is harmless.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--left-right", "--count", f"origin/{branch}...HEAD"],
+            capture_output=True, text=True, cwd=str(home_dir), timeout=10
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split()
+            if len(parts) == 2:
+                return int(parts[1]), int(parts[0])  # (ahead, behind)
+    except Exception:  # noqa: BLE001 — best-effort diagnostic only
+        pass
+    return 0, 0
+
+
+def _conflict_response(
+    *,
+    status_code: int,
+    detail: str,
+    conflict_type: str,
+    stderr: str,
+    home_dir: Path,
+    branch: str | None,
+) -> JSONResponse:
+    """Build a 409 JSONResponse that carries both the legacy ``detail`` and
+    the new ``conflict_class`` classification (issue #386 / S5).
+
+    Keeps the ``X-Conflict-Type`` header intact for backward compatibility
+    with older clients; adds ``X-Conflict-Class`` alongside it.
+    """
+    ahead, behind = _compute_ahead_behind(home_dir, branch) if branch else (0, 0)
+    conflict_class = classify_conflict(stderr or "", ahead=ahead, behind=behind).value
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "detail": detail,
+            "conflict_class": conflict_class,
+        },
+        headers={
+            "X-Conflict-Type": conflict_type,
+            "X-Conflict-Class": conflict_class,
+        },
+    )
 
 
 def _get_pull_branch(current_branch: str, home_dir: Path) -> str:
@@ -122,6 +175,43 @@ async def get_git_status():
                 behind = int(parts[0])
                 ahead = int(parts[1])
 
+        # Parallel-history detection (S2, issue #385): surface the common
+        # ancestor between HEAD and origin/<pull_branch> so the frontend can
+        # distinguish "simple behind" from "parallel history" (where both
+        # Pull First and Force Push are wrong answers).
+        common_ancestor_sha = ""
+        common_ancestor_age_days = None
+        merge_base_result = subprocess.run(
+            ["git", "merge-base", "HEAD", f"origin/{pull_branch}"],
+            capture_output=True,
+            text=True,
+            cwd=str(home_dir),
+            timeout=10
+        )
+        if merge_base_result.returncode == 0:
+            common_ancestor_sha = merge_base_result.stdout.strip()
+            if common_ancestor_sha:
+                ancestor_date_result = subprocess.run(
+                    ["git", "log", "-1", "--format=%cI", common_ancestor_sha],
+                    capture_output=True,
+                    text=True,
+                    cwd=str(home_dir),
+                    timeout=10
+                )
+                if ancestor_date_result.returncode == 0:
+                    date_str = ancestor_date_result.stdout.strip()
+                    if date_str:
+                        try:
+                            ancestor_dt = datetime.fromisoformat(date_str)
+                            if ancestor_dt.tzinfo is None:
+                                ancestor_dt = ancestor_dt.replace(tzinfo=timezone.utc)
+                            delta = datetime.now(timezone.utc) - ancestor_dt
+                            common_ancestor_age_days = delta.days
+                        except ValueError:
+                            logger.warning(
+                                f"Could not parse common-ancestor date: {date_str!r}"
+                            )
+
         # Get remote URL (without credentials)
         remote_result = subprocess.run(
             ["git", "remote", "get-url", "origin"],
@@ -142,12 +232,15 @@ async def get_git_status():
         return {
             "git_enabled": True,
             "branch": current_branch,
+            "pull_branch": pull_branch,
             "remote_url": remote_url,
             "last_commit": last_commit,
             "changes": changes,
             "changes_count": len(changes),
             "ahead": ahead,
             "behind": behind,
+            "common_ancestor_sha": common_ancestor_sha,
+            "common_ancestor_age_days": common_ancestor_age_days,
             "sync_status": "up_to_date" if ahead == 0 and len(changes) == 0 else "pending_sync"
         }
 
@@ -253,10 +346,13 @@ async def sync_to_github(request: GitSyncRequest):
                     subprocess.run(["git", "rebase", "--abort"], cwd=str(home_dir), timeout=10, capture_output=True)
                     if stash_created:
                         subprocess.run(["git", "stash", "pop"], cwd=str(home_dir), timeout=30, capture_output=True)
-                    raise HTTPException(
+                    return _conflict_response(
                         status_code=409,
                         detail=f"Pull failed during sync: {pull_result.stderr}",
-                        headers={"X-Conflict-Type": "merge_conflict"}
+                        conflict_type="merge_conflict",
+                        stderr=pull_result.stderr or "",
+                        home_dir=home_dir,
+                        branch=pull_branch,
                     )
 
                 # Reapply stash
@@ -385,10 +481,13 @@ async def sync_to_github(request: GitSyncRequest):
                     }
                 # Check if it's a rejection due to remote changes
                 if "rejected" in stderr_lower or "fetch first" in stderr_lower or "non-fast-forward" in stderr_lower:
-                    raise HTTPException(
+                    return _conflict_response(
                         status_code=409,
                         detail="Push rejected: Remote has changes. Use 'Pull First' or 'Force Push' strategy.",
-                        headers={"X-Conflict-Type": "push_rejected"}
+                        conflict_type="push_rejected",
+                        stderr=stderr,
+                        home_dir=home_dir,
+                        branch=current_branch,
                     )
                 else:
                     raise HTTPException(status_code=500, detail=f"Git push failed: {stderr}")
@@ -557,10 +656,13 @@ async def pull_from_github(request: GitPullRequest = GitPullRequest()):
                     timeout=30
                 )
                 if stash_result.returncode != 0:
-                    raise HTTPException(
+                    return _conflict_response(
                         status_code=409,
                         detail=f"Failed to stash local changes: {stash_result.stderr}",
-                        headers={"X-Conflict-Type": "stash_failed"}
+                        conflict_type="stash_failed",
+                        stderr=stash_result.stderr or "",
+                        home_dir=home_dir,
+                        branch=pull_branch,
                     )
                 stash_created = "No local changes" not in stash_result.stdout
 
@@ -581,10 +683,13 @@ async def pull_from_github(request: GitPullRequest = GitPullRequest()):
                 if stash_created:
                     subprocess.run(["git", "stash", "pop"], cwd=str(home_dir), timeout=30, capture_output=True)
 
-                raise HTTPException(
+                return _conflict_response(
                     status_code=409,
                     detail=f"Pull failed with conflicts: {pull_result.stderr}",
-                    headers={"X-Conflict-Type": "merge_conflict"}
+                    conflict_type="merge_conflict",
+                    stderr=pull_result.stderr or "",
+                    home_dir=home_dir,
+                    branch=pull_branch,
                 )
 
             # Reapply stash if we created one
@@ -644,10 +749,13 @@ async def pull_from_github(request: GitPullRequest = GitPullRequest()):
                 conflict_type = "local_uncommitted" if has_local_changes else "merge_conflict"
                 error_detail = pull_result.stderr.strip()
 
-                raise HTTPException(
+                return _conflict_response(
                     status_code=409,
                     detail=f"Pull failed: {error_detail}",
-                    headers={"X-Conflict-Type": conflict_type}
+                    conflict_type=conflict_type,
+                    stderr=pull_result.stderr or "",
+                    home_dir=home_dir,
+                    branch=pull_branch,
                 )
 
             return {
