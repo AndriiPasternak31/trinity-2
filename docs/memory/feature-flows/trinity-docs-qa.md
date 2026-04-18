@@ -91,7 +91,8 @@ POST https://us-central1-mcp-server-project-455215.cloudfunctions.net/ask-trinit
 Content-Type: application/json
 
 {
-  "question": "How do I create an agent?"
+  "question": "How do I create an agent?",
+  "session_id": "optional-for-multi-turn"
 }
 ```
 
@@ -99,15 +100,51 @@ Content-Type: application/json
 ```json
 {
   "answer": "To create an agent in Trinity...",
-  "state": "SUCCEEDED"
+  "state": "SUCCEEDED",
+  "session_id": "7547107641198884380"
 }
 ```
+
+### Multi-Turn Chat
+
+The endpoint supports conversational sessions with context memory:
+
+```javascript
+// First message - creates new session
+const res1 = await fetch(ENDPOINT, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ question: "What are agents?" })
+});
+const { answer, session_id } = await res1.json();
+
+// Follow-up - continues conversation
+const res2 = await fetch(ENDPOINT, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ 
+    question: "How do I create one?",  // "one" resolves to "agent"
+    session_id: session_id
+  })
+});
+```
+
+Sessions persist ~30 minutes of inactivity. Context carries across turns.
 
 ### CLI Usage
 
 ```bash
 ./scripts/ask-trinity.sh "How do I add credentials to an agent?"
 ```
+
+## Tone & Personality
+
+The assistant has a baked-in personality via system prompt:
+
+- **Markdown formatted** — headers, bullets, code blocks
+- **Friendly & witty** — casual language, emojis, personality
+- **Simple explanations** — plain language, no jargon overload
+- **Concise** — get to the point without being robotic
 
 ## Configuration
 
@@ -139,13 +176,13 @@ Content-Type: application/json
 - **Markdown not supported**: Vertex AI Search requires `text/plain`, so `.md` files are converted to `.txt`
 - **No real-time indexing**: Document changes require ~30s for re-indexing
 - **Context window**: Large questions may be truncated
-- **No conversation memory**: Each query is independent (no multi-turn)
+- **Session timeout**: Sessions expire after ~30 min of inactivity
 
 ## Future Enhancements
 
 - [ ] Add more docs (architecture, API reference)
 - [ ] Integrate into Trinity UI as help widget
-- [ ] Add conversation memory for follow-up questions
+- [x] ~~Add conversation memory for follow-up questions~~ (done: session support)
 - [ ] Support for code snippets with syntax highlighting
 
 ## Related
