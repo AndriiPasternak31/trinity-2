@@ -408,6 +408,10 @@ async def create_agent_internal(
         env_vars['GITHUB_PAT'] = github_pat_for_agent
         # Phase 7: Enable git sync for GitHub-native agents
         env_vars['GIT_SYNC_ENABLED'] = 'true'
+        # Dev/self-host: propagate optional git base-URL override to agent container
+        _git_base = os.getenv('TRINITY_GIT_BASE_URL')
+        if _git_base:
+            env_vars['TRINITY_GIT_BASE_URL'] = _git_base
 
         # Source mode (default): Track source branch directly for pull-only sync
         # Legacy mode: Create a unique working branch for bidirectional sync

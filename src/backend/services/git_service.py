@@ -8,6 +8,7 @@ Handles:
 - Initializing git in agent containers
 """
 import httpx
+import os
 import uuid
 import logging
 from dataclasses import dataclass
@@ -22,6 +23,18 @@ logger = logging.getLogger(__name__)
 def generate_instance_id() -> str:
     """Generate a unique instance ID for an agent."""
     return uuid.uuid4().hex[:8]
+
+
+def _git_remote_url(github_pat: str, github_repo: str) -> str:
+    """Build an authenticated git remote URL.
+
+    Defaults to GitHub. Dev/self-host deployments can override the base via
+    TRINITY_GIT_BASE_URL (e.g., "http://trinity-gitea-dev:3000" for a local
+    gitea in the test harness). The base URL must include the scheme.
+    """
+    base = os.getenv("TRINITY_GIT_BASE_URL", "https://github.com").rstrip("/")
+    scheme, _, host_path = base.partition("://")
+    return f"{scheme}://oauth2:{github_pat}@{host_path}/{github_repo}.git"
 
 
 def generate_working_branch(agent_name: str, instance_id: str) -> str:
@@ -339,8 +352,8 @@ async def initialize_git_in_container(
         ('git config --global init.defaultBranch main', True),
         ('git init', True),
         (f'git remote get-url origin >/dev/null 2>&1 && '
-         f'git remote set-url origin https://oauth2:{github_pat}@github.com/{github_repo}.git || '
-         f'git remote add origin https://oauth2:{github_pat}@github.com/{github_repo}.git', True),
+         f'git remote set-url origin {_git_remote_url(github_pat, github_repo)} || '
+         f'git remote add origin {_git_remote_url(github_pat, github_repo)}', True),
         ('git fetch origin', False),  # Optional — remote may be empty
     ]
 

@@ -9,6 +9,7 @@ Handles all GitHub API interactions:
 """
 import httpx
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from enum import Enum
@@ -64,7 +65,7 @@ class GitHubService:
     Centralizes all GitHub REST API calls.
     """
 
-    API_BASE = "https://api.github.com"
+    API_BASE = os.getenv("TRINITY_GIT_API_BASE", "https://api.github.com")
     API_VERSION = "2022-11-28"
 
     def __init__(self, pat: str):
