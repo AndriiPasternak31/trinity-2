@@ -1,0 +1,155 @@
+# Trinity Docs Q&A
+
+**ID**: DOCS-QA-001  
+**Status**: Implemented  
+**Added**: 2026-04-18
+
+## Overview
+
+Public conversational Q&A system for Trinity documentation, powered by Vertex AI Search with Gemini LLM. Users can ask questions about Trinity and receive grounded answers with citations from the onboarding documentation.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Trinity Docs Q&A                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  docs/onboarding/*.md                                                    │
+│         │                                                                │
+│         │ GitHub Action (on push)                                        │
+│         ▼                                                                │
+│  ┌─────────────────────┐    ┌─────────────────────┐                     │
+│  │   GCS Bucket        │───▶│ Vertex AI Search    │                     │
+│  │   (txt conversion)  │    │ Data Store          │                     │
+│  └─────────────────────┘    └──────────┬──────────┘                     │
+│                                        │                                 │
+│                              ┌─────────┴──────────┐                     │
+│                              │  Search Engine     │                     │
+│                              │  (Gemini LLM)      │                     │
+│                              └─────────┬──────────┘                     │
+│                                        │                                 │
+│                              ┌─────────┴──────────┐                     │
+│                              │  Cloud Function    │                     │
+│                              │  (public endpoint) │                     │
+│                              └─────────┬──────────┘                     │
+│                                        │                                 │
+│                    ┌───────────────────┼───────────────────┐            │
+│                    ▼                   ▼                   ▼            │
+│              ask-trinity.sh       curl/REST           Future UI         │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Components
+
+### GCP Resources
+
+| Resource | ID | Description |
+|----------|-----|-------------|
+| Project | `mcp-server-project-455215` | GCP project |
+| GCS Bucket | `trinity-docs-rag-mcp-server-project-455215` | Document storage |
+| Data Store | `trinity-docs` | Vertex AI Search data store |
+| Search Engine | `trinity-search` | Search engine with LLM add-on |
+| Cloud Function | `ask-trinity` | Public HTTP endpoint |
+| Workload Identity Pool | `github-actions` | GitHub Actions auth |
+| Service Account | `trinity-docs-sync` | GCS + Discovery Engine access |
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `.github/workflows/sync-docs-to-vertex.yml` | Auto-sync docs to GCS on push |
+| `scripts/ask-trinity.sh` | CLI tool for querying |
+| `docs/onboarding/*.md` | Source documentation |
+
+## Data Flow
+
+### Document Sync (GitHub Action)
+
+1. Push to `docs/onboarding/*.md` triggers workflow
+2. Workflow authenticates via Workload Identity Federation
+3. Markdown files converted to `.txt` (Vertex AI requirement)
+4. Files synced to `gs://trinity-docs-rag-*/txt/`
+5. Document re-import triggered via Discovery Engine API
+6. Vertex AI indexes and chunks documents
+
+### Query Flow
+
+1. User sends question via `ask-trinity.sh` or direct curl
+2. Cloud Function receives request (no auth required)
+3. Function calls Vertex AI Search Answer API
+4. Gemini 2.0 Flash generates answer from indexed docs
+5. Response includes answer text and citation references
+
+## API
+
+### Public Endpoint
+
+```
+POST https://us-central1-mcp-server-project-455215.cloudfunctions.net/ask-trinity
+Content-Type: application/json
+
+{
+  "question": "How do I create an agent?"
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "To create an agent in Trinity...",
+  "state": "SUCCEEDED"
+}
+```
+
+### CLI Usage
+
+```bash
+./scripts/ask-trinity.sh "How do I add credentials to an agent?"
+```
+
+## Configuration
+
+### GitHub Secrets
+
+| Secret | Value |
+|--------|-------|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/667627606781/locations/global/workloadIdentityPools/github-actions/providers/github` |
+| `GCP_SERVICE_ACCOUNT` | `trinity-docs-sync@mcp-server-project-455215.iam.gserviceaccount.com` |
+
+### Service Account Roles
+
+- `roles/storage.objectAdmin` — GCS bucket access
+- `roles/discoveryengine.editor` — Document import
+
+## Indexed Documents
+
+| Document | Content |
+|----------|---------|
+| `00-welcome.txt` | Introduction to Trinity |
+| `01-getting-started.txt` | Installation and first agent |
+| `02-use-case-scenarios.txt` | Real-world usage examples |
+| `03-common-workflows.txt` | Day-to-day operations |
+| `04-troubleshooting.txt` | Problem diagnosis and fixes |
+| `README.txt` | Documentation index |
+
+## Limitations
+
+- **Markdown not supported**: Vertex AI Search requires `text/plain`, so `.md` files are converted to `.txt`
+- **No real-time indexing**: Document changes require ~30s for re-indexing
+- **Context window**: Large questions may be truncated
+- **No conversation memory**: Each query is independent (no multi-turn)
+
+## Future Enhancements
+
+- [ ] Add more docs (architecture, API reference)
+- [ ] Integrate into Trinity UI as help widget
+- [ ] Add conversation memory for follow-up questions
+- [ ] Support for code snippets with syntax highlighting
+
+## Related
+
+- [Vertex AI Search Console](https://console.cloud.google.com/gen-app-builder/engines?project=mcp-server-project-455215)
+- [Cloud Function](https://console.cloud.google.com/functions/details/us-central1/ask-trinity?project=mcp-server-project-455215)
+- [GCS Bucket](https://console.cloud.google.com/storage/browser/trinity-docs-rag-mcp-server-project-455215)
