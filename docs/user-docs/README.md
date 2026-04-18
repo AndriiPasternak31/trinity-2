@@ -7,6 +7,7 @@
 - [Overview](getting-started/overview.md) — What is Trinity, key concepts, architecture
 - [Setup](getting-started/setup.md) — Installation, first-time setup, login
 - [Quick Start](getting-started/quick-start.md) — Create your first agent in 5 minutes
+- [Roles and Permissions](getting-started/roles-and-permissions.md) — 4-tier role model, user management
 - [Getting Help](getting-started/help.md) — Docs Q&A bot, community resources
 
 ## Agents
@@ -19,6 +20,7 @@
 - [Agent Logs](agents/agent-logs.md) — Log viewing, telemetry, Vector aggregation
 - [Agent Configuration](agents/agent-configuration.md) — Autonomy, read-only, resources, timeout
 - [Agent Guardrails](agents/agent-guardrails.md) — Deterministic safety enforcement, bash deny-lists, credential protection
+- [Self-Execute](agents/self-execute.md) — Background tasks during chat, result injection
 
 ## Credentials
 
@@ -38,6 +40,7 @@
 - [Scheduling](automation/scheduling.md) — Cron schedules, execution queue, misfire handling
 - [Skills and Playbooks](automation/skills-and-playbooks.md) — Skills library, assignment, chat autocomplete
 - [Approvals](automation/approvals.md) — Human-in-the-loop approval gates
+- [Fan-Out](automation/fan-out.md) — Parallel task dispatch and result collection
 
 ## Operations
 
@@ -45,10 +48,13 @@
 - [Operating Room](operations/operating-room.md) — Operator queue, notifications, cost alerts
 - [Monitoring](operations/monitoring.md) — Health checks, cleanup service, fleet dashboard
 - [Executions](operations/executions.md) — Execution list, detail, live streaming, termination
+- [Audit Trail](operations/audit-trail.md) — Append-only administrative action log
+- [Agent Quotas](operations/agent-quotas.md) — Per-role agent creation limits
 
 ## Sharing and Access
 
 - [Agent Sharing](sharing-and-access/agent-sharing.md) — Share with users, access levels
+- [Access Control](sharing-and-access/access-control.md) — Cross-channel email verification, access requests
 - [Public Links](sharing-and-access/public-links.md) — Public chat URLs, email verification, session memory
 - [Tags and Organization](sharing-and-access/tags-and-organization.md) — Tags, filtering, system views
 - [Mobile Admin](sharing-and-access/mobile-admin.md) — Mobile PWA at /m
@@ -61,6 +67,19 @@
 - [Telegram Integration](integrations/telegram-integration.md) — Bot setup, group chats, privacy mode, trigger modes
 - [MCP Server](integrations/mcp-server.md) — 62 MCP tools, API keys, tool categories
 - [Nevermined Payments](integrations/nevermined-payments.md) — x402 payment monetization
+
+## CLI
+
+- [Trinity CLI](cli/trinity-cli.md) — Command-line agent management, multi-instance profiles, deployment
+
+## Abilities (Agent Development Toolkit)
+
+- [Overview](abilities/overview.md) — Plugin marketplace introduction, quick start
+- [create-agent Plugin](abilities/create-agent-plugin.md) — Agent creation wizards (11 wizards)
+- [agent-dev Plugin](abilities/agent-dev-plugin.md) — Development tools, memory systems, backlog workflow
+- [trinity Plugin](abilities/trinity-plugin.md) — Platform deployment and sync
+- [dev-methodology Plugin](abilities/dev-methodology-plugin.md) — Documentation-driven development
+- [utilities Plugin](abilities/utilities-plugin.md) — Ops and productivity tools
 
 ## Dev Announcements
 
