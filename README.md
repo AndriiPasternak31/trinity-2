@@ -164,7 +164,7 @@ If you're an AI agent given this repository:
 - **Timeline View** — Gantt-style execution timeline with trigger-based color coding (manual, scheduled, MCP, agent-triggered, public, paid)
 - **Host Telemetry** — Real-time CPU, memory, and disk monitoring in the dashboard header
 - **Fleet Health Monitoring** — Multi-layer health checks (Docker, network, business) with alerting and WebSocket updates
-- **OpenTelemetry Metrics** — Cost, token usage, and productivity tracking exportable to Grafana/Datadog
+- **OpenTelemetry Metrics & Tracing** — Cost, token usage, and productivity tracking exportable to Grafana/Datadog; distributed traces across multi-agent calls
 
 <p align="center">
   <img src="docs/assets/screenshots/timeline-fleet-activity.png" alt="Trinity Timeline — Fleet Activity" width="700"/>
@@ -182,6 +182,9 @@ If you're an AI agent given this repository:
 - **Full Capabilities Mode** — Optional elevated permissions for agents that need `apt-get`, `sudo`, etc.
 - **Read-Only Mode** — Protect source code from modification while allowing output to designated directories
 - **Runaway Prevention** — `max_turns` parameter limits agent execution depth
+- **Guardrails** — Deterministic safety enforcement with configurable per-agent overrides (GUARD-001)
+- **Persistent Async Backlog** — SQLite-backed FIFO queue for tasks that exceed parallel capacity, survives restarts
+- **Execution Retry & Timeouts** — Automatic retry for failed scheduled executions; configurable per-agent execution timeouts
 
 <p align="center">
   <img src="docs/assets/screenshots/agent-dashboard-detail.png" alt="Trinity Agent Dashboard" width="700"/>
@@ -194,14 +197,20 @@ If you're an AI agent given this repository:
 - **Shared Folders** — File-based state sharing between agents via Docker volumes
 - **System Manifest Deployment** — Deploy multi-agent systems from a single YAML configuration
 - **Scheduling** — Cron-based automation with dedicated scheduler service and Redis distributed locks
-- **MCP Integration** — 67 tools for external agent orchestration via Model Context Protocol
+- **MCP Integration** — 72 tools for external agent orchestration via Model Context Protocol
 - **Trinity Connect** — WebSocket event streaming for local Claude Code integration
+- **Channel Adapters** — Pluggable external messaging: Slack (Socket Mode + webhooks, per-channel agent binding) and Telegram (DMs, groups, voice transcription, file uploads)
+- **Unified Access Control** — Verified-email allow-list governs access across web, Slack, and Telegram with per-agent `require_email` / `open_access` policies (#311)
+- **Proactive Messaging** — Agents initiate user conversations via `send_message` / `send_group_message` MCP tools (#321, #349)
 
 ### Operations
 
 - **Template-Based Deployment** — Create agents from pre-configured templates or GitHub repos
 - **Credential Management** — Direct file injection with encrypted git storage (`.credentials.enc`)
+- **Per-Agent GitHub PAT** — Encrypted per-agent tokens override the global PAT for private template access (#347)
 - **Subscription Management** — Centralized Claude Max/Pro subscription tokens shared across agents
+- **Platform Audit Log** — Append-only cross-cutting audit trail for lifecycle, auth, and MCP events (SEC-001, admin-only API)
+- **Role Hierarchy** — 4-tier RBAC (`user` < `operator` < `creator` < `admin`) with whitelist-driven role on first login
 - **Agent Tags & System Views** — Organize agents with tags and saved filter views for fleet management
 - **Live Execution Streaming** — Real-time streaming of execution logs to the web UI
 - **Execution Termination** — Stop running executions gracefully via SIGINT/SIGKILL
@@ -321,7 +330,7 @@ trinity/
 ├── src/
 │   ├── backend/          # FastAPI backend API
 │   ├── frontend/         # Vue.js 3 + Tailwind CSS web UI
-│   ├── mcp-server/       # Trinity MCP server (67 tools)
+│   ├── mcp-server/       # Trinity MCP server (72 tools)
 │   ├── cli/              # Trinity CLI (pip install trinity-cli)
 │   └── scheduler/        # Dedicated scheduler service (Redis locks)
 ├── docker/
@@ -449,10 +458,11 @@ Trinity includes an MCP server for external orchestration of agents:
 | `get_agent` | Get detailed agent information |
 | `get_agent_info` | Get agent template metadata (capabilities, commands, etc.) |
 | `create_agent` | Create a new agent from template |
-| `start_agent` | Start a stopped agent |
-| `stop_agent` | Stop a running agent |
+| `deploy_local_agent` | Package and deploy a local agent directory |
+| `start_agent` / `stop_agent` | Start or stop an agent container |
 | `rename_agent` | Rename an agent |
 | `delete_agent` | Delete an agent |
+| `initialize_github_sync` / `set_agent_github_pat` | GitHub sync and per-agent PAT management |
 
 #### Communication
 | Tool | Description |
@@ -461,6 +471,8 @@ Trinity includes an MCP server for external orchestration of agents:
 | `get_chat_history` | Retrieve conversation history |
 | `get_agent_logs` | View container logs |
 | `fan_out` | Dispatch N parallel tasks to an agent and collect results |
+| `send_message` | Proactive user message by verified email (agent-initiated) |
+| `send_group_message` / `list_channel_groups` | Proactive group messaging across Slack/Telegram |
 
 > **Note**: Claude Code enforces a 60-second timeout on MCP HTTP tool calls. For longer tasks, use `async=true` with `parallel=true` to get an `execution_id` immediately and poll for results. See [Known Issues](docs/KNOWN_ISSUES.md) for details.
 
@@ -482,6 +494,7 @@ Trinity includes an MCP server for external orchestration of agents:
 
 #### Additional Tool Categories
 - **Scheduling** (8 tools) — Create, list, update, delete, enable/disable schedules, trigger manually
+- **Executions** (3 tools) — List recent executions, poll async results, get agent activity summaries
 - **Tags** (5 tools) — List, get, set, add, remove agent tags for fleet organization
 - **Subscriptions** (6 tools) — Register and assign Claude Max/Pro subscriptions to agents
 - **Skills** (7 tools) — List, create, update, delete, assign skills to agents
@@ -622,7 +635,7 @@ Weekly maintenance skills to keep the codebase clean and consistent:
 
 | Skill | What it checks |
 |-------|---------------|
-| `/validate-architecture` | 16 architectural invariants (layer separation, auth patterns, etc.) |
+| `/validate-architecture` | 15 architectural invariants (layer separation, auth patterns, etc.) |
 | `/validate-schema` | Schema drift between `db/schema.py`, `db/migrations.py`, and `architecture.md` |
 | `/validate-config` | Env var consistency across `docker-compose.yml`, `.env.example`, and code |
 | `/refactor-audit` | Dead code, complexity hotspots, large files/functions |
