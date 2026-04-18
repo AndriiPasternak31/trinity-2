@@ -148,12 +148,6 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `skills.py` - Skill CRUD and assignment
 - `settings.py` - Platform admin settings (includes Slack transport management: connect/disconnect/install)
 
-*Process Engine:*
-- `processes.py` - Process definition CRUD, execution control
-- `process_templates.py` - Process template listing and retrieval
-- `approvals.py` - Human approval inbox
-- `triggers.py` - Process triggers
-
 *Content & Files:*
 - `image_generation.py` - Image generation REST endpoints (IMG-001)
 - `avatar.py` - Agent avatar generation and serving (AVATAR-001)
@@ -162,7 +156,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 *System:*
 - `system_agent.py` - System agent management
 
-**Services (`services/`)** — 23 service modules + Process Engine:
+**Services (`services/`)** — 23 service modules:
 
 *Core:*
 - `docker_service.py` - Docker container management
@@ -224,9 +218,6 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `system_service.py` - System manifest operations
 - `log_archive_service.py` - Log archival
 - `archive_storage.py` - Archive storage backend
-
-*Process Engine:*
-- `process_engine/` - BPMN-inspired workflow orchestration (see Process Engine section below)
 
 **Logging (`logging_config.py`):**
 - Structured JSON logging for production
@@ -375,73 +366,9 @@ docker exec trinity-vector sh -c "tail -50 /data/logs/agents.json" | jq .
 └── [template files...]    # Any other files from template
 ```
 
-### Process Engine (`src/backend/services/process_engine/`)
+### Process Engine
 
-**NEW: 2026-01-16** — BPMN-inspired workflow orchestration for multi-agent processes.
-
-**Architecture:** Domain-Driven Design (DDD) with clean layer separation.
-
-```
-services/process_engine/
-├── domain/              # Core domain model
-│   ├── aggregates.py    # ProcessDefinition, ProcessExecution
-│   ├── entities.py      # StepDefinition, StepRoles, StepExecution
-│   ├── value_objects.py # ProcessId, ExecutionId, Version, StepId
-│   ├── enums.py         # ExecutionStatus, StepType, AgentRole
-│   ├── events.py        # Domain events (ProcessStarted, StepCompleted, etc.)
-│   └── step_configs.py  # Type-specific step configurations
-├── engine/              # Execution engine
-│   ├── execution_engine.py  # Main orchestrator
-│   ├── step_handler.py      # Base handler interface
-│   ├── dependency_resolver.py # Parallel execution planning
-│   └── handlers/            # Step type handlers
-│       ├── agent_task.py    # AI agent execution
-│       ├── human_approval.py # Human-in-the-loop
-│       ├── gateway.py       # Conditional branching
-│       ├── timer.py         # Delay/scheduling
-│       ├── notification.py  # Send notifications
-│       └── sub_process.py   # Nested process calls
-├── repositories/        # Persistence layer
-│   ├── process_definition_repository.py
-│   └── process_execution_repository.py
-├── services/            # Application services
-│   ├── validator.py     # YAML + semantic validation
-│   ├── analytics.py     # Metrics and trends
-│   ├── alerts.py        # Cost threshold alerts
-│   ├── informed_notifier.py # EMI pattern notifications
-│   └── templates.py     # Process template management
-├── events/              # Event infrastructure
-│   └── websocket_publisher.py # Real-time UI updates
-└── schemas/             # JSON Schema for validation
-    └── process-definition.schema.json
-```
-
-**Step Types:**
-
-| Type | Handler | Description |
-|------|---------|-------------|
-| `agent_task` | `AgentTaskHandler` | Execute task via AI agent |
-| `human_approval` | `HumanApprovalHandler` | Pause for human decision |
-| `gateway` | `GatewayHandler` | Conditional branching |
-| `timer` | `TimerHandler` | Delay execution |
-| `notification` | `NotificationHandler` | Send notifications |
-| `sub_process` | `SubProcessHandler` | Call another process |
-
-**Execution State Machine:**
-
-```
-PENDING → RUNNING → COMPLETED
-                 ↘ FAILED
-                 ↘ CANCELLED
-          ↗ PAUSED (approval) → RUNNING
-```
-
-**EMI Role Pattern:**
-- **Executor**: Agent that performs the work (required)
-- **Monitor**: Agents that can intervene (optional)
-- **Informed**: Agents notified of events via NDJSON files (optional)
-
-**Feature Flows:** `docs/memory/feature-flows/process-engine/`
+> **OUT OF SCOPE**: The Process Engine (`src/backend/services/process_engine/`) is not currently being developed. Code exists but is dormant. See `docs/memory/feature-flows/process-engine/` for historical design docs.
 
 ### Background Services
 
@@ -639,38 +566,6 @@ Services that run continuously in the backend process:
 | GET | `/oauth/{provider}/callback` | OAuth callback |
 | GET | `/api/health` | Health check |
 
-### Process Engine (NEW: 2026-01-16)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/processes` | List all process definitions |
-| POST | `/api/processes` | Create process from YAML |
-| GET | `/api/processes/{id}` | Get process definition |
-| PUT | `/api/processes/{id}` | Update process definition |
-| DELETE | `/api/processes/{id}` | Delete process |
-| POST | `/api/processes/{id}/publish` | Publish process (make executable) |
-| POST | `/api/processes/{id}/execute` | Start process execution |
-| GET | `/api/executions` | List all executions |
-| GET | `/api/executions/{id}` | Get execution details |
-| POST | `/api/executions/{id}/cancel` | Cancel running execution |
-| GET | `/api/approvals` | List pending approvals |
-| GET | `/api/approvals/{id}` | Get approval details |
-| POST | `/api/approvals/{id}/decide` | Submit approval decision |
-| GET | `/api/process-templates` | List process templates |
-| GET | `/api/process-templates/{id}` | Get template with definition |
-| POST | `/api/process-templates` | Create user template |
-| GET | `/api/processes/{id}/analytics` | Get process metrics |
-| GET | `/api/processes/{id}/trends` | Get execution trends |
-
-**WebSocket Events (Process Engine):**
-- `process_started` - Execution began
-- `step_started` - Step execution began
-- `step_completed` - Step finished successfully
-- `step_failed` - Step failed
-- `process_completed` - Execution finished
-- `process_failed` - Execution failed
-- `approval_required` - Human approval needed
-
 ### Operator Queue (OPS-001)
 
 | Method | Path | Description |
@@ -697,21 +592,9 @@ Services that run continuously in the backend process:
 | GET | `/api/audit-log/stats` | Admin | Aggregate counts by event_type and actor_type |
 | GET | `/api/audit-log/{event_id}` | Admin | Single entry by UUID |
 
-**Storage**: append-only `audit_log` table in main SQLite DB. SQLite triggers
-block UPDATE unconditionally and DELETE within the 365-day retention window.
+**Storage**: append-only `audit_log` table in main SQLite DB. SQLite triggers block UPDATE unconditionally and DELETE within the 365-day retention window.
 
-**Distinct from `/api/audit`**: the existing `/api/audit` router exposes the
-Process Engine's workflow audit (`audit_entries` table). The new `/api/audit-log`
-covers cross-cutting platform events (lifecycle, auth, MCP, credentials, etc.)
-via the new `audit_log` table. Both are intentionally separate per the SEC-001
-architecture; a unified surface can be added later.
-
-**Phase 1 + agent lifecycle smoke test.** Phase 1 ships the infrastructure;
-Phase 2a ships agent lifecycle audit (`routers/agents.py` emits rows after
-create / start / stop / delete) as a working end-to-end demonstration.
-Remaining write integrations (auth, sharing, settings, credentials — Phase 2b),
-MCP TypeScript audit (Phase 3), and hash-chain verification + export (Phase 4)
-follow as separate PRs against issue #20.
+**Phase 1 + agent lifecycle smoke test.** Phase 1 ships infrastructure; Phase 2a ships agent lifecycle audit. Remaining integrations (auth, sharing, settings, credentials — Phase 2b), MCP TypeScript audit (Phase 3), and hash-chain verification (Phase 4) follow as separate PRs.
 
 ### Nevermined Payments (NVM-001)
 
@@ -751,19 +634,17 @@ These are structural patterns that must be preserved. Breaking them causes casca
 
 9. **Channel Adapter ABC** — External messaging (Slack, Telegram) follows `adapters/base.py` → `ChannelAdapter` ABC with `NormalizedMessage` and `ChannelResponse`. New channels must implement this interface.
 
-10. **Process Engine: DDD Isolation** — `services/process_engine/` uses strict DDD: domain aggregates, value objects, repository pattern, event bus. New step types → new handler in `engine/handlers/` implementing `StepHandler` base. Don't leak process engine internals into regular services.
+10. **WebSocket Events for Real-Time** — All real-time updates go through WebSocket broadcast (`agent_activity`, `agent_collaboration`). Frontend subscribes via `utils/websocket.js`. Don't poll for state that should be pushed.
 
-11. **WebSocket Events for Real-Time** — All real-time updates go through WebSocket broadcast (`agent_activity`, `agent_collaboration`, process events). Frontend subscribes via `utils/websocket.js`. Don't poll for state that should be pushed.
+11. **Docker as Source of Truth** — Agent container state comes from Docker labels (`trinity.*`), not from an in-memory registry. `docker_service.py` is the single point of Docker interaction.
 
-12. **Docker as Source of Truth** — Agent container state comes from Docker labels (`trinity.*`), not from an in-memory registry. `docker_service.py` is the single point of Docker interaction.
+12. **Credentials: File Injection, Never Stored in DB** — Credentials use `.env` files injected into containers (CRED-002). Encrypted exports use AES-256-GCM (`.credentials.enc`). Redis holds transient secrets. Never persist credential values in SQLite.
 
-13. **Credentials: File Injection, Never Stored in DB** — Credentials use `.env` files injected into containers (CRED-002). Encrypted exports use AES-256-GCM (`.credentials.enc`). Redis holds transient secrets. Never persist credential values in SQLite.
+13. **MCP Server = Third Surface in Sync** — The MCP server (`src/mcp-server/src/tools/*.ts`) is a TypeScript proxy over the backend API. When adding a backend endpoint for external access, the MCP tool module needs updating too. Three surfaces must stay in sync: backend router, agent server (if internal), MCP tool (if external).
 
-14. **MCP Server = Third Surface in Sync** — The MCP server (`src/mcp-server/src/tools/*.ts`) is a TypeScript proxy over the backend API. When adding a backend endpoint for external access, the MCP tool module needs updating too. Three surfaces must stay in sync: backend router, agent server (if internal), MCP tool (if external).
+14. **Pydantic Models Centralized in `models.py`** — Request/response models live in `models.py`, not scattered across routers. Keeps the API contract in one place.
 
-15. **Pydantic Models Centralized in `models.py`** — Request/response models live in `models.py`, not scattered across routers. Keeps the API contract in one place.
-
-16. **API URL Nesting Convention** — Agent-scoped resources nest under `/api/agents/{name}/...`. Platform-wide resources get top-level prefixes (`/api/executions`, `/api/processes`, `/api/approvals`).
+15. **API URL Nesting Convention** — Agent-scoped resources nest under `/api/agents/{name}/...`. Platform-wide resources get top-level prefixes (`/api/executions`, `/api/operator-queue`).
 
 ---
 
@@ -1099,96 +980,6 @@ CREATE TABLE slack_active_threads (
 );
 ```
 
-**process_definitions:** (Phase 14 - Process Engine, NEW: 2026-01-16)
-```sql
-CREATE TABLE process_definitions (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    yaml_content TEXT NOT NULL,
-    version INTEGER DEFAULT 1,
-    status TEXT DEFAULT 'draft',       -- draft, published, archived
-    created_by TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    UNIQUE(name, version),
-    FOREIGN KEY (created_by) REFERENCES users(id)
-);
-CREATE INDEX idx_process_definitions_name ON process_definitions(name);
-CREATE INDEX idx_process_definitions_status ON process_definitions(status);
-```
-
-**process_executions:** (Phase 14 - Process Engine, NEW: 2026-01-16)
-```sql
-CREATE TABLE process_executions (
-    id TEXT PRIMARY KEY,
-    process_id TEXT NOT NULL,
-    process_name TEXT NOT NULL,
-    process_version INTEGER NOT NULL,
-    status TEXT NOT NULL,              -- pending, running, completed, failed, cancelled, paused
-    triggered_by TEXT NOT NULL,        -- manual, schedule, sub_process, api
-    input_data TEXT,                   -- JSON
-    output_data TEXT,                  -- JSON
-    total_cost REAL DEFAULT 0,
-    started_at TEXT,
-    completed_at TEXT,
-    parent_execution_id TEXT,          -- For sub-processes
-    parent_step_id TEXT,
-    error TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (process_id) REFERENCES process_definitions(id),
-    FOREIGN KEY (parent_execution_id) REFERENCES process_executions(id)
-);
-CREATE INDEX idx_process_executions_process ON process_executions(process_id);
-CREATE INDEX idx_process_executions_status ON process_executions(status);
-CREATE INDEX idx_process_executions_parent ON process_executions(parent_execution_id);
-```
-
-**process_step_executions:** (Phase 14 - Process Engine, NEW: 2026-01-16)
-```sql
-CREATE TABLE process_step_executions (
-    id TEXT PRIMARY KEY,
-    execution_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
-    step_name TEXT NOT NULL,
-    step_type TEXT NOT NULL,           -- agent_task, human_approval, gateway, timer, notification, sub_process
-    status TEXT NOT NULL,              -- pending, running, completed, failed, skipped, waiting
-    agent_name TEXT,
-    input_data TEXT,                   -- JSON
-    output_data TEXT,                  -- JSON
-    cost REAL DEFAULT 0,
-    started_at TEXT,
-    completed_at TEXT,
-    retry_count INTEGER DEFAULT 0,
-    error TEXT,
-    FOREIGN KEY (execution_id) REFERENCES process_executions(id)
-);
-CREATE INDEX idx_step_executions_execution ON process_step_executions(execution_id);
-CREATE INDEX idx_step_executions_status ON process_step_executions(status);
-```
-
-**process_approvals:** (Phase 14 - Process Engine, NEW: 2026-01-16)
-```sql
-CREATE TABLE process_approvals (
-    id TEXT PRIMARY KEY,
-    execution_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
-    status TEXT NOT NULL,              -- pending, approved, rejected, timed_out
-    title TEXT NOT NULL,
-    description TEXT,
-    approvers TEXT,                    -- JSON array
-    timeout_at TEXT,
-    decided_by TEXT,
-    decision TEXT,
-    comment TEXT,
-    created_at TEXT NOT NULL,
-    completed_at TEXT,
-    FOREIGN KEY (execution_id) REFERENCES process_executions(id)
-);
-CREATE INDEX idx_process_approvals_status ON process_approvals(status);
-CREATE INDEX idx_process_approvals_execution ON process_approvals(execution_id);
-```
-
 **operator_queue:** (OPS-001 - Operating Room, NEW: 2026-03-07)
 ```sql
 CREATE TABLE operator_queue (
@@ -1218,15 +1009,6 @@ CREATE INDEX idx_opqueue_priority ON operator_queue(priority);
 CREATE INDEX idx_opqueue_created ON operator_queue(created_at);
 CREATE INDEX idx_opqueue_agent_status ON operator_queue(agent_name, status);
 ```
-
-**Process Engine Features:**
-- YAML-based process definitions with JSON Schema validation
-- Six step types: agent_task, human_approval, gateway, timer, notification, sub_process
-- Parallel execution based on dependency graph
-- EMI role pattern (Executor/Monitor/Informed) per step
-- Real-time monitoring via WebSocket events
-- Cost tracking and threshold alerts
-- Sub-process support with parent-child linking
 
 **audit_log:** (SEC-001 / Issue #20 — Phase 1, NEW: 2026-04-14)
 ```sql
@@ -1271,7 +1053,7 @@ BEGIN SELECT RAISE(ABORT, 'Audit log entries cannot be deleted within retention 
 
 **audit_log Features:**
 - Append-only via SQLite triggers (UPDATE blocked unconditionally, DELETE blocked within 365-day retention)
-- Cross-cutting platform audit; coexists with the Process Engine's separate `audit_entries` table
+- Cross-cutting platform audit for lifecycle, auth, MCP, credentials events
 - Phase 1 ships infrastructure only; write integration into routers happens in Phase 2
 
 ### Redis
@@ -1575,38 +1357,3 @@ Local and production use the same ports for consistency:
 - `audit-data` - Audit database
 - `audit-logs` - Audit log files
 
----
-
-## Key Files Reference
-
-| File | Purpose |
-|------|---------|
-| `src/backend/main.py` | Main FastAPI app |
-| `src/backend/database.py` | SQLite persistence |
-| `src/backend/routers/credentials.py` | Credential injection (CRED-002) |
-| `src/frontend/src/views/AgentDetail.vue` | Agent detail page |
-| `src/frontend/src/stores/agents.js` | Agent state |
-| `src/frontend/src/stores/auth.js` | Auth state |
-| `docker/base-image/agent-server.py` | Agent internal server |
-| `docker/base-image/Dockerfile` | Agent base image |
-| `docker-compose.yml` | Local orchestration |
-| `docker-compose.prod.yml` | Production config |
-
-### Process Engine Files (NEW: 2026-01-16)
-
-| File | Purpose |
-|------|---------|
-| `src/backend/services/process_engine/` | Process Engine service root |
-| `src/backend/services/process_engine/engine/execution_engine.py` | Core orchestration engine |
-| `src/backend/services/process_engine/domain/aggregates.py` | ProcessDefinition, ProcessExecution |
-| `src/backend/services/process_engine/domain/entities.py` | StepDefinition, StepRoles |
-| `src/backend/services/process_engine/services/validator.py` | YAML + semantic validation |
-| `src/backend/services/process_engine/services/analytics.py` | Metrics and trends |
-| `src/backend/routers/processes.py` | Process API endpoints |
-| `src/frontend/src/views/ProcessList.vue` | Process list page |
-| `src/frontend/src/views/ProcessEditor.vue` | YAML editor with preview |
-| `src/frontend/src/views/ProcessExecutionDetail.vue` | Execution monitoring |
-| `src/frontend/src/views/Approvals.vue` | Human approval inbox |
-| `config/process-templates/` | Bundled process templates |
-| `docs/PROCESS_DRIVEN_PLATFORM/` | Design documents |
-| `docs/memory/feature-flows/process-engine/` | Feature flow documentation |
