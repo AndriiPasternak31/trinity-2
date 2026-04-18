@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'docs/onboarding/**'
+      - 'docs/user-docs/**'
   workflow_dispatch:
 
 env:
@@ -37,9 +38,20 @@ jobs:
         run: |
           # Convert .md to .txt with text/plain content type (Vertex AI Search requirement)
           mkdir -p /tmp/docs-txt
+
+          # Sync docs/onboarding (flat)
           for file in docs/onboarding/*.md; do
+            [ -f "$file" ] || continue
             basename=$(basename "$file" .md)
             cp "$file" "/tmp/docs-txt/${basename}.txt"
+          done
+
+          # Sync docs/user-docs (recursive, preserve relative paths with hyphens)
+          find docs/user-docs -name "*.md" -type f | while read file; do
+            # Convert path like docs/user-docs/guides/building-agents.md to user-docs-guides-building-agents.txt
+            relpath="${file#docs/user-docs/}"
+            txtname=$(echo "$relpath" | sed 's|/|-|g' | sed 's|\.md$|.txt|')
+            cp "$file" "/tmp/docs-txt/${txtname}"
           done
 
           # Sync to GCS with explicit content type
