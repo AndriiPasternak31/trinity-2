@@ -17,8 +17,14 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
     echo "Initializing agent from GitHub repository: ${GITHUB_REPO}"
     cd /home/developer
 
-    # Clone the repository using PAT authentication
-    CLONE_URL="https://oauth2:${GITHUB_PAT}@github.com/${GITHUB_REPO}.git"
+    # Clone the repository using PAT authentication.
+    # TRINITY_GIT_BASE_URL defaults to https://github.com; overridable for
+    # self-hosted gitea / GHES / dev harnesses.
+    GIT_BASE_URL="${TRINITY_GIT_BASE_URL:-https://github.com}"
+    GIT_BASE_URL="${GIT_BASE_URL%/}"
+    GIT_HOST_PATH="${GIT_BASE_URL#*://}"
+    GIT_SCHEME="${GIT_BASE_URL%%://*}"
+    CLONE_URL="${GIT_SCHEME}://oauth2:${GITHUB_PAT}@${GIT_HOST_PATH}/${GITHUB_REPO}.git"
 
     # Check if GIT_SYNC_ENABLED - if so, keep .git directory for bidirectional sync
     if [ "${GIT_SYNC_ENABLED}" = "true" ]; then
@@ -34,7 +40,7 @@ if [ -n "${GITHUB_REPO}" ] && [ -n "${GITHUB_PAT}" ]; then
             echo "Current branch: ${CURRENT_BRANCH} (preserved from previous run)"
             # Update remote URL with current PAT (may have changed since last start)
             if [ -n "${GITHUB_PAT}" ]; then
-                git remote set-url origin "https://oauth2:${GITHUB_PAT}@github.com/${GITHUB_REPO}.git"
+                git remote set-url origin "${CLONE_URL}"
             fi
             git fetch origin 2>&1 || echo "Note: Could not fetch from remote"
 
