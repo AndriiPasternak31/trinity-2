@@ -2,6 +2,12 @@
 
 > Auto-generated from source code. Run `/generate-user-docs` to update.
 
+## Guides
+
+- [Deploying Trinity](guides/deploying-trinity.md) — Cloud vs self-hosted setup, step-by-step
+- [Using Trinity](guides/using-trinity.md) — UI tour: dashboard, agents, monitoring
+- [Building Agents](guides/building-agents.md) — Create, develop, deploy with Claude Code + abilities
+
 ## Getting Started
 
 - [Overview](getting-started/overview.md) — What is Trinity, key concepts, architecture

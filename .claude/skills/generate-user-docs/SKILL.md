@@ -30,20 +30,37 @@ Read backend routers, frontend views, feature flows, and recent changes to produ
 | Feature flow index | `docs/memory/feature-flows.md` | Yes | No |
 | Requirements | `docs/memory/requirements.md` | Yes | No |
 | Architecture | `docs/memory/architecture.md` | Yes | No |
+| Trinity Docs site | `../trinity-docs/app/getting-started/*.tsx` | Yes | No |
+| Abilities repo | `github.com/abilityai/abilities` (README) | Yes | No |
 | Git history | `git log --since` | Yes | No |
 | Existing user docs | `docs/user-docs/**/*.md` | Yes | Yes |
-| Git history | `git log --since` | Yes | No |
 
 ## Prerequisites
 
 - Repository checked out with `docs/memory/` populated
 - No build or runtime dependencies required
 
+## Maintained Guides
+
+These tutorial-style guides walk users through end-to-end tasks. Keep them in sync with their source.
+
+| Guide | Source | Purpose |
+|-------|--------|---------|
+| `guides/deploying-trinity.md` | `trinity-docs/app/getting-started/deploying-trinity/page.tsx` | Cloud vs self-hosted setup |
+| `guides/using-trinity.md` | `trinity-docs/app/getting-started/using-trinity/page.tsx` | UI tour: dashboard, agents, monitoring |
+| `guides/building-agents.md` | `trinity-docs/app/getting-started/building-agents/page.tsx` | Create, develop, deploy with abilities |
+
+**Sync rule**: When the trinity-docs source changes, update the corresponding guide to match. Convert TSX to markdown, preserving structure and content.
+
 ## Target Structure
 
 ```
 docs/user-docs/
 ├── README.md                          # Index + navigation
+├── guides/                            # Tutorial-style walkthroughs
+│   ├── deploying-trinity.md          # Cloud vs self-hosted setup
+│   ├── using-trinity.md              # UI tour: dashboard, agents, monitoring
+│   └── building-agents.md            # Create, develop, deploy with abilities
 ├── getting-started/
 │   ├── overview.md                    # What is Trinity, key concepts
 │   ├── setup.md                       # First-time setup, login, admin config
