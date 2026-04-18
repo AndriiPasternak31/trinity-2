@@ -59,54 +59,6 @@ const routes = [
     component: () => import('../views/Templates.vue'),
     meta: { requiresAuth: true }
   },
-  {
-    path: '/processes',
-    name: 'ProcessList',
-    component: () => import('../views/ProcessList.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/processes/new',
-    name: 'ProcessNew',
-    component: () => import('../views/ProcessEditor.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/processes/docs',
-    name: 'ProcessDocs',
-    component: () => import('../views/ProcessDocs.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/processes/docs/:slug+',
-    name: 'ProcessDocsPage',
-    component: () => import('../views/ProcessDocs.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/processes/wizard',
-    name: 'ProcessWizard',
-    component: () => import('../views/ProcessWizard.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/processes/:id',
-    name: 'ProcessEdit',
-    component: () => import('../views/ProcessEditor.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/executions',
-    name: 'ExecutionList',
-    component: () => import('../views/ExecutionList.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/approvals',
-    name: 'Approvals',
-    component: () => import('../views/Approvals.vue'),
-    meta: { requiresAuth: true }
-  },
   // Legacy redirects: Events and Alerts consolidated into Operating Room
   {
     path: '/alerts',
@@ -115,18 +67,6 @@ const routes = [
   {
     path: '/events',
     redirect: '/operating-room?tab=notifications'
-  },
-  {
-    path: '/executions/:id',
-    name: 'ProcessExecutionDetail',
-    component: () => import('../views/ProcessExecutionDetail.vue'),
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/process-dashboard',
-    name: 'ProcessDashboard',
-    component: () => import('../views/ProcessDashboard.vue'),
-    meta: { requiresAuth: true }
   },
   {
     path: '/operating-room',

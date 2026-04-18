@@ -1,6 +1,6 @@
 ---
 name: validate-architecture
-description: Validate codebase against the 16 architectural invariants defined in architecture.md. Produces a pass/fail report.
+description: Detect drift between architecture.md and the actual code. Validates 15 architectural invariants and flags stale doc claims with suggested edits.
 allowed-tools: [Read, Grep, Glob, Bash, Agent]
 user-invocable: true
 ---
@@ -9,15 +9,17 @@ user-invocable: true
 
 ## Purpose
 
-Check the codebase against the 16 Architectural Invariants in @docs/memory/architecture.md. Report violations with file paths and specific details. No changes are made — this is read-only analysis.
+Check the codebase against the 15 Architectural Invariants in @docs/memory/architecture.md, and detect drift between the doc's quantitative and scope claims and the actual code. Output: invariant violations plus suggested architecture.md edits. No files are modified — read-only analysis.
+
+The architecture doc is a living artifact. When counts or scope claims drift, this skill proposes a concrete edit (`architecture.md:L<N> — update "X" → "Y"`) rather than just marking FAIL.
 
 ## Process
 
 ### Step 1: Load Invariants
 
-Read the "Architectural Invariants" section from `docs/memory/architecture.md` to get the current list.
+Read the "Architectural Invariants" section from `docs/memory/architecture.md` to get the current list. Also parse its "Component Details", "Backend", and per-router sections for quantitative claims (line counts, router counts, tool counts, endpoint counts) — these feed the drift checks in Step 2b.
 
-### Step 2: Validate Each Invariant
+### Step 2a: Validate Each Invariant
 
 Run the checks below. For each invariant, record PASS or FAIL with evidence.
 
@@ -56,104 +58,155 @@ Run the checks below. For each invariant, record PASS or FAIL with evidence.
 - Grep `src/backend/routers/*.py` for route handlers (decorated with `@router.get`, `@router.post`, etc.)
 - For each router file (except `internal.py`, `setup.py`, `auth.py`, `public.py`), verify at least one endpoint uses `get_current_user` or `AuthorizedAgent` or `OwnedAgentByName`
 - Check that `internal.py` does NOT use `get_current_user`
+- **Inline authorization sprawl** — grep router endpoint bodies for permission-check patterns that should be dependencies: `db.can_user_`, `db.is_system_agent`, `current_user.username !=`, `if not ... owner`, and hand-rolled `raise HTTPException(status_code=403` blocks. Permission logic should live in a `Depends()` dependency, not inline in each endpoint. List every occurrence (file:line) and FAIL if more than 5 distinct sites.
 
 **9. Channel Adapter ABC**
 - Verify `src/backend/adapters/base.py` exists and defines `ChannelAdapter` class
 - Check that adapter implementations (`slack_adapter.py`, etc.) inherit from `ChannelAdapter`
 
-**10. Process Engine: DDD Isolation**
-- Grep `src/backend/services/` (excluding `process_engine/`) for imports from `process_engine.domain` — should find none
-- Grep `src/backend/routers/` for imports from `process_engine.domain` — should find none (routers should go through services)
-- Verify step handlers in `process_engine/engine/handlers/` inherit from a base handler
-
-**11. WebSocket Events for Real-Time**
+**10. WebSocket Events for Real-Time**
 - Grep `src/frontend/src/` for `setInterval` or `setTimeout` patterns that poll API endpoints — flag as potential violations (should use WebSocket instead)
 - Verify `src/frontend/src/utils/websocket.js` exists
 
-**12. Docker as Source of Truth**
+**11. Docker as Source of Truth**
 - Grep `src/backend/` for container state stored in global variables or module-level dicts (e.g., `running_agents = {}`, `container_cache = {}`) — should not exist
 - Verify `docker_service.py` exists as the Docker interaction point
 
-**13. Credentials: File Injection, Never Stored in DB**
+**12. Credentials: File Injection, Never Stored in DB**
 - Grep `db/schema.py` for any table that stores credential values (not references/metadata) — should find none
 - Grep `src/backend/` for patterns that write credential values to SQLite
 
-**14. MCP Server = Third Surface in Sync**
-- Glob `src/mcp-server/src/tools/*.ts` and list tool modules
-- Compare tool coverage against backend router domains — flag backend domains with no MCP tool coverage (informational, not all need MCP tools)
+**13. MCP Server = Third Surface in Sync** (enforced)
+- Glob `src/mcp-server/src/tools/*.ts` and build the MCP tool-module list
+- Glob `src/backend/routers/*.py` and build the backend-domain list, excluding `internal.py`, `setup.py`, `auth.py`, `public.py`, `paid.py` (these are not externally accessible via MCP by design)
+- For each remaining backend domain, require one of:
+  - a corresponding tool module in `src/mcp-server/src/tools/`, OR
+  - an explicit `# mcp: none` comment at the top of the router declaring intentional exclusion (with a one-line reason)
+- FAIL for any domain without either. Enforced, not advisory.
 
-**15. Pydantic Models Centralized in `models.py`**
+**14. Pydantic Models Centralized in `models.py`**
 - Grep `src/backend/routers/*.py` for `class.*BaseModel` or `class.*Model(` definitions — models should be in `models.py`, not routers
 - Count models in `models.py` vs scattered across other files
 
-**16. API URL Nesting Convention**
+**15. API URL Nesting Convention**
 - Grep `src/backend/routers/*.py` for `APIRouter(prefix=` and list all prefixes
 - Flag any agent-scoped resource that doesn't nest under `/api/agents/{name}/`
 - Flag any platform-wide resource that incorrectly nests under `/api/agents/`
 
+### Step 2b: Detect Doc Drift
+
+These checks compare `architecture.md` claims against repo reality and propose concrete doc edits, not pass/fail alone.
+
+**D1. Quantitative count alignment**
+
+For each claim in `architecture.md`, compute the actual value and compare:
+
+| Claim in arch.md | Actual value (compute) |
+|------------------|------------------------|
+| `main.py` line count | `wc -l src/backend/main.py` |
+| Router count / list of routers | `ls src/backend/routers/*.py` (exclude `__init__.py`) |
+| Service module count | `ls src/backend/services/*.py` (exclude `__init__.py`) |
+| MCP tool count (modules + total tools) | `ls src/mcp-server/src/tools/*.ts` plus count of exported tools |
+| Per-router endpoint counts | `grep -E "@router\.(get\|post\|put\|delete)" src/backend/routers/<name>.py` |
+
+For each divergence >10%, emit a suggested doc edit:
+
+```
+architecture.md:L<N> — claim "main.py ... 182 lines" does not match actual (860 lines).
+  Suggested edit: update to "860 lines" (or drop the parenthetical).
+```
+
+**D2. Scope-coherence check**
+
+Grep `architecture.md` for markers: `OUT OF SCOPE`, `dormant`, `not currently being developed`, `deprecated`. For each match, extract the named module path (e.g., `src/backend/services/process_engine/`).
+
+Then:
+- Grep `src/backend/main.py` for imports of that module or for routers in that area
+- Grep `src/backend/routers/*.py` for imports from that module
+- If the supposedly-dormant module is actively imported, or its routers are registered in `main.py`, emit a suggested doc edit:
+
+```
+architecture.md:L<N> — Process Engine marked "OUT OF SCOPE" but routers/processes.py, routers/approvals.py, routers/triggers.py are registered in main.py.
+  Suggested edit: either remove the OUT OF SCOPE tag (if the module is in fact live), or remove the routers (if it is truly dormant).
+```
+
 ### Step 3: Generate Report
 
-Output a summary table:
+Output two sections:
 
 ```
 ## Architecture Validation Report
 
+### Invariant Compliance
+
 | # | Invariant | Status | Details |
 |---|-----------|--------|---------|
 | 1 | Three-Layer Backend | PASS/FAIL | ... |
-| 2 | DB Mixin Composition | PASS/FAIL | ... |
 ...
 
-**Result: X/16 PASS, Y/16 FAIL**
+**Result: X/15 PASS, Y/15 FAIL**
 
-### Violations
+#### Violations
 
-#### [Invariant Name]
+##### [Invariant Name]
 - **File**: path/to/file.py:line
-- **Issue**: Description of violation
+- **Issue**: Description
 - **Fix**: Suggested remediation
+
+### Doc Drift — Suggested architecture.md Edits
+
+#### D1. Count mismatches
+- architecture.md:L<N> — "<claim>" vs actual "<value>". Suggested edit: "<new text>".
+
+#### D2. Scope contradictions
+- architecture.md:L<N> — "<section>" marked out-of-scope but <evidence of activity>. Suggested edit: <resolution>.
 ```
 
 ### Step 4: Create Issue if Critical
 
-If any violations were found for these P0-P1 invariants, create a GitHub issue:
+Create a GitHub issue when any of these fire:
 
 **P0-P1 invariants** (critical — break runtime or security):
 - #1 Three-Layer Backend (layer violations cause maintenance debt)
-- #8 Auth Pattern (missing auth = security hole)
-- #13 Credentials Never in DB (credential exposure)
+- #8 Auth Pattern (missing auth = security hole; inline authorization sprawl = scattered security logic)
+- #12 Credentials Never in DB (credential exposure)
 - #3 Schema in schema.py (ad-hoc tables break migrations)
 
-**Check**: Count failures in P0-P1 invariants from the report.
+**P1 drift** (misleading docs cause cascading downstream errors):
+- D1 count mismatches with >25% divergence
+- D2 any scope contradiction (dormant-but-live modules)
 
-**If P0-P1 failures > 0**, create issue:
+If any fire, create issue:
 
 ```bash
 gh issue create \
   --repo abilityai/trinity \
-  --title "Architecture Validation: [N] critical violations found" \
+  --title "Architecture drift: [N] violations, [M] doc drift findings" \
   --body "## Automated Architecture Validation Report
 
 **Date**: $(date -u +%Y-%m-%d)
-**Result**: [N] critical violations require attention
 
-### Critical Findings (P0-P1)
+### Critical Invariant Violations (P0-P1)
 
-[List each P0-P1 violation with invariant number, file:line, and description]
+[List each P0-P1 violation with invariant number, file:line, description]
+
+### Doc Drift — Suggested architecture.md Edits
+
+[List each suggested edit with line number and replacement text]
 
 ### Recommended Actions
 
-1. [Prioritized fix for each violation]
+1. [Prioritized fix for each finding]
 
 ---
 *Generated by scheduled /validate-architecture run*" \
   --label "type-bug,priority-p1,automated"
 ```
 
-**If no P0-P1 failures**, skip issue creation — report only logged to execution history.
+If nothing critical fires, skip issue creation — report only logged to execution history.
 
 ## Outputs
 
-- Markdown report printed to conversation
-- GitHub issue created if P0-P1 violations found (labeled `automated`, `priority-p1`)
+- Markdown report (invariant compliance + doc drift suggestions) printed to conversation
+- GitHub issue created if P0-P1 invariant violations OR P1 drift findings exist (labeled `automated`, `priority-p1`)
 - No files modified

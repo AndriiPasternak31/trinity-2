@@ -66,15 +66,7 @@ from routers.setup import router as setup_router, get_setup_token as get_setup_s
 from routers.telemetry import router as telemetry_router
 from routers.logs import router as logs_router
 from routers.agent_dashboard import router as agent_dashboard_router
-from routers.processes import router as processes_router
-from routers.executions import router as executions_router
-from routers.approvals import router as approvals_router
-from routers.triggers import router as triggers_router
-from routers.alerts import router as alerts_router
-from routers.process_templates import router as process_templates_router
-from routers.audit import router as audit_router
 from routers.audit_log import router as audit_log_router  # SEC-001 / Issue #20
-from routers.docs import router as docs_router
 from routers.skills import router as skills_router
 from routers.internal import router as internal_router
 from routers.tags import router as tags_router
@@ -109,12 +101,6 @@ from services.operator_queue_service import operator_queue_service, set_websocke
 # Import cleanup service
 from services.cleanup_service import cleanup_service, set_cleanup_ws_manager
 
-
-# Import process engine WebSocket publisher
-from services.process_engine.events import set_websocket_publisher_broadcast
-
-# Import execution recovery function
-from routers.executions import run_execution_recovery
 
 # Import logging configuration
 import logging
@@ -238,9 +224,6 @@ set_event_subs_filtered_ws_manager(filtered_manager)
 # Set up activity service WebSocket manager
 activity_service.set_websocket_manager(manager)
 activity_service.set_filtered_websocket_manager(filtered_manager)
-
-# Set up process engine WebSocket publisher
-set_websocket_publisher_broadcast(manager.broadcast)
 
 # Set up cleanup service WebSocket manager for watchdog events (Issue #129)
 set_cleanup_ws_manager(manager)
@@ -487,23 +470,6 @@ async def lifespan(app: FastAPI):
         print(f"Error starting Telegram transport: {e}")
         # Don't fail startup — Telegram is optional
 
-    # Run process execution recovery (IT5 P0 reliability feature)
-    try:
-        recovery_report = await run_execution_recovery()
-        if recovery_report.total_processed > 0:
-            print(
-                f"Execution recovery: "
-                f"resumed={len(recovery_report.resumed)}, "
-                f"retried={len(recovery_report.retried)}, "
-                f"failed={len(recovery_report.failed)}, "
-                f"errors={len(recovery_report.errors)}"
-            )
-        else:
-            print("Execution recovery: no interrupted executions found")
-    except Exception as e:
-        print(f"Error running execution recovery: {e}")
-        # Don't fail startup - recovery is important but not critical
-
     yield
 
     # NOTE: Embedded scheduler shutdown removed - scheduler runs in dedicated container
@@ -619,15 +585,7 @@ app.include_router(setup_router)
 app.include_router(telemetry_router)
 app.include_router(logs_router)
 app.include_router(agent_dashboard_router)
-app.include_router(processes_router)
-app.include_router(executions_router)
-app.include_router(approvals_router)
-app.include_router(triggers_router)
-app.include_router(alerts_router)
-app.include_router(process_templates_router)
-app.include_router(audit_router)  # IT5 P1: Process Engine audit logging
 app.include_router(audit_log_router)  # SEC-001 / #20: Platform audit log (Phase 1)
-app.include_router(docs_router)   # Process documentation serving
 app.include_router(skills_router) # Skills Management System
 app.include_router(internal_router)  # Internal agent-to-backend endpoints (no auth)
 app.include_router(tags_router)  # Agent Tags (ORG-001)

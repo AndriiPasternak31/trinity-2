@@ -225,15 +225,6 @@ const hasCriticalOpsItem = computed(() =>
   operatorQueueStore.criticalCount > 0 || notificationsStore.hasUrgentPending || alertsStore.activeCount > 0
 )
 
-// Check if currently in process section (for highlighting nav)
-const isProcessSection = computed(() => {
-  const path = route.value.path
-  return path.startsWith('/processes') ||
-         path.startsWith('/process-dashboard') ||
-         path.startsWith('/executions') ||
-         path.startsWith('/approvals')
-})
-
 // Theme management
 const themeTitle = computed(() => {
   const titles = {

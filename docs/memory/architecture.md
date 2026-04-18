@@ -84,14 +84,14 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 
 | Module | Purpose |
 |--------|---------|
-| `main.py` | FastAPI app initialization, WebSocket manager, router mounting (182 lines) |
+| `main.py` | FastAPI app initialization, WebSocket manager, router mounting |
 | `config.py` | Centralized configuration constants |
 | `models.py` | All Pydantic request/response models |
 | `dependencies.py` | FastAPI dependencies (auth, token validation, role hierarchy, agent access control) |
-| `database.py` | SQLite persistence (users, agent ownership, MCP API keys) |
+| `database.py` | SQLite persistence facade — orchestrates 27 domain operation classes from `db/` (users, ownership, MCP keys, schedules, executions, chat, activities, subscriptions, monitoring, audit log, Slack/Telegram, payments, operator queue, skills, tags, …) |
 | ~~`credentials.py`~~ | **REMOVED (2026-02-05)** - CRED-002 replaced with `routers/credentials.py` file injection system |
 
-**Routers (`routers/`)** — 45 router modules:
+**Routers (`routers/`)** — 53 router modules:
 
 *Core Agent:*
 - `agents.py` - Core CRUD, start/stop, logs, stats, queue, activities, terminal (642 lines)
@@ -156,7 +156,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 *System:*
 - `system_agent.py` - System agent management
 
-**Services (`services/`)** — 23 service modules:
+**Services (`services/`)** — 37 service modules:
 
 *Core:*
 - `docker_service.py` - Docker container management
@@ -286,7 +286,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - Tools access auth context via `context.session` parameter
 - Agent-to-agent collaboration uses agent-scoped keys for access control
 
-**67 Tools** across 15 tool modules (`src/tools/`):
+**Tools** across 16 tool modules (`src/tools/`):
 
 | Module | Tools | Description |
 |--------|-------|-------------|
