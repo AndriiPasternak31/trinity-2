@@ -408,6 +408,12 @@ async def create_agent_internal(
         env_vars['GITHUB_PAT'] = github_pat_for_agent
         # Phase 7: Enable git sync for GitHub-native agents
         env_vars['GIT_SYNC_ENABLED'] = 'true'
+        # #389 S1a: 15-min auto-sync heartbeat. Only legacy (working-branch)
+        # agents get it — source-mode agents track main read-only, and
+        # auto-pushing to main would clobber protected branches. Operators
+        # can toggle per-agent via PUT /api/agents/{name}/git/auto-sync.
+        if not config.source_mode:
+            env_vars['GIT_SYNC_AUTO'] = 'true'
 
         # Source mode (default): Track source branch directly for pull-only sync
         # Legacy mode: Create a unique working branch for bidirectional sync
@@ -616,6 +622,17 @@ async def create_agent_internal(
                         source_branch=config.source_branch or "main",
                         source_mode=config.source_mode
                     )
+                    # #389 S1a: opt non-source-mode GitHub-template agents
+                    # into the auto-sync heartbeat by default. Source-mode
+                    # agents stay opt-in (auto-pushing to main would clobber
+                    # protected branches).
+                    if not config.source_mode:
+                        try:
+                            db.set_git_auto_sync_enabled(config.name, True)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to enable auto-sync for {config.name}: {e}"
+                            )
                 except Exception as e:
                     logger.warning(f"Failed to create git config for {config.name}: {e}")
 
