@@ -658,6 +658,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Community & Support
 
+- **Ask Trinity Bot**: [Get instant answers about Trinity](https://us-central1-mcp-server-project-455215.cloudfunctions.net/ask-trinity) — AI-powered Q&A from the docs
 - **GitHub Issues**: [Report bugs and request features](https://github.com/abilityai/trinity/issues)
 - **GitHub Discussions**: [Ask questions and share ideas](https://github.com/abilityai/trinity/discussions)
 - **Demo Video**: [Watch Trinity in action](https://youtu.be/SWpNphnuPpQ)
