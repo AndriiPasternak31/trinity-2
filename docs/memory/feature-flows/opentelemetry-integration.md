@@ -454,9 +454,8 @@ Existing agents keep their OTel config until restarted.
 | `config/otel-collector.yaml` | Collector configuration with health_check extension (73 lines) |
 | `.env.example` | OTel environment variables (lines 95-112) |
 | `docs/DEPLOYMENT.md` | Added OpenTelemetry section |
-| `src/frontend/src/stores/observability.js` | Pinia store for observability state (268 lines) |
-| `src/frontend/src/components/ObservabilityPanel.vue` | Collapsible metrics panel (185 lines) |
-| `src/frontend/src/views/Dashboard.vue` | OTel imports (lines 357, 371), header stats (lines 35-56), panel (line 340), lifecycle (lines 430-431) |
+| `src/frontend/src/stores/observability.js` | Pinia store for observability state (268 lines) — **unused after Dashboard removal** |
+| `src/frontend/src/components/ObservabilityPanel.vue` | Collapsible metrics panel (185 lines) — **removed from Dashboard 2026-04-18** |
 
 ---
 
@@ -612,205 +611,36 @@ export const useObservabilityStore = defineStore('observability', {
 
 ### Dashboard Integration
 
-**File**: `src/frontend/src/views/Dashboard.vue`
+> **REMOVED 2026-04-18**: OTel UI integration was removed from Dashboard.vue. The Dashboard no longer displays cost/token stats or the ObservabilityPanel. OTel metrics are still collected by the backend and exported to Prometheus — this only affects the Dashboard UI display.
+>
+> A dedicated Observability page will be added in a future phase.
 
-#### Imports (lines 357, 371)
-
-```javascript
-import { useObservabilityStore } from '@/stores/observability'
-
-const observabilityStore = useObservabilityStore()
-```
-
-**Note**: `ObservabilityPanel` component is imported and used directly in the template.
-
-#### Header Stats (lines 35-56)
-
-OTel metrics display in the compact header alongside agent counts:
-
-```html
-<!-- OTel Stats (when operational and has data) -->
-<template v-if="observabilityStore.isOperational && observabilityStore.hasData">
-  <span class="text-gray-300">·</span>
-  <span class="flex items-center space-x-1">
-    <svg class="w-3 h-3 text-emerald-500"><!-- dollar icon --></svg>
-    <span class="font-medium text-emerald-600">{{ observabilityStore.formattedTotalCost }}</span>
-  </span>
-  <span class="text-gray-300">·</span>
-  <span class="flex items-center space-x-1">
-    <span class="font-medium text-cyan-600">{{ observabilityStore.formattedTotalTokens }}</span>
-    <span>tokens</span>
-  </span>
-</template>
-
-<!-- Warning indicator (when enabled but collector unavailable) -->
-<span v-if="observabilityStore.enabled && !observabilityStore.available"
-      class="flex items-center space-x-1 text-yellow-600"
-      title="OTel Collector unavailable">
-  <svg class="w-3 h-3"><!-- warning icon --></svg>
-  <span>OTel</span>
-</span>
-```
-
-#### Panel Integration (line 340)
-
-```html
-<!-- Observability Panel (bottom-left, only when OTel enabled) -->
-<ObservabilityPanel v-if="observabilityStore.enabled" />
-```
-
-#### Lifecycle (lines 430-431)
-
-```javascript
-onMounted(async () => {
-  // ... other initializations ...
-  // Initialize observability (checks if OTel is enabled)
-  await observabilityStore.fetchStatus()
-})
-```
+**Previous implementation** (for reference):
+- Header stats showed total cost and token count
+- ObservabilityPanel displayed detailed breakdown
+- observabilityStore fetched metrics on mount
 
 ---
 
 ### Observability Panel Component
 
-**File**: `src/frontend/src/components/ObservabilityPanel.vue` (185 lines)
-
-#### Template Structure (lines 1-161)
-
-Collapsible panel positioned at bottom-left of Dashboard:
-
-| State | Display |
-|-------|---------|
-| **Collapsed** | Status indicator + Cost + Tokens summary |
-| **Expanded** | Full breakdown with 4 sections |
-| **Not enabled** | "OTel not enabled. Set OTEL_ENABLED=1." |
-| **Error** | Yellow warning with error message |
-| **No data** | "No metrics data yet. Start chatting..." |
-| **Loading** | Centered spinner overlay |
-
-#### Expanded Sections (lines 56-146)
-
-1. **Cost by Model** (lines 57-74)
-   - List of models with costs
-   - Total at bottom with border
-
-2. **Tokens by Type** (lines 76-93)
-   - input, output, cacheCreation, cacheRead
-   - Formatted with K/M suffix
-
-3. **Productivity Grid** (lines 95-116)
-   - 2x2 grid with: Sessions, Active Time, Commits, PRs
-   - Styled cards with dark mode support
-
-4. **Lines of Code** (lines 118-140)
-   - Green for added, red for removed
-   - Only shown if data exists
-
-5. **Last Updated** (line 143-145)
-   - "just now", "2m ago", or timestamp
-
-#### Script (lines 163-185)
-
-```javascript
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useObservabilityStore } from '@/stores/observability'
-
-const observabilityStore = useObservabilityStore()
-const isExpanded = ref(false)
-
-const formatLastUpdated = computed(() => {
-  if (!observabilityStore.lastUpdated) return 'never'
-  const diff = Date.now() - observabilityStore.lastUpdated.getTime()
-  if (diff < 60000) return 'just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-  return observabilityStore.lastUpdated.toLocaleTimeString()
-})
-
-onMounted(() => {
-  observabilityStore.startPolling()  // Start 60s polling
-})
-
-onUnmounted(() => {
-  observabilityStore.stopPolling()   // Cleanup interval
-})
-```
-
-#### Styling
-
-- Positioned: `absolute bottom-4 left-4`
-- Width: Collapsed `w-48`, Expanded `w-96`
-- Dark mode: Full support via `dark:` classes
-- Transitions: `transition-all duration-300`
+> **REMOVED 2026-04-18**: ObservabilityPanel was removed from Dashboard. The component file still exists but is no longer used.
 
 ---
 
 ## UI Testing
 
-### Test 1: OTel Disabled State
+> **NOTE**: Dashboard UI tests below are obsolete as of 2026-04-18. OTel backend functionality can still be tested via the Prometheus endpoint.
 
-**Action**: Start with `OTEL_ENABLED=0` (explicitly disabled)
+### Test: Prometheus Metrics Export (Still Valid)
 
-**Expected**:
-- No OTel stats in Dashboard header
-- ObservabilityPanel not rendered
-- No API calls to `/api/observability/*`
-
-**Verify**: Check browser DevTools Network tab - no observability requests
-
-### Test 2: OTel Enabled, Collector Down
-
-**Action**: Set `OTEL_ENABLED=1`, stop OTel collector
-
-**Expected**:
-- Yellow warning icon + "OTel" text in Dashboard header
-- ObservabilityPanel shows: `<error message>`
-- No crash or UI freeze
-
-**Verify**: Inspect element shows yellow warning styling
-
-### Test 3: OTel Fully Operational
-
-**Action**: Set `OTEL_ENABLED=1`, start OTel collector, generate agent activity
-
-**Expected**:
-- Green cost + tokens in Dashboard header after 60s
-- ObservabilityPanel shows collapsed summary
-- Click expand to see full breakdown
+**Action**: Set `OTEL_ENABLED=1`, start collector, generate agent activity
 
 **Verify**:
 ```bash
 # Check metrics are being collected
 curl http://localhost:8889/metrics | grep trinity_claude_code
 ```
-
-### Test 4: Auto-Refresh
-
-**Action**: Keep Dashboard open, generate more agent activity
-
-**Expected**:
-- Metrics update every 60 seconds automatically
-- "Updated just now" / "Updated Xm ago" shows correctly
-- No manual refresh needed
-
-**Verify**: Watch Network tab for `/api/observability/metrics` calls every 60s
-
-### Test 5: Dark Mode
-
-**Action**: Toggle dark mode in browser/system
-
-**Expected**:
-- ObservabilityPanel respects dark mode
-- All text and backgrounds adjust appropriately
-- Status indicator colors remain visible
-
-### Test 6: Panel Expand/Collapse
-
-**Action**: Click the chevron button on ObservabilityPanel
-
-**Expected**:
-- Panel smoothly animates between collapsed (w-48) and expanded (w-96)
-- All sections visible when expanded
-- Summary visible when collapsed
 
 ---
 
@@ -820,9 +650,10 @@ curl http://localhost:8889/metrics | grep trinity_claude_code
 |-------|--------|--------|
 | Phase 1: Environment Variables | 30 min | Completed 2025-12-20 |
 | Phase 2: OTEL Collector | 2 hours | Completed 2025-12-20 |
-| Phase 2.5: UI Integration | 2 hours | Completed 2025-12-20 |
+| Phase 2.5: UI Integration | 2 hours | ~~Completed 2025-12-20~~ **Removed 2026-04-18** |
 | Phase 3: Prometheus/Grafana | 4 hours | Not started |
 | Phase 4: Hooks Integration | 1-2 days | Not started |
+| Phase 5: Dedicated Observability Page | TBD | Planned |
 
 ---
 
@@ -988,6 +819,7 @@ docker compose logs otel-collector --since 30s | grep Traces
 
 | Date | Changes |
 |------|---------|
+| 2026-04-18 | **REMOVED Dashboard UI**: OTel header stats (cost, tokens, warning) and ObservabilityPanel removed from Dashboard.vue. Backend metrics collection unchanged. A dedicated Observability page planned for future. |
 | 2026-04-14 | Added Distributed Tracing section (RELIABILITY-002): backend auto-instrumentation for FastAPI/httpx/Redis, trace_id in logs, 10% sampling |
 | 2026-01-23 | Updated line numbers for crud.py (308-316), docker-compose.yml (207-228), observability.py, main.py (289), Dashboard.vue (357, 371, 35-56, 340, 430-431), ObservabilityPanel.vue (185 lines). Added system_agent_service.py and ops.py to files modified. Added health_check endpoint port 13133 to docker-compose. Updated otel-collector.yaml to show health_check extension and telemetry config. |
 | 2025-12-30 | Line numbers verified |
