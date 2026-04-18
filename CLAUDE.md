@@ -49,6 +49,12 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 
 ---
 
+## Remote Agent
+
+This repository has a remote counterpart running on Trinity (`trinity` agent) for autonomous development. Use `/trinity:sync` to synchronize local changes with the remote instance. The remote agent can run scheduled tasks, process backlog issues, and operate autonomously when needed.
+
+---
+
 ## SDLC
 
 All work follows a 4-stage lifecycle tracked via the **Trinity Roadmap** GitHub Project board:
