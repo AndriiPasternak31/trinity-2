@@ -111,8 +111,19 @@ async function saveGithubPat() {
     masked: response.data.masked,
     source: 'settings'
   }
+  // #211: backend auto-propagates the new PAT to running agents.
+  // response.data.propagation = {total_running, updated, skipped, failed}
+  githubPatPropagation.value = response.data.propagation || null
 }
 ```
+
+**Auto-Propagation on PAT Update (#211)** — When the global PAT is saved, the
+backend reuses the agent-side `/api/credentials/read` + `/api/credentials/inject`
+endpoints (via `services/github_pat_propagation_service.py`) to merge the new
+`GITHUB_PAT` into each running agent's `.env` without a restart. Agents with a
+per-agent PAT (#347) are skipped; agents whose `.env` never had `GITHUB_PAT`
+are skipped. Delete PAT does NOT propagate. Partial failures are reported per
+agent and never block the PAT save.
 
 **Ops Settings Load** (Settings.vue lines 820-829)
 ```javascript

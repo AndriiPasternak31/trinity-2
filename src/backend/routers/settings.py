@@ -275,7 +275,8 @@ async def update_github_pat(
     """
     Set or update the GitHub Personal Access Token.
 
-    Admin-only. Token is stored in system settings.
+    Admin-only. Token is stored in system settings and auto-propagated to all
+    running agents that currently use the global PAT (#211).
     """
     require_admin(current_user)
 
@@ -291,9 +292,20 @@ async def update_github_pat(
         # Store in settings
         db.set_setting('github_pat', key)
 
+        # Auto-propagate to running agents (#211). Never block the PAT save on
+        # propagation failures — the token is already persisted.
+        from services.github_pat_propagation_service import propagate_github_pat
+        try:
+            propagation = await propagate_github_pat(key)
+            propagation_payload: Dict[str, Any] = propagation.model_dump()
+        except Exception as e:
+            logger.exception("GitHub PAT propagation failed")
+            propagation_payload = {"error": f"Propagation failed: {str(e)}"}
+
         return {
             "success": True,
-            "masked": mask_api_key(key)
+            "masked": mask_api_key(key),
+            "propagation": propagation_payload,
         }
     except HTTPException:
         raise

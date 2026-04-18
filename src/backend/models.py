@@ -386,3 +386,23 @@ class CredentialImportResponse(BaseModel):
 class InternalDecryptInjectRequest(BaseModel):
     """Request for internal decrypt-and-inject (startup.sh)."""
     agent_name: str
+
+
+# ============================================================================
+# GitHub PAT Propagation Models (#211)
+# ============================================================================
+
+class AgentPropagationStatus(BaseModel):
+    """Per-agent result when propagating the global GitHub PAT."""
+    agent_name: str
+    # "updated", "skipped_per_agent_pat", "skipped_no_pat", "failed"
+    status: str
+    error: Optional[str] = None
+
+
+class GithubPatPropagationResult(BaseModel):
+    """Aggregate result of a GitHub PAT propagation run."""
+    total_running: int
+    updated: List[str]
+    skipped: List[AgentPropagationStatus]
+    failed: List[AgentPropagationStatus]
