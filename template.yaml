@@ -9,3 +9,18 @@ avatar_prompt: A commanding orchestrator figure in a sleek dark coat standing be
 resources:
   cpu: "2"
   memory: "4g"
+
+# Persistent-state allowlist (S4, abilityai/trinity#383).
+# Glob patterns for workspace files that must survive a template-level reset
+# (e.g. the future "adopt main, preserve state" operation — see #384). At
+# agent creation this list is materialized into
+# `.trinity/persistent-state.yaml` inside the container; runtime sync/reset
+# paths read that file, not this one. Operators can edit the on-disk copy
+# per-agent. Omit the key to inherit the default list defined in
+# `src/backend/services/git_service.py::DEFAULT_PERSISTENT_STATE`.
+persistent_state:
+  - workspace/**
+  - .trinity/**
+  - .mcp.json
+  - .claude.json
+  - .claude/.credentials.json

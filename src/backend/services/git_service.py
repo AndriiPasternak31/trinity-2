@@ -29,6 +29,83 @@ def generate_working_branch(agent_name: str, instance_id: str) -> str:
     return f"trinity/{agent_name}/{instance_id}"
 
 
+# ============================================================================
+# S4 — Persistent State Allowlist (abilityai/trinity#383)
+# ============================================================================
+#
+# The list of workspace paths that must survive a template-level reset lives
+# on disk at `.trinity/persistent-state.yaml` inside each agent. It is seeded
+# at creation time from the template (or the defaults below) and may be
+# edited per-agent thereafter. Template.yaml is only read at creation
+# (template_service.py caches it for 10 minutes); runtime sync/reset paths
+# must read from the on-disk file, never re-read the template.
+
+DEFAULT_PERSISTENT_STATE: list[str] = [
+    "workspace/**",
+    ".trinity/**",
+    ".mcp.json",
+    ".claude.json",
+    ".claude/.credentials.json",
+]
+
+_PERSISTENT_STATE_PATH = "/home/developer/.trinity/persistent-state.yaml"
+
+
+async def materialize_persistent_state(
+    agent_name: str, patterns: list[str]
+) -> None:
+    """Write `.trinity/persistent-state.yaml` inside the agent container.
+
+    Called once from `agent_service.crud` after the container is running.
+    Operators may edit the file thereafter; runtime readers treat the
+    on-disk copy as authoritative.
+    """
+    import yaml as _yaml
+    body = _yaml.safe_dump(
+        {"persistent_state": list(patterns)}, sort_keys=False
+    )
+    # Heredoc quotes preserve glob characters verbatim.
+    cmd = (
+        f"mkdir -p /home/developer/.trinity && "
+        f"cat > {_PERSISTENT_STATE_PATH} <<'PSTATE_EOF'\n{body}PSTATE_EOF"
+    )
+    await execute_command_in_container(
+        container_name=f"agent-{agent_name}",
+        command=f'bash -c "{cmd}"',
+        timeout=10,
+    )
+
+
+async def _persistent_state_for(agent_name: str) -> list[str]:
+    """Read the persistent-state allowlist for an agent.
+
+    Returns the on-disk list when `.trinity/persistent-state.yaml` is
+    present and valid; otherwise returns a fresh copy of
+    `DEFAULT_PERSISTENT_STATE`. Consumers of this helper (e.g. the future
+    reset-preserve-state operation from #384) must not mutate the default
+    constant, hence the defensive `list(...)` copies on every fallback.
+    """
+    import yaml as _yaml
+    result = await execute_command_in_container(
+        container_name=f"agent-{agent_name}",
+        command=f'bash -c "cat {_PERSISTENT_STATE_PATH} 2>/dev/null || true"',
+        timeout=5,
+    )
+    if result.get("exit_code", 0) != 0:
+        return list(DEFAULT_PERSISTENT_STATE)
+    raw = result.get("output", "").strip()
+    if not raw:
+        return list(DEFAULT_PERSISTENT_STATE)
+    try:
+        data = _yaml.safe_load(raw) or {}
+    except _yaml.YAMLError:
+        return list(DEFAULT_PERSISTENT_STATE)
+    patterns = data.get("persistent_state")
+    if not isinstance(patterns, list) or not patterns:
+        return list(DEFAULT_PERSISTENT_STATE)
+    return [str(p) for p in patterns]
+
+
 async def create_git_config_for_agent(
     agent_name: str,
     github_repo: str,
