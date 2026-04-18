@@ -1,6 +1,6 @@
 # Trinity User Documentation
 
-> Auto-generated from source code. Run `/generate-user-docs` to update.
+> Auto-generated from source code. Run `/generate-user-docs` to update. Last sync: 2026-04-18.
 
 ## Guides
 
