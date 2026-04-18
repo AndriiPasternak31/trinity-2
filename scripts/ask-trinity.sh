@@ -1,44 +1,32 @@
 #!/bin/bash
-# Ask Trinity - Query the Vertex AI Search documentation assistant
+# Ask Trinity - Query the Trinity documentation assistant
 # Usage: ./scripts/ask-trinity.sh "How do I create an agent?"
+#
+# No authentication required - uses public Cloud Function endpoint
 
 set -e
 
-PROJECT_ID="mcp-server-project-455215"
-ENGINE_ID="trinity-search"
-LOCATION="global"
+ENDPOINT="https://us-central1-mcp-server-project-455215.cloudfunctions.net/ask-trinity"
 
 if [ -z "$1" ]; then
     echo "Usage: $0 \"your question\""
+    echo ""
+    echo "Examples:"
+    echo "  $0 \"How do I create an agent?\""
+    echo "  $0 \"What credentials do agents need?\""
+    echo "  $0 \"How do I troubleshoot a stuck agent?\""
     exit 1
 fi
 
 QUERY="$1"
-ACCESS_TOKEN=$(gcloud auth print-access-token)
 
 response=$(curl -s -X POST \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -H "X-Goog-User-Project: $PROJECT_ID" \
-  "https://discoveryengine.googleapis.com/v1/projects/$PROJECT_ID/locations/$LOCATION/collections/default_collection/engines/$ENGINE_ID/servingConfigs/default_search:answer" \
-  -d "{
-    \"query\": {
-      \"text\": \"$QUERY\"
-    },
-    \"answerGenerationSpec\": {
-      \"modelSpec\": {
-        \"modelVersion\": \"gemini-2.0-flash-001/answer_gen/v1\"
-      },
-      \"promptSpec\": {
-        \"preamble\": \"You are a helpful assistant that answers questions about Trinity, an autonomous agent orchestration platform. Be concise and practical. If you don't know the answer based on the provided context, say so.\"
-      },
-      \"includeCitations\": true
-    }
-  }")
+  "$ENDPOINT" \
+  -d "{\"question\": \"$QUERY\"}")
 
-# Extract and display answer
-answer=$(echo "$response" | jq -r '.answer.answerText // "No answer generated"')
-state=$(echo "$response" | jq -r '.answerQueryUnderstandingInfo.queryClassificationInfo[0].type // "UNKNOWN"')
+answer=$(echo "$response" | jq -r '.answer // .error // "No response"')
+state=$(echo "$response" | jq -r '.state // "UNKNOWN"')
 
 echo ""
 echo "Question: $QUERY"
@@ -46,10 +34,3 @@ echo ""
 echo "Answer:"
 echo "$answer"
 echo ""
-
-# Show sources if available
-sources=$(echo "$response" | jq -r '.answer.references[]?.chunkInfo.documentMetadata.title // empty' 2>/dev/null | head -5)
-if [ -n "$sources" ]; then
-    echo "Sources:"
-    echo "$sources" | while read -r src; do echo "  - $src"; done
-fi
