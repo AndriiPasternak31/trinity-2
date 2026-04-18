@@ -105,19 +105,19 @@ import json, sys
 from collections import defaultdict
 
 data = json.load(sys.stdin)
-epics = defaultdict(lambda: {'todo': 0, 'in_progress': 0, 'done': 0, 'blocked': 0, 'items': []})
+epics = defaultdict(lambda: {'todo': 0, 'in_progress': 0, 'blocked': 0, 'items': []})
 
 for item in data['items']:
     c = item.get('content', {})
     if not c.get('number'):
         continue
-    epic = item.get('Epic', '') or 'No Epic'
     status = item.get('status', 'Todo')
+    if status == 'Done':
+        continue  # Skip closed issues
+    epic = item.get('Epic', '') or 'No Epic'
     labels = [l['name'] for l in c.get('labels', [])]
     
-    if status == 'Done':
-        epics[epic]['done'] += 1
-    elif status == 'In Progress':
+    if status == 'In Progress':
         epics[epic]['in_progress'] += 1
         epics[epic]['items'].append(('#' + str(c['number']), c['title'][:40]))
     else:
@@ -127,25 +127,22 @@ for item in data['items']:
             epics[epic]['todo'] += 1
         epics[epic]['items'].append(('#' + str(c['number']), c['title'][:40]))
 
-print('## Epic Rollup\n')
-print('| Epic | Done | In Progress | Todo | Blocked | Progress |')
-print('|------|------|-------------|------|---------|----------|')
+print('## Epic Rollup (Open Issues)\n')
+print('| Epic | In Progress | Todo | Blocked | Total |')
+print('|------|-------------|------|---------|-------|')
 
 for epic in sorted(epics.keys(), key=lambda e: (e == 'No Epic', e)):
     d = epics[epic]
-    total = d['done'] + d['in_progress'] + d['todo'] + d['blocked']
-    pct = int(d['done'] / total * 100) if total else 0
-    bar = '█' * (pct // 10) + '░' * (10 - pct // 10)
-    print(f\"| {epic} | {d['done']} | {d['in_progress']} | {d['todo']} | {d['blocked']} | {bar} {pct}% |\")
+    total = d['in_progress'] + d['todo'] + d['blocked']
+    if total > 0:
+        print(f\"| {epic} | {d['in_progress']} | {d['todo']} | {d['blocked']} | {total} |\")
 
 print()
 print('### In Progress by Epic')
 for epic in sorted(epics.keys(), key=lambda e: (e == 'No Epic', e)):
     d = epics[epic]
-    active = [i for i in d['items'] if d['in_progress'] > 0]
     if d['in_progress'] > 0:
         print(f'**{epic}**:')
-        # Show only first 3 in-progress items
         for num, title in d['items'][:3]:
             print(f'  - {num} {title}')
 "
@@ -161,23 +158,23 @@ import json, sys
 EPIC = '$EPIC_NAME'
 data = json.load(sys.stdin)
 
-items = {'done': [], 'in_progress': [], 'todo': [], 'blocked': []}
+items = {'in_progress': [], 'todo': [], 'blocked': []}
 for item in data['items']:
     c = item.get('content', {})
     if not c.get('number'):
         continue
     if item.get('Epic', '') != EPIC:
         continue
-    
     status = item.get('status', 'Todo')
+    if status == 'Done':
+        continue  # Skip closed issues
+    
     labels = [l['name'] for l in c.get('labels', [])]
     tier = item.get('Tier', '') or '—'
     rank = item.get('rank', '?')
     row = (rank, c['number'], tier, c['title'][:50], status)
     
-    if status == 'Done':
-        items['done'].append(row)
-    elif status == 'In Progress':
+    if status == 'In Progress':
         items['in_progress'].append(row)
     elif 'status-blocked' in labels:
         items['blocked'].append(row)
@@ -185,13 +182,12 @@ for item in data['items']:
         items['todo'].append(row)
 
 total = sum(len(v) for v in items.values())
-done_pct = int(len(items['done']) / total * 100) if total else 0
 
-print(f'## {EPIC}\n')
-print(f'**Progress**: {len(items[\"done\"])}/{total} ({done_pct}%)')
+print(f'## {EPIC} (Open Issues)\n')
+print(f'**Total Open**: {total}')
 print(f'**In Progress**: {len(items[\"in_progress\"])} | **Todo**: {len(items[\"todo\"])} | **Blocked**: {len(items[\"blocked\"])}\n')
 
-for section, label in [('in_progress', 'In Progress'), ('blocked', 'Blocked'), ('todo', 'Todo'), ('done', 'Done')]:
+for section, label in [('in_progress', 'In Progress'), ('blocked', 'Blocked'), ('todo', 'Todo')]:
     if items[section]:
         print(f'### {label}')
         print('| Rank | # | Tier | Title |')
@@ -210,31 +206,28 @@ import json, sys
 from collections import defaultdict
 
 data = json.load(sys.stdin)
-themes = defaultdict(lambda: {'count': 0, 'done': 0, 'items': []})
+themes = defaultdict(lambda: {'count': 0, 'items': []})
 
 for item in data['items']:
     c = item.get('content', {})
     if not c.get('number'):
         continue
-    theme = item.get('Theme', '') or 'No Theme'
     status = item.get('status', 'Todo')
+    if status == 'Done':
+        continue  # Skip closed issues
+    theme = item.get('Theme', '') or 'No Theme'
     
     themes[theme]['count'] += 1
-    if status == 'Done':
-        themes[theme]['done'] += 1
-    else:
-        themes[theme]['items'].append(('#' + str(c['number']), c['title'][:45], status))
+    themes[theme]['items'].append(('#' + str(c['number']), c['title'][:45], status))
 
-print('## Theme Coverage\n')
-print('| Theme | Total | Done | Active | Progress |')
-print('|-------|-------|------|--------|----------|')
+print('## Theme Coverage (Open Issues)\n')
+print('| Theme | Open |')
+print('|-------|------|')
 
 for theme in sorted(themes.keys(), key=lambda t: (t == 'No Theme', -themes[t]['count'])):
     d = themes[theme]
-    active = d['count'] - d['done']
-    pct = int(d['done'] / d['count'] * 100) if d['count'] else 0
-    bar = '█' * (pct // 10) + '░' * (10 - pct // 10)
-    print(f'| {theme} | {d[\"count\"]} | {d[\"done\"]} | {active} | {bar} {pct}% |')
+    if d['count'] > 0:
+        print(f'| {theme} | {d[\"count\"]} |')
 "
 ```
 
