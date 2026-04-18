@@ -867,8 +867,8 @@ Trinity is autonomous agent orchestration and infrastructure — sovereign infra
 
 ### 16.2 SSH Access
 - **Status**: ✅ Implemented (2026-01-02)
-- **Description**: Ephemeral SSH credentials via MCP tool
-- **Key Features**: ED25519 keys, configurable TTL, ops setting controlled
+- **Description**: Ephemeral SSH credentials via MCP tool (admin-only)
+- **Key Features**: ED25519 keys, configurable TTL, ops setting controlled, admin-only access
 - **Flow**: `docs/memory/feature-flows/ssh-access.md`
 
 ### 16.3 Agent Info Display

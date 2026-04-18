@@ -544,7 +544,7 @@ Services that run continuously in the backend process:
 | GET | `/api/agents/{name}/folders/consumers` | List agents that will mount this folder |
 | GET | `/api/agents/{name}/autonomy` | Get autonomy status with schedule counts (NEW: 2026-01-01) |
 | PUT | `/api/agents/{name}/autonomy` | Enable/disable autonomy (toggles all schedules) |
-| POST | `/api/agents/{name}/ssh-access` | Generate ephemeral SSH credentials (NEW: 2026-01-02) |
+| POST | `/api/agents/{name}/ssh-access` | Generate ephemeral SSH credentials (admin-only) |
 | GET | `/api/agents/{name}/read-only` | Get read-only mode status and config (NEW: 2026-02-17) |
 | PUT | `/api/agents/{name}/read-only` | Enable/disable read-only mode (blocks source file writes) |
 | GET | `/api/agents/{name}/timeout` | Get execution timeout setting (NEW: 2026-03-12) |

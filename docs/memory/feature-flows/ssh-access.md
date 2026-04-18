@@ -1,15 +1,16 @@
 # Feature: SSH Access
 
 ## Overview
-Generate ephemeral SSH credentials for direct terminal access to agent containers. Supports key-based (ED25519) or password-based authentication with configurable TTL (default 4 hours, max 24 hours). Controlled by system-wide `ssh_access_enabled` ops setting.
+Generate ephemeral SSH credentials for direct terminal access to agent containers. Supports key-based (ED25519) or password-based authentication with configurable TTL (default 4 hours, max 24 hours). Controlled by system-wide `ssh_access_enabled` ops setting. **Admin-only access.**
 
 ## User Story
-As an agent operator, I want to generate temporary SSH credentials for my agent containers so that I can access them directly via SSH from my local terminal (especially useful with Tailscale/VPN setups).
+As a platform admin, I want to generate temporary SSH credentials for agent containers so that I can access them directly via SSH from my local terminal for debugging or maintenance (especially useful with Tailscale/VPN setups).
 
 ## Revision History
 | Date | Change |
 |------|--------|
-| 2026-03-26 | **SEC: Removed server-side keypair generation (#175)**: Key auth now requires client-supplied `public_key`. Private keys never leave the client. Enforced owner-only access (admin/owner, not shared users). Removed `generate_ssh_keypair()` and `cryptography` dependency. |
+| 2026-04-18 | **SEC: Admin-only access**: Changed from owner/admin to admin-only. Uses `require_admin` dependency instead of `can_user_delete_agent` check. |
+| 2026-03-26 | **SEC: Removed server-side keypair generation (#175)**: Key auth now requires client-supplied `public_key`. Private keys never leave the client. Removed `generate_ssh_keypair()` and `cryptography` dependency. |
 | 2026-02-24 | **Async Docker Operations**: All SshService methods now async (DOCKER-001). Uses `container_exec_run` wrapper to prevent event loop blocking. |
 | 2026-02-13 | **Fixed localhost bug**: Added FRONTEND_URL domain extraction as priority #2 in host detection. Production deployments now correctly return domain instead of localhost. |
 | 2026-01-23 | Updated line numbers: ssh_service.py, agents.py, agents.ts, client.ts, types.ts |
@@ -40,7 +41,7 @@ getAgentSshAccess: {
     "Supports two auth methods: 'key' (provide your public key) or 'password' (one-liner with sshpass). " +
     "Credentials expire automatically (default: 4 hours). Agent must be running. " +
     "For key auth: generate a keypair locally (ssh-keygen -t ed25519) and provide the PUBLIC key. " +
-    "The server never generates or handles private keys. Only agent owner or admin can use this.",
+    "The server never generates or handles private keys. Admin only.",
   parameters: z.object({
     agent_name: z.string().describe("Name of the agent to access"),
     ttl_hours: z
@@ -141,7 +142,7 @@ class SshAccessRequest(BaseModel):
 async def create_ssh_access(
     agent_name: str,
     body: SshAccessRequest = SshAccessRequest(),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)  # Admin-only access
 ):
     # 1. Check if SSH access is enabled system-wide
     if not get_ops_setting("ssh_access_enabled", as_type=bool):
@@ -150,12 +151,7 @@ async def create_ssh_access(
             detail="SSH access is disabled. Enable it in Settings -> Ops Settings -> ssh_access_enabled"
         )
 
-    # 2. Enforce owner-only access (owner or admin, not shared users)
-    # SSH grants shell access to credentials — stricter than normal agent access
-    if not db.can_user_delete_agent(current_user.username, agent_name):
-        raise HTTPException(status_code=403, detail="Access denied. Only the agent owner or admin can generate SSH credentials.")
-
-    # 3. Verify agent exists and is running
+    # 2. Verify agent exists and is running
     container = get_agent_container(agent_name)
     if not container:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -583,10 +579,10 @@ security_opt=['apparmor:docker-default'],  # no-new-privileges removed for SSH s
 3. MCP Tool (agents.ts) -> apiClient.createSshAccess()
    |
 4. POST /api/agents/{name}/ssh-access (agent_ssh.py)
+   |-- Requires admin role (via require_admin dependency)
+   |   └── 403 if not admin
    |-- Check ssh_access_enabled ops setting
    |   └── 403 if disabled
-   |-- Check can_user_delete_agent (owner or admin only)
-   |   └── 403 if not owner/admin
    |-- Get container, verify running
    |   └── 404 if not found, 400 if not running
    |-- Validate TTL (0.1-24 hours)
@@ -672,8 +668,8 @@ security_opt=['apparmor:docker-default'],  # no-new-privileges removed for SSH s
 
 | Error Case | HTTP Status | Message |
 |------------|-------------|---------|
+| User is not admin | 403 | "Admin role required" (from require_admin dependency) |
 | SSH access disabled globally | 403 | "SSH access is disabled. Enable it in Settings -> Ops Settings -> ssh_access_enabled" |
-| User is not owner or admin | 403 | "Access denied. Only the agent owner or admin can generate SSH credentials." |
 | Agent container not found | 404 | "Agent not found" |
 | Agent not running | 400 | "Agent must be running to generate SSH access. Start the agent first." |
 | Invalid auth_method | 400 | "auth_method must be 'key' or 'password'" |
@@ -688,7 +684,7 @@ security_opt=['apparmor:docker-default'],  # no-new-privileges removed for SSH s
 
 1. **System-Level Control**: SSH access is disabled by default (`ssh_access_enabled = false`). Admin must explicitly enable.
 
-2. **Owner-Only Access**: Endpoint requires agent owner or admin (`can_user_delete_agent`). Shared users cannot generate SSH credentials — SSH grants shell access to injected credentials inside the container.
+2. **Admin-Only Access**: Endpoint requires admin role (`require_admin` dependency). Agent owners and shared users cannot generate SSH credentials — SSH grants shell access to injected credentials inside containers, so it's restricted to platform admins only.
 
 3. **Ephemeral Credentials**: All credentials auto-expire via Redis TTL. Maximum TTL is 24 hours.
 

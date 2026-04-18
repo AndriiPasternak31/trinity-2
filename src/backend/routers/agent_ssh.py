@@ -7,8 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from models import User
-from database import db
-from dependencies import get_current_user
+from dependencies import require_admin
 from services.docker_service import get_agent_container
 from services.docker_utils import container_reload
 
@@ -26,7 +25,7 @@ class SshAccessRequest(BaseModel):
 async def create_ssh_access(
     agent_name: str,
     body: SshAccessRequest = SshAccessRequest(),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_admin)
 ):
     """
     Generate ephemeral SSH credentials for direct agent access.
@@ -53,11 +52,6 @@ async def create_ssh_access(
             status_code=403,
             detail="SSH access is disabled. Enable it in Settings → Ops Settings → ssh_access_enabled"
         )
-
-    # Enforce owner-only access (owner or admin, not shared users)
-    # SSH grants shell access to credentials — stricter than normal agent access
-    if not db.can_user_delete_agent(current_user.username, agent_name):
-        raise HTTPException(status_code=403, detail="Access denied. Only the agent owner or admin can generate SSH credentials.")
 
     container = get_agent_container(agent_name)
     if not container:

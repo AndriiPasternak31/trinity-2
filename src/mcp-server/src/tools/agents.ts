@@ -517,7 +517,7 @@ export function createAgentTools(
         "Supports two auth methods: 'key' (provide your public key) or 'password' (one-liner with sshpass). " +
         "Credentials expire automatically (default: 4 hours). Agent must be running. " +
         "For key auth: generate a keypair locally (ssh-keygen -t ed25519) and provide the PUBLIC key. " +
-        "The server never generates or handles private keys. Only agent owner or admin can use this.",
+        "The server never generates or handles private keys. Admin only.",
       parameters: z.object({
         agent_name: z.string().describe("Name of the agent to access"),
         ttl_hours: z
