@@ -72,6 +72,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 | Cloudflare Tunnel | Public endpoint access (webhooks, public chat) |
 | Tailscale | Private VPN access |
 | GCP | Cloud hosting |
+| Vertex AI Search | Documentation Q&A (public endpoint) |
 
 ---
 

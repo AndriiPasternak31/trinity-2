@@ -313,3 +313,4 @@ The **[abilities](https://github.com/abilityai/abilities)** repo is the canonica
 - **Agent Guide**: `docs/TRINITY_COMPATIBLE_AGENT_GUIDE.md`
 - **Agent Network Demo**: `docs/AGENT_NETWORK_DEMO.md`
 - **Agent Development Toolkit**: https://github.com/abilityai/abilities
+- **Docs Q&A Bot**: `./scripts/ask-trinity.sh "your question"` or [public endpoint](https://us-central1-mcp-server-project-455215.cloudfunctions.net/ask-trinity)
