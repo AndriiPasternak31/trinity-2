@@ -1,0 +1,26 @@
+# Credentials - never commit
+.mcp.json
+.env
+*.pem
+*.key
+
+# Claude Code internals
+.claude/projects/
+.claude/statsig/
+.claude/todos/
+.claude/debug/
+
+# Runtime
+content/
+session-files/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Trinity tracking (keep tracked)
+!.trinity-remote.yaml

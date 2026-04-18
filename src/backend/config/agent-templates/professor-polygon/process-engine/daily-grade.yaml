@@ -1,0 +1,45 @@
+# process-engine/daily-grade.yaml
+name: praxis-daily-grade
+description: Daily Professor cycle — grade, self-rewrite, backprop.
+
+triggers:
+  - type: schedule
+    cron: "0 6 * * *"
+
+steps:
+  - id: grade
+    type: agent_task
+    agent: professor-polygon
+    skill: grade
+    timeout_seconds: 600
+
+  - id: self_rewrite
+    type: agent_task
+    agent: professor-polygon
+    skill: self-rewrite
+    depends_on: [grade]
+    timeout_seconds: 300
+
+  - id: check_graduation
+    type: gateway
+    depends_on: [self_rewrite]
+    condition: |
+      # Count consecutive queue-approvals
+      ops = trinity.operator_queue.list(
+        agent="polygon-vybe",
+        status="approved",
+        limit=60,
+      )
+      consecutive = 0
+      for item in reversed(ops):
+        if item.status == "approved": consecutive += 1
+        else: break
+      return consecutive >= 50
+    on_true: [graduate]
+    on_false: []
+
+  - id: graduate
+    type: webhook
+    method: PUT
+    url: http://trinity:8080/api/agents/polygon-vybe/read-only
+    body: '{"enabled": false}'

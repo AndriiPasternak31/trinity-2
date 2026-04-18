@@ -1,0 +1,151 @@
+{
+  "metadata": {
+    "source": "Cryptomannn Community LT program (Spirit - Research Lead)",
+    "last_updated": "2026-03-27",
+    "notes": "Handles need address resolution via polymarket.com/@handle profile pages. Use Data API: https://data-api.polymarket.com/trades?user=<ADDRESS>&limit=10"
+  },
+  "categories": {
+    "musk_tweets": {
+      "description": "Specialists in Musk tweet count markets",
+      "wallets": [
+        {"handle": "Annica", "url": "https://polymarket.com/@Annica"},
+        {"handle": "szz", "url": "https://polymarket.com/@szz"},
+        {"handle": "Prexpect", "url": "https://polymarket.com/@Prexpect"},
+        {"handle": "sb911", "url": "https://polymarket.com/@sb911"}
+      ]
+    },
+    "btc_15min": {
+      "description": "15-minute BTC market scalpers",
+      "wallets": [
+        {"handle": "gabagool22", "url": "https://polymarket.com/@gabagool22"},
+        {"handle": "distinct-baguette", "url": "https://polymarket.com/@distinct-baguette"},
+        {"handle": "PBot1", "url": "https://polymarket.com/@PBot1"},
+        {"handle": "1TickWonder2", "url": "https://polymarket.com/@1TickWonder2"},
+        {"handle": "Sharky6999", "url": "https://polymarket.com/@Sharky6999"},
+        {"handle": "kingofcoinflips", "url": "https://polymarket.com/@kingofcoinflips"},
+        {"handle": "a4385", "url": "https://polymarket.com/@a4385", "notes": "15K->230K in 2 days"},
+        {"handle": "bratanbratishka", "url": "https://polymarket.com/@bratanbratishka", "notes": "100K in 2 days on 5-15 min"}
+      ]
+    },
+    "weather": {
+      "description": "Weather market specialists",
+      "wallets": [
+        {"address": "0xa2711d1d311a0b2fa7f88d5c7cb760a3fa062727"},
+        {"handle": "neobrother", "url": "https://polymarket.com/@neobrother"},
+        {"handle": "VibeTrader", "url": "https://polymarket.com/@VibeTrader"},
+        {"handle": "1pixel", "url": "https://polymarket.com/@1pixel"},
+        {"address": "0x594edB9112f526Fa6A80b8F858A6379C8A2c1C11"},
+        {"handle": "HondaCivic", "url": "https://polymarket.com/@HondaCivic"}
+      ]
+    },
+    "geopolitics_israel": {
+      "description": "Israel-focused geopolitical markets",
+      "wallets": [
+        {"handle": "Rundeep", "url": "https://polymarket.com/@Rundeep"}
+      ]
+    },
+    "geopolitics_middle_east": {
+      "description": "Middle East geopolitical markets",
+      "wallets": [
+        {"handle": "Sonix", "url": "https://polymarket.com/@Sonix"}
+      ]
+    },
+    "google_insider": {
+      "description": "Suspected insider knowledge on Google events",
+      "wallets": [
+        {"handle": "beepboopzyx", "url": "https://polymarket.com/@beepboopzyx"}
+      ]
+    },
+    "crypto_longterm": {
+      "description": "Long-term crypto + 15-min markets",
+      "wallets": [
+        {"handle": "justdance", "url": "https://polymarket.com/@justdance"},
+        {"handle": "coinman2", "url": "https://polymarket.com/@coinman2"},
+        {"address": "0x6916Cc00AA1c3e75ECf4081DF7caE7D2f3592fd4"},
+        {"address": "0xf705fa045201391d9632b7f3cde06a5e24453ca7"}
+      ]
+    },
+    "tge": {
+      "description": "Token Generation Event specialists",
+      "wallets": [
+        {"handle": "filthyBera", "url": "https://polymarket.com/@filthyBera"}
+      ]
+    },
+    "sports": {
+      "description": "Sports market specialists",
+      "wallets": [
+        {"address": "0x5350afcd8bd8ceffdf4da32420d6d31be0822fda"},
+        {"address": "0x204f72f35326db932158cba6adff0b9a1da95e14"},
+        {"address": "0x2005d16a84ceefa912d4e380cd32e7ff827875ea"}
+      ]
+    },
+    "gaming": {
+      "description": "Gaming/esports market specialists",
+      "wallets": [
+        {"handle": "DaisyFarm", "url": "https://polymarket.com/@DaisyFarm"},
+        {"handle": "BossOfEsports", "url": "https://polymarket.com/@BossOfEsports"}
+      ]
+    },
+    "movies": {
+      "description": "Movies/entertainment market specialists",
+      "wallets": [
+        {"address": "0xe2b1fc269d0c2e27da11fadd1d9596fe28227d2a"}
+      ]
+    },
+    "speed_trading": {
+      "description": "1-second precision speed traders",
+      "wallets": [
+        {"handle": "megamm2", "url": "https://polymarket.com/@megamm2"}
+      ]
+    },
+    "uma_voters": {
+      "description": "UMA dispute resolution voters - their positioning signals likely resolution direction",
+      "wallets": [
+        {"handle": "The-Joker", "url": "https://polymarket.com/@The-Joker"},
+        {"handle": "bamesjond", "url": "https://polymarket.com/@bamesjond"},
+        {"handle": "Car", "url": "https://polymarket.com/@Car", "notes": "Uses @clashreport as OSINT source"},
+        {"handle": "JJo", "url": "https://polymarket.com/@JJo"},
+        {"handle": "ImJustKen", "url": "https://polymarket.com/@ImJustKen"},
+        {"handle": "neformal", "url": "https://polymarket.com/@neformal"},
+        {"handle": "scout", "url": "https://polymarket.com/@scout"},
+        {"handle": "Rex416", "url": "https://polymarket.com/@Rex416"},
+        {"handle": "Infringe", "url": "https://polymarket.com/@Infringe"},
+        {"handle": "cashy", "url": "https://polymarket.com/@cashy"},
+        {"handle": "ithinkthisisgod", "url": "https://polymarket.com/@ithinkthisisgod"},
+        {"handle": "Sonix", "url": "https://polymarket.com/@Sonix"}
+      ]
+    },
+    "general_profitable": {
+      "description": "Consistently profitable mixed-strategy traders",
+      "wallets": [
+        {"handle": "bobe2", "url": "https://polymarket.com/@bobe2"},
+        {"handle": "JAHODA", "url": "https://polymarket.com/@JAHODA"},
+        {"handle": "Car", "url": "https://polymarket.com/@Car"},
+        {"handle": "ImJustKen", "url": "https://polymarket.com/@ImJustKen"},
+        {"handle": "TheWolfOfPoly", "url": "https://polymarket.com/@TheWolfOfPoly"},
+        {"handle": "kekkone", "url": "https://polymarket.com/@kekkone"},
+        {"handle": "archaic", "url": "https://polymarket.com/@archaic"},
+        {"handle": "dontshowmyname", "url": "https://polymarket.com/@dontshowmyname"},
+        {"handle": "mango-lassi", "url": "https://polymarket.com/@mango-lassi"},
+        {"handle": "Euan", "url": "https://polymarket.com/@Euan"},
+        {"handle": "LlamaEnjoyer", "url": "https://polymarket.com/@LlamaEnjoyer"},
+        {"handle": "AJSV", "url": "https://polymarket.com/@AJSV"},
+        {"handle": "Roflan-ludoman", "url": "https://polymarket.com/@Roflan-ludoman"},
+        {"handle": "slight-", "url": "https://polymarket.com/@slight-"},
+        {"handle": "poorsob", "url": "https://polymarket.com/@poorsob"},
+        {"handle": "pako", "url": "https://polymarket.com/@pako"},
+        {"handle": "mombil", "url": "https://polymarket.com/@mombil"},
+        {"handle": "Vespucci", "url": "https://polymarket.com/@Vespucci"},
+        {"handle": "Dropper", "url": "https://polymarket.com/@Dropper"},
+        {"handle": "JJo", "url": "https://polymarket.com/@JJo"},
+        {"handle": "0xheavy888", "url": "https://polymarket.com/@0xheavy888"},
+        {"handle": "HolyMoses7", "url": "https://polymarket.com/@HolyMoses7"},
+        {"handle": "donjo", "url": "https://polymarket.com/@donjo"},
+        {"handle": "033033033", "url": "https://polymarket.com/@033033033"},
+        {"address": "0xe3726a1b9c6ba2f06585d1c9e01d00afaedaeb38"},
+        {"handle": "scottilicious", "url": "https://polymarket.com/@scottilicious"},
+        {"address": "0xe8dd7741ccb12350957ec71e9ee332e0d1e6ec86"}
+      ]
+    }
+  }
+}

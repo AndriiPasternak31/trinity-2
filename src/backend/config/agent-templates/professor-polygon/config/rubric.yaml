@@ -1,0 +1,18 @@
+# config/rubric.yaml
+target_brier_delta: 0.02
+surprise_threshold: 0.40
+min_resolved_for_feedback: 30
+noise_dominance_threshold: 0.80
+graduation_approvals_required: 50
+
+feedback_templates:
+  calibration_update:
+    "Your confidence on {domain} drifted — tightening Platt A from {old_a:.3f} to {new_a:.3f}"
+  new_correction:
+    "Repeated failure mode on {edge_type}: adding skill correction-{id} to handle {issue}"
+  surprise:
+    "|p-o|={magnitude:.2f} on {market}: {reasoning_snippet}"
+
+cornelius_routing:
+  insight_path: "insights/trading/polygon/{id}.md"
+  default_tags: ["trading", "polymarket", "surprise"]

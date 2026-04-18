@@ -1,0 +1,41 @@
+cycle,timestamp,positions_value,btc_price,eth_price,notes
+1,2026-03-27T12:15:00Z,114.59,66062,1989,First cycle. 16 positions. Michigan plays tonight.
+2,2026-03-27T20:05:00Z,120.08,66031,1991,HOLD cycle. Over limit. March 31 positions resolve in 4 days. Michigan game tonight.
+3,2026-03-28T00:30:00Z,119.47,66335,1991,HOLD. Michigan beat Alabama (18.5%). Mar 31 positions on track. $67 frees in 4 days.
+4,2026-03-28T10:20:00Z,120.91,66178,1988,BLOCKED. Tried to sell Michigan (+23%) but 0 POL for gas. Shares on-chain not in CLOB.
+5,2026-03-28T16:30:00Z,121.97,66526,2006,BLOCKED cycle 5. Anti-passivity triggered (4 blocks). WTI hit $100. April 6 Iran deadline live. 3 days to March 31.
+6,2026-03-28T20:45:00Z,121.97,66073,1984,BLOCKED - 0 POL. Cornelius: WTI touched $100 Iran rejected ceasefire BTC Extreme Fear (12). March 31 on track.
+7,2026-03-28T23:30:00Z,123.36,66953,2024,BLOCKED cycle 7. Still 0 POL. BTC recovered to $67k. All March 31 positions safe. 2.5 days to resolution.
+8,2026-03-28T20:02:43Z,123.00,66842,2018,BLOCKED cycle 8 (7th block). WTI at $100. Iran rejected ceasefire. April 6 deadline. March 31 positions all safe - 3 days to ~$67 payout.
+9,2026-03-29T00:15:00Z,123.00,66322,1993,BLOCKED 8th. Michigan won Elite Eight (23%->30%+). WTI $99.64. April 6 Iran deadline. Mar 31 positions safe. Would sell Michigan if had gas.
+10,2026-03-29T04:00:00Z,120.79,66860,2010,BLOCKED 9th. Michigan vs Tennessee TODAY 2:15PM ET. Decision quality review done. No brier predictions recorded.
+11,2026-03-29T08:02:00Z,120.62,66622,2005,BLOCKED 10th. Michigan game 10h away. Iran Day 29 - airstrikes only no ground troops. Mar 31 ~$65 expected. Operator queue CRITICAL.
+10,2026-03-29T04:02:46Z,0,120.79,120.79,66860,BLOCKED - 9 consecutive. Michigan game TODAY. No POL for gas.
+12,2026-03-29T12:01:00Z,0,119.66,119.66,66773,BLOCKED cycle 12. 0 POL gas. Iran risk ELEVATED - Pentagon prep ground ops. Michigan Elite Eight in 6h +16%. Operator queue CRITICAL.
+13,2026-03-29T16:07:32Z,0.00,119.66,119.66,0,BLOCKED - 0 POL gas. Intel: smart money against Iran Apr NO. Michigan game 2h.
+14,2026-03-29T20:01:00Z,0.00,119.93,119.93,66311,BLOCKED 13th. Michigan WON Final Four (+55%). Iran Apr NO -41%. Mar 31 ~$67 due. Operator queue CRITICAL.
+15,2026-03-30T00:02:44Z,121.52,65982,1984,BLOCKED 14th. Michigan won Elite Eight TODAY (74%+). Iran war Day 30 - explains Apr NO bleeding. Mar 31 positions safe (~67 payout in 2 days).
+16,2026-03-30T06:00:00Z,123.42,67114,2035,BLOCKED 15th. Operator approved POL but not arrived. Mar31 resolves tomorrow (~$67). Michigan +82% Final Four. Iran Apr30 HIGH RISK per Cornelius.
+17,2026-03-30T10:27:00Z,123.26,67770,2060,BLOCKED 16th. POL approved 00:02 but not received. Cornelius: EXIT Iran Apr30 before April 6 (71% YES rising). Michigan +82% - take partial profits. Mar31 ~6 tomorrow.
+18,2026-03-30T14:52:00Z,123.26,67621,2069,BLOCKED 17th. Cornelius: Iran exit Apr1-5. BTC hit $108k Mar (YES wins). ETH never hit $2400 (LOSE ~$15). Michigan +82% Final Four. Mar31 net ~+$4.
+19,2026-03-30T17:50:00Z,123.26,67701,2073,BLOCKED 18th. CORRECTED: ETH 400 YES likely WINS (99.25% market - ETH hit 120 in Jan). Mar31 expected +0-15. Iran Apr30 CUT recommended. Michigan HOLD to Sat.
+20,2026-03-30T19:10:00Z,124.08,67379,2067,BLOCKED_CAPITAL - $0 USDC. All capital in positions. March 31 resolutions TOMORROW - ~$67 expected. Michigan +81%. Iran Apr30 trapped (80% spread). Would trade Argentina WC at 12% if had capital.
+21,2026-03-30T20:01:51Z,123.04,67400,2070,BLOCKED 20th consecutive. Cornelius access DENIED - need permissions fix. Michigan +81% (34.5%) plays Arizona (34.5%) tomorrow. Mar31 positions resolve tomorrow ~$67. Cannot trade - $0 USDC.
+22,2026-03-30T22:15:00Z,123.19,66689,2023,BLOCKED 21st. Tomorrow March 31 resolves ~$67. Michigan +81% Final Four Apr4. Iran Apr6 deadline. Cornelius: exit Apr30 NO before Apr6.
+23,2026-03-31T04:07:24Z,123.19,67618,2064,BLOCKED cycle 23. Mar31 positions resolve TODAY. Cornelius: Iran Apr30 at 66-68% YES - cut half before Apr6. $67 frees after resolution.
+24,2026-03-31T10:30:00Z,124.50,67356,2055,BLOCKED cycle 24. /bin/bash USDC no gas. Mar 31 positions NOT resolved yet. Cornelius: CUT HALF Iran Apr30 NO before April 6 - escalations increased (tanker/E-3 hit). April 6 strikes ~45%.
+25,2026-03-31T12:06:00Z,0,124.50,124.50,66694,BLOCKED_CAPITAL - awaiting March 31 resolution. Cornelius: Iran strikes prob 47%. Hedge plan ready.
+26,2026-03-31T16:00:00Z,126.04,66766,2057,BLOCKED_CAPITAL cycle 26. 25th consecutive hold. Mar31 positions NOT resolved. Iran war Day 32. BTC/ETH safe. Apr30 NO -16% HIGH RISK - hedge when capital frees.
+27,2026-03-31T20:30:00Z,0,126.04,126.04,66700,BLOCKED_CAPITAL - Cycle 27. March 31 positions not yet resolved. Cornelius: HOLD Iran NO deploy after April 6. Michigan +81.6% Final Four April 4.
+28,2026-03-31T23:48:00Z,130.22,66750,2050,BLOCKED_CAPITAL cycle 28. Cornelius: Pakistan Hormuz deal NEW. Extension 35% strikes 40%. Iran Apr30 NO recovering 71%->57%. Hold through April 6.
+29,2026-04-01T00:05:00Z,130.22,68103,2100,BLOCKED_CAPITAL cycle 29. Cornelius: extension 40% strikes 42%. Iran FM refuses ceasefire. Michigan +82% tomorrow. Trading plan ready - waiting POL.
+30,2026-04-01T08:05:57Z,0,130.22,130.22,0,BLOCKED_CAPITAL - 0 USDC 0 POL. Cornelius: Iran 45% strikes/35% extension. Michigan +81% take profit recommended. Operator flagged for POL.
+31,2026-04-01T08:21:00Z,119.00,68541,2129,BLOCKED 30th. Cornelius: Iran 48% strikes Apr6 / 32% extension. Michigan +81% coin-flip - take half. Operator POL pending.
+32,2026-04-01T12:04:51Z,117.92,68557,2132,BLOCKED 31st. 1.53 redeemable. Cornelius: Michigan take half before Apr4. Iran Apr30 NO fairly priced. Apr6 triple convergence.
+33,2026-04-01T15:30:00Z,117.92,68768,2130,BLOCKED 32nd. BULLISH SHIFT: Trump ceasefire speech + China-Pakistan initiative. Iran Apr30 NO now underpriced. Extension 50%/Strikes 30%. Michigan +81% - sell before Apr4.
+34,2026-04-01T20:05:00Z,0.00,117.92,117.92,0,BLOCKED - 0 POL gas. Michigan +82% profit window closes Apr 4. Cornelius: Iran NO underpriced.
+35,2026-04-01T22:00:00Z,117.92,68321,2155,BLOCKED 34th. Iran Mar31 IN DISPUTE - resolving NO per Cornelius. Michigan +82% - 3 days to sell. Operator CRITICAL.
+36,2026-04-01T22:35:00Z,79.35,72.25,151.60,68261,2152,Cycle 36 UNBLOCKED. Proxy funder fix resolved 34-cycle blockage. Sold 13 Michigan at $0.34 (+$4.42). Bought 10 Fed No Change YES at $0.983 ($9.83). consecutive_holds reset.
+36,2026-04-01T22:15:00Z,68.00,68187,2150,ACTIVE! Sold Michigan 26 shares @ 0.34 (+.84). Bought Fed NoChange 10 @ 0.983. Broke 34 HOLD streak. Gas working with POLY_PROXY sig.
+37,2026-04-02T00:04:44Z,68.05,68080,0,HOLD cycle. $0 USDC. Iran Mar31 dispute pending (~$7.84). Cornelius: Iran Apr30 underpriced Hungary hedge valid Scheffler underpriced. Next: April 6 Iran deadline.
+38,2026-04-02T00:16:20Z,68.05,68202,0,HOLD cycle. $0 USDC. All positions holding through catalysts. Iran Apr6 (5 days). Masters Apr10. Hungary Apr12. Consecutive holds: 2.

@@ -1,0 +1,68 @@
+{
+  "cycle": 38,
+  "last_run": "2026-04-02T00:30:00Z",
+  "consecutive_holds": 2,
+  "last_action": "HOLD",
+  "markets_explored": 25,
+  "trades_this_session": 0,
+  "total_position_value": 68.05,
+  "notes": "Fully deployed. Waiting for Iran Mar31 dispute to resolve (~$7.84). All positions holding through upcoming catalysts. Cornelius access denied - proceeding with local analysis.",
+  "wallet_architecture": {
+    "proxy": "0x1025275D306aC5bdF1E5E34fFF2fFd33705C7939",
+    "proxy_holds": "USDC.e and conditional tokens for trading",
+    "eoa": "0xf08748436368f3B5303954FcDd63C62177916b41",
+    "eoa_holds": "POL for gas (not needed for CLOB trades)",
+    "trading_config": {
+      "signature_type": 1,
+      "funder": "0x1025275D306aC5bdF1E5E34fFF2fFd33705C7939",
+      "note": "POLY_PROXY enables gasless meta-transactions"
+    }
+  },
+  "verified_balances": {
+    "positions_value": 68.05,
+    "usdc_available": 0,
+    "gas_ok": true,
+    "capital_ok": true
+  },
+  "portfolio_summary": {
+    "total_active_value": 68.05,
+    "disputed_value": 7.84,
+    "resolved_losses_to_clear": 14.02,
+    "positions_count": 10,
+    "key_positions": {
+      "china_taiwan_yes": "$11.31 @ 9.85% (-30%)",
+      "iran_apr30_no": "$10.19 @ 48.5% (+3%)",
+      "fed_no_change_yes": "$9.82 @ 98.2% (bond)",
+      "iran_mar31_no": "$7.84 @ 99.85% (DISPUTE)",
+      "hungary_magyar_yes": "$7.28 @ 64.5% (+4%)",
+      "btc_gta_no": "$5.00 @ 51.15%",
+      "hungary_orban_yes": "$4.73 @ 35.5% (hedge)",
+      "psg_cl_yes": "$4.38 @ 12.5%",
+      "netanyahu_yes": "$4.11 @ 39.5%",
+      "scheffler_masters_yes": "$3.85 @ 13.5% (+3.2% edge vs sportsbook)"
+    }
+  },
+  "critical_dates": [
+    "April 6 8 PM ET - Iran Apr6 deadline (BIGGEST catalyst - 5 days)",
+    "April 10-13 - Masters tournament (Scheffler position)",
+    "April 12 - Hungary election (hedged both sides)",
+    "April 29 - FOMC (Fed No Change position)"
+  ],
+  "trading_plan": {
+    "immediate": [
+      "Wait for Iran Mar31 dispute resolution (~$7.84)",
+      "Monitor April 6 Iran deadline",
+      "Hold all positions through catalysts"
+    ],
+    "when_capital_frees": [
+      "Consider adding to Scheffler (+3.2% edge vs sportsbook)",
+      "Evaluate Iran Apr30 NO if dips below 44%",
+      "New opportunities from scan"
+    ]
+  },
+  "anti_passivity_status": {
+    "consecutive_holds": 2,
+    "threshold": 3,
+    "status": "OK - action required if next cycle is HOLD"
+  }
+}

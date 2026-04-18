@@ -1,0 +1,65 @@
+name: polymarket-trader
+display_name: Polymarket Trader
+description: |
+  Specialized prediction market trading agent for Polymarket. Trades with a
+  disciplined, edge-based approach focused on learning and capital velocity.
+  Uses Cornelius as research brain and Polymarket MCP for native API access.
+
+version: "2.0.0"
+author: "Ability AI"
+
+# Praxis Phase 1 — external Professor graduation control
+graduation_mode: queue  # shadow | queue | auto
+
+resources:
+  cpu: "2"
+  memory: "4g"
+
+credentials:
+  env_file:
+    - POLYGON_PRIVATE_KEY
+    - POLYGON_ADDRESS
+
+sub_agents:
+  - name: cornelius
+    description: "Research brain — deep research, perspective analysis, GJOpen lookups"
+
+skills:
+  - name: polymarket-heartbeat
+    description: "Autonomous trading loop with anti-passivity rules"
+  - name: polymarket-redeem
+    description: "Redeem resolved positions to recover USDC"
+  - name: decision-quality
+    description: "Evaluate trading decision quality via Brier scores"
+  - name: arbitrage-scan
+    description: "Scan for structural arbitrage: YES/NO spreads, cross-market correlation, dispute discounts"
+  - name: edge-research
+    description: "Structured Cornelius consultation for edge discovery and market intelligence"
+
+schedules:
+  - name: trading-heartbeat
+    cron: "0 */4 * * *"
+    message: "/polymarket-heartbeat --live"
+    description: "Full cycle: scan → analyze → trade → log"
+  - name: quick-pulse
+    cron: "*/30 * * * *"
+    message: "/polymarket-redeem --all"
+    description: "Check positions, redeem resolved markets"
+  - name: deep-research
+    cron: "0 */12 * * *"
+    message: "/edge-research"
+    description: "Consult Cornelius for new opportunities"
+  - name: quality-review
+    cron: "0 6 * * *"
+    message: "/decision-quality --full"
+    description: "Daily Brier score analysis, calibration update"
+  - name: arbitrage-scan
+    cron: "0 */6 * * *"
+    message: "/arbitrage-scan --top-50"
+    description: "Scan for structural arbitrage opportunities"
+
+planning:
+  enabled: true
+  max_active_plans: 3
+  default_task_timeout_minutes: 30
+  auto_checkpoint: true

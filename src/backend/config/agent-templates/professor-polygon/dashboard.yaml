@@ -1,0 +1,55 @@
+# dashboard.yaml
+title: Professor Polygon — Student Quality
+refresh: 60
+
+widgets:
+  - id: rolling_brier
+    type: metric
+    title: Rolling Brier (window=30)
+    source: polygon-vybe/workspace/brier-log.csv
+    script: |
+      import pandas as pd, numpy as np
+      df = pd.read_csv(path)
+      resolved_mask = df["resolved"].astype(str).str.strip().str.lower().isin(["1","true","yes","resolved"])
+      df = df[resolved_mask]
+      if len(df) < 30: print(f"{df['brier_score'].astype(float).mean():.3f} (n={len(df)})"); exit()
+      print(f"{df['brier_score'].astype(float).tail(30).mean():.3f}")
+
+  - id: platt_drift
+    type: chart
+    title: Platt A over time
+    source: polygon-vybe/workspace/calibration-params.json
+
+  - id: resolved_count
+    type: metric
+    title: Resolved decisions
+    source: polygon-vybe/workspace/brier-log.csv
+    script: |
+      import pandas as pd
+      df = pd.read_csv(path)
+      resolved_mask = df["resolved"].astype(str).str.strip().str.lower().isin(["1","true","yes","resolved"])
+      print(len(df[resolved_mask]))
+
+  - id: pending_directives
+    type: list
+    title: Pending Directives
+    source: workspace/directives.json
+
+  - id: hsh_count
+    type: metric
+    title: Hidden-state hypotheses
+    source: workspace/hidden_state_store.json
+    script: |
+      import json
+      data = json.loads(open(path).read())
+      print(len(data.get("hypotheses", [])))
+
+  - id: graduation_status
+    type: status
+    title: Graduation mode
+    source: /Users/andrii/Desktop/projects/vybe/agents/polygon-vybe/template.yaml
+
+  - id: surprise_log
+    type: markdown
+    title: Surprises this week
+    source: /Users/andrii/Desktop/projects/vybe/agents/polygon-vybe/workspace/surprise-log.md

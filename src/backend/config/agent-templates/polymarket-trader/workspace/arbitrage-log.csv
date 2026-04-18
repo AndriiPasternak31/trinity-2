@@ -1,0 +1,233 @@
+timestamp,scan_type,market_a,market_b,price_a,price_b,combined,profit_pct,liquidity,action,notes
+2026-03-27T18:00:00Z,intra-market,Netanyahu YES+NO,n/a,0.007,0.994,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T18:00:00Z,intra-market,Iranian Regime YES+NO,n/a,0.008,0.993,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T18:00:00Z,intra-market,Jesus Christ YES+NO,n/a,0.039,0.962,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T18:00:00Z,intra-market,Greenland YES+NO,n/a,0.093,0.908,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T18:00:00Z,intra-market,Russia-Ukraine Ceasefire YES+NO,n/a,0.005,0.996,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T18:00:00Z,intra-market,US forces Iran YES+NO,n/a,0.17,0.84,1.01,0,high,SKIP,No arb - 1% excess
+2026-03-27T18:00:00Z,intra-market,Fed rate cut YES+NO,n/a,0.005,0.996,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T18:00:00Z,intra-market,Falcons PARIVISION YES+NO,n/a,0.45,0.57,1.02,0,medium,SKIP,No arb - 2% excess
+2026-03-27T18:00:00Z,intra-market,Hawks Celtics YES+NO,n/a,0.35,0.66,1.01,0,high,SKIP,No arb - 1% excess
+2026-03-27T18:00:00Z,cross-market,Starmer timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent pricing (later dates > earlier)
+2026-03-27T18:00:00Z,cross-market,BTC 150k timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent pricing (later dates > earlier)
+2026-03-27T18:00:00Z,dispute,MicroStrategy BTC 2025,n/a,0.001,n/a,n/a,0,none,SKIP,In dispute - no liquidity
+2026-03-27T23:50:00Z,intra-market,Netanyahu Mar31 YES+NO,n/a,0.007,0.994,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,intra-market,Iran Regime Mar31 YES+NO,n/a,0.006,0.995,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,intra-market,US-Iran Ceasefire Mar31 YES+NO,n/a,0.037,0.964,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,intra-market,Jesus Christ 2027 YES+NO,n/a,0.039,0.962,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,intra-market,Russia-Ukraine Mar31 YES+NO,n/a,0.005,0.997,1.002,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,intra-market,Trump Greenland 2027 YES+NO,n/a,0.092,0.91,1.002,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,intra-market,Spain World Cup YES+NO,n/a,0.159,0.842,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-27T23:50:00Z,cross-market,BTC Mar price levels,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent hierarchy - lower thresholds have higher prob
+2026-03-27T23:50:00Z,cross-market,Crude Oil Mar levels,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent hierarchy - lower thresholds have higher prob
+2026-03-27T23:50:00Z,multi-outcome,Dem 2028 Nominee (128 mkts),sum=0.927,n/a,n/a,0.927,-7.3%,high,SKIP,Sum<1 implies slight underpricing but neg-risk managed
+2026-03-27T23:50:00Z,multi-outcome,World Cup 2026 (60 mkts),sum=1.007,n/a,n/a,1.007,0.7%,high,SKIP,Sum>1 by 0.7% - neg-risk absorbs excess
+2026-03-27T23:50:00Z,multi-outcome,NBA 2026 Champion (30 mkts),sum=1.020,n/a,n/a,1.020,2%,high,SKIP,Sum>1 by 2% - neg-risk absorbs excess
+2026-03-27T23:50:00Z,dispute,None found,n/a,n/a,n/a,n/a,0,n/a,SKIP,No active disputes with trading opportunity
+2026-03-28T06:00:00Z,intra-market,Oil $105 HIGH YES+NO,n/a,0.577,0.456,1.033,0,high,SKIP,No arb - 3.3% excess
+2026-03-28T06:00:00Z,intra-market,Oil $110 HIGH YES+NO,n/a,0.296,0.716,1.012,0,high,SKIP,No arb - 1.2% excess
+2026-03-28T06:00:00Z,intra-market,Oil $120 HIGH YES+NO,n/a,0.169,0.859,1.028,0,high,SKIP,No arb - 2.8% excess
+2026-03-28T06:00:00Z,intra-market,Fed No Change YES+NO,n/a,0.966,0.035,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-28T06:00:00Z,intra-market,JD Vance GOP Nom YES+NO,n/a,0.368,0.633,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-28T06:00:00Z,intra-market,Arsenal UCL YES+NO,n/a,0.27,0.74,1.01,0,high,SKIP,No arb - 1% excess
+2026-03-28T06:00:00Z,intra-market,Newsom Pres YES+NO,n/a,0.172,0.83,1.002,0,high,SKIP,No arb - efficient pricing
+2026-03-28T06:00:00Z,intra-market,LAFC MLS Cup YES+NO,n/a,0.21,0.82,1.03,0,medium,SKIP,No arb - 3% excess
+2026-03-28T06:00:00Z,intra-market,EdgeX FDV YES+NO,n/a,0.13,0.89,1.02,0,low,SKIP,No arb - 2% excess
+2026-03-28T06:00:00Z,intra-market,Greenland YES+NO,n/a,0.17,0.85,1.02,0,medium,SKIP,No arb - 2% excess
+2026-03-28T06:00:00Z,cross-market,BTC March thresholds,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent - higher thresholds lower probability
+2026-03-28T06:00:00Z,cross-market,Netanyahu timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent - later dates higher probability
+2026-03-28T06:00:00Z,cross-market,US-Iran ceasefire timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent - later dates higher probability
+2026-03-28T06:00:00Z,cross-market,US forces Iran timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent - later dates higher probability
+2026-03-28T06:00:00Z,dispute,MicroStrategy BTC 2025,n/a,0.001,n/a,n/a,0,none,SKIP,Disputed - no liquidity
+2026-03-28T06:00:00Z,dispute,Kraken IPO 2025,n/a,0.002,n/a,n/a,0,none,SKIP,In proposal - no liquidity
+2026-03-28T06:00:00Z,dispute,Macron out 2025,n/a,0.001,n/a,n/a,0,none,SKIP,In proposal - no liquidity
+2026-03-28T08:04:46-04:00,multi-outcome,Republican 2028 Nominee,N/A,143.3%,100%,143.3%,-43.3%,high,MONITOR,Total probability 143.3% vs expected 100% - overpriced by 43pp. Top: RFK Jr 49% + JD Vance 37% + Rubio 21% already = 107%. Requires shorting mechanism to exploit.
+2026-03-28T08:04:46-04:00,multi-outcome,Democratic 2028 Nominee,N/A,92.8%,100%,92.8%,7.2%,high,MONITOR,Total probability 92.8% vs expected 100% - underpriced by 7.2pp. Potential value in buying YES basket. Top: Newsom 24.25%.
+2026-03-28T08:05:01-04:00,multi-outcome,Colombia Presidential Election,N/A,150.3%,100%,150.3%,-50.3%,medium,MONITOR,LARGEST DEVIATION: Total probability 150.3% vs expected 100% - overpriced by 50.3pp. Requires shorting to exploit.
+2026-03-28T08:05:01-04:00,multi-outcome,Elon Musk tweets April 2026,N/A,114.6%,100%,114.6%,-14.6%,high,MONITOR,Total probability 114.6% vs expected 100% - overpriced by 14.6pp.
+2026-03-28T18:06:12Z,intra_market,top_20_liquid_markets,n/a,n/a,n/a,~1.001,0,high,no_action,All markets showing ~0.1% MM spread - no arb
+2026-03-28T18:06:12Z,correlation,BTC_reach_170k_2026,BTC_reach_180k_2026,0.075,0.075,n/a,0,medium,no_action,Equal prices (7.5%) violates monotonicity but gap too small to exploit
+2026-03-28T18:06:12Z,dispute,Trump_crypto_cap_gains_2027,n/a,0.065,0.935,n/a,n/a,305,monitor,YES at 6.5% while disputed - need to assess resolution direction
+2026-03-28T18:06:12Z,dispute,US_Somaliland_June2026,n/a,0.166,0.834,n/a,n/a,109,monitor,YES at 16.6% while disputed
+2026-03-28T18:06:12Z,delta_neutral,BTC_dip_60k_March,BTC_reach_80k_March,0.995,0.997,1.992,0.4,M+,no_action,Range trade costs .992 for .00 payout - negligible after fees
+2026-03-29T00:04:41Z,scan-summary,top-50-markets,-,-,-,-,-,none,"No arb found. 50 markets scanned. All YES+NO >= 1.00. Markets efficient."
+2026-03-29T06:04:17Z,intra_market,Dem_2028_batch,10_markets,YES+NO,~1.001-1.002,1.002,0%,high,SKIP,All efficient - Oprah/Whitmer/Raimondo/AOC/Buttigieg/Ossoff/etc
+2026-03-29T06:04:17Z,intra_market,Mid_volume_batch,5_markets,YES+NO,~1.001-1.002,1.002,0%,medium,SKIP,Khanna/MTG/Eric_Trump/Hegseth/Massie all efficient
+2026-03-29T06:04:17Z,correlation,MegaETH_FDV_tiers,8_markets,monotonic,correct,n/a,0%,high,SKIP,All tiers consistent (higher threshold = lower prob)
+2026-03-29T06:04:17Z,correlation,Starmer_out_timeline,5_dates,monotonic,correct,n/a,0%,medium,SKIP,Later dates have higher prob as expected
+2026-03-29T06:04:17Z,correlation,Russia_Kostyantynivka,6_dates,monotonic,correct,n/a,0%,medium,SKIP,Mar31 3% < Apr30 27.5% < Jun30 60% < Dec31 87.5%
+2026-03-29T06:04:17Z,correlation,BTC_price_2026,6_thresholds,monotonic,correct,n/a,0%,high,SKIP,00k 5% < 80k 7.5% < ... < 00k 34.5%
+2026-03-29T06:04:17Z,dispute,None_found,search,-,-,-,0%,none,SKIP,No disputed markets with trading opportunity
+2026-03-29T06:04:17Z,scan_summary,top_50_by_volume,3_scan_types,YES+NO,1.001-1.002,n/a,0%,mixed,COMPLETE,All markets efficient - MMs maintaining tight spreads
+2026-03-29T12:00:00Z,intra_market,JD_Vance_GOP_2028,YES+NO,0.366,0.636,1.002,0%,high,SKIP,Efficient - top GOP candidate
+2026-03-29T12:00:00Z,intra_market,Newsom_DEM_2028,YES+NO,0.244,0.757,1.001,0%,high,SKIP,Efficient - top DEM candidate
+2026-03-29T12:00:00Z,intra_market,OKC_Thunder_NBA,YES+NO,0.38,0.63,1.01,0%,high,SKIP,1% spread - normal
+2026-03-29T12:00:00Z,intra_market,BTC_65k_March_dip,YES+NO,0.46,0.554,1.014,0%,high,SKIP,1.4% spread - normal
+2026-03-29T12:00:00Z,intra_market,Caesars_acquisition,YES+NO,0.72,0.34,1.06,0%,low,SKIP,6% spread but still no arb
+2026-03-29T12:00:00Z,correlation,CL_oil_thresholds,$100/$105/$110,82.7%/54.8%/30.5%,correct,n/a,0%,high,SKIP,Monotonic - higher thresholds lower prob
+2026-03-29T12:00:00Z,correlation,BTC_dip_thresholds,$65k/$60k/$55k,46.9%/5.3%/0.8%,correct,n/a,0%,high,SKIP,Monotonic - lower dips less likely
+2026-03-29T12:00:00Z,correlation,Champions_League,top_6_teams,27%+23%+17%+13%+11%+8%,99%,n/a,0%,high,SKIP,Sum near 100% - consistent
+2026-03-29T12:00:00Z,dispute,search_result,none_with_liquidity,-,-,n/a,0%,none,SKIP,Closed markets in dispute have no orderbook
+2026-03-29T12:00:00Z,scan_summary,top_50_markets,all_3_types,10_intra+5_corr+dispute,>1.00,n/a,0%,all,COMPLETE,Markets efficient - MMs active
+2026-03-29T18:00:00Z,intra_market,Netanyahu_Mar31,YES+NO,0.005,0.996,1.001,0%,high,SKIP,Efficient - 2 days to resolution
+2026-03-29T18:00:00Z,intra_market,Iran_Regime_Mar31,YES+NO,0.006,0.995,1.001,0%,high,SKIP,Efficient - 2 days to resolution
+2026-03-29T18:00:00Z,intra_market,Claude5_Mar31,YES+NO,0.011,0.991,1.002,0%,medium,SKIP,Efficient - 2 days to resolution
+2026-03-29T18:00:00Z,intra_market,Chelsea_Clinton_2028,YES+NO,0.009,0.992,1.001,0%,high,SKIP,Efficient
+2026-03-29T18:00:00Z,intra_market,Oprah_2028,YES+NO,0.013,0.989,1.002,0%,high,SKIP,Efficient
+2026-03-29T18:00:00Z,intra_market,LeBron_Pres_2028,YES+NO,0.005,0.996,1.001,0%,high,SKIP,Efficient
+2026-03-29T18:00:00Z,correlation,Oil_March_thresholds,$120/$110/$100,10.25%/27.7%/82.9%,monotonic,0%,high,SKIP,Consistent - higher thresholds lower prob
+2026-03-29T18:00:00Z,correlation,BTC_2026_thresholds,$200k/$180k/$160k,4.75%/7%/8.5%,monotonic,0%,high,SKIP,Consistent hierarchy
+2026-03-29T18:00:00Z,multi_outcome,Premier_League_Winner,sum,n/a,n/a,100.25%,0%,high,SKIP,Sum slightly over 100%
+2026-03-29T18:00:00Z,multi_outcome,Champions_League,sum,n/a,n/a,100.85%,0%,high,SKIP,Sum slightly over 100%
+2026-03-29T18:00:00Z,multi_outcome,NBA_2026_Champion,sum,n/a,n/a,102.05%,0%,high,SKIP,Sum 2% over - no field arb
+2026-03-29T18:00:00Z,multi_outcome,Dem_2028_Nominee_128mkts,sum,n/a,n/a,91.85%,-8.15%,high,MONITOR,Sum 8% under 100% but negRisk managed
+2026-03-29T18:00:00Z,dispute,search_result,none_with_liquidity,n/a,n/a,n/a,0%,none,SKIP,No disputed markets found
+2026-03-29T18:00:00Z,scan_summary,top_50_by_volume,all_3_types,8_intra+4_corr+4_multi+dispute,>1.00,n/a,0%,all,COMPLETE,Markets remain efficient - tight MM spreads
+2026-03-29T12:00:00Z,intra-market,Top 20 high-volume markets,n/a,various,various,~1.001,0,high,SKIP,No arb - all efficiently priced at YES+NO=1.001
+2026-03-29T12:00:00Z,intra-market,High-liquidity markets (FIFA/2028),n/a,various,various,~1.001,0,high,SKIP,No arb - all efficiently priced
+2026-03-29T12:00:00Z,cross-market,MegaETH >$1.5B vs >$2B,same_event,bid=0.07/ask=0.11,bid=0.10/ask=0.11,n/a,potential,medium,REVIEW,MISPRICING: >$1.5B (lower threshold) priced LOWER than >$2B - illogical
+2026-03-29T12:00:00Z,dispute,MicroStrategy BTC 2025,n/a,0,n/a,n/a,0,none,SKIP,Status: disputed multiple times - empty orderbook
+2026-03-29T12:00:00Z,cross-market,BTC $150k timeline,n/a,Mar/Jun/Dec dates,n/a,n/a,0,medium,SKIP,Consistent pricing (later dates higher prob)
+2026-03-30T10:00:00Z,intra-market,Iran_ceasefire_Apr30,YES+NO,0.32,0.69,1.01,0,high,SKIP,No arb - 1% MM spread
+2026-03-30T10:00:00Z,intra-market,CrudeOil_$100_Mar,YES+NO,0.699,0.306,1.005,0,high,SKIP,No arb - efficient
+2026-03-30T10:00:00Z,intra-market,Netanyahu_Jun30,YES+NO,0.14,0.87,1.01,0,high,SKIP,No arb - 1% MM spread
+2026-03-30T10:00:00Z,intra-market,BTC_$120k_2026,YES+NO,0.19,0.83,1.02,0,medium,SKIP,No arb - 2% spread
+2026-03-30T10:00:00Z,intra-market,Netanyahu_2026,YES+NO,0.47,0.55,1.02,0,medium,SKIP,No arb - 2% spread
+2026-03-30T10:00:00Z,intra-market,US_forces_Iran_Apr30,YES+NO,0.68,0.33,1.01,0,high,SKIP,No arb - 1% spread
+2026-03-30T10:00:00Z,correlation,Iran_ceasefire_timeline,7_dates,1.45%->73.5%,monotonic,n/a,0,high,SKIP,Correctly ordered Mar<Apr7<Apr15<Apr30<May<Jun<Dec
+2026-03-30T10:00:00Z,correlation,Netanyahu_timeline,4_dates,0.25%->45.5%,monotonic,n/a,0,high,SKIP,Correctly ordered Mar<Apr<Jun<Dec2026
+2026-03-30T10:00:00Z,correlation,Starmer_timeline,5_dates,0%->64.5%,monotonic,n/a,0,medium,SKIP,Correctly ordered Feb<Mar<Apr<Jun<Dec
+2026-03-30T10:00:00Z,correlation,BTC_2026_price_levels,34_thresholds,all,monotonic,n/a,0,high,SKIP,All consistent - higher reach thresholds lower prob
+2026-03-30T10:00:00Z,dispute,search_result,none_found,n/a,n/a,n/a,0,none,SKIP,No disputed markets currently active
+2026-03-30T10:00:00Z,scan_summary,top_50_markets,3_scan_types,6_intra+4_corr+dispute,>=1.01,n/a,0%,all,COMPLETE,All markets efficient - MMs maintaining 1-2% spreads. No arb.
+2026-03-30T12:00:00Z,intra-market,Netanyahu_Mar31,YES+NO,0.003,0.998,1.001,0,high,SKIP,No arb - 0.1% spread efficient pricing
+2026-03-30T12:00:00Z,intra-market,Iran_Regime_Mar31,YES+NO,0.003,0.998,1.001,0,high,SKIP,No arb - 0.1% spread efficient pricing
+2026-03-30T12:00:00Z,intra-market,US_Iran_Ceasefire_Mar31,YES+NO,0.013,0.988,1.001,0,high,SKIP,No arb - 0.1% spread efficient pricing
+2026-03-30T12:00:00Z,intra-market,US_Forces_Iran_Mar31,YES+NO,0.064,0.938,1.002,0,high,SKIP,No arb - 0.2% spread
+2026-03-30T12:00:00Z,intra-market,Trump_Greenland_2027,YES+NO,0.094,0.908,1.002,0,high,SKIP,No arb - 0.2% spread
+2026-03-30T12:00:00Z,intra-market,Jesus_Christ_2027,YES+NO,0.039,0.962,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-30T12:00:00Z,intra-market,Stephen_A_Smith_2028,YES+NO,0.011,0.99,1.001,0,high,SKIP,No arb - efficient pricing
+2026-03-30T12:00:00Z,intra-market,Whitmer_2028,YES+NO,0.015,0.987,1.002,0,high,SKIP,No arb - efficient pricing
+2026-03-30T12:00:00Z,intra-market,Oprah_2028,YES+NO,0.012,0.99,1.002,0,high,SKIP,No arb - efficient pricing
+2026-03-30T12:00:00Z,correlation,MicroStrategy_BTC_timeline,4_dates,0%->13.5%,monotonic,n/a,0,high,SKIP,Consistent - Mar 0.25% < Jun 3.1% < Dec 13.5%
+2026-03-30T12:00:00Z,correlation,Starmer_out_timeline,6_dates,0%->61%,monotonic,n/a,0,high,SKIP,Consistent - Mar 0.35% < Apr 4.5% < Jun 37.5% < Dec 61%
+2026-03-30T12:00:00Z,correlation,Kostyantynivka_timeline,7_dates,1.85%->88%,monotonic,n/a,0,high,SKIP,Consistent - Mar 1.85% < Apr 22.5% < Jun 63% < Dec 88%
+2026-03-30T12:00:00Z,correlation,BTC_reach_2026,$70k-$1M,100%->1.65%,monotonic,n/a,0,high,SKIP,Consistent - lower thresholds higher probability
+2026-03-30T12:00:00Z,multi-outcome,Augusta_National_102mkts,YES_sum,n/a,103.9%,103.9%,-3.9%,high,SKIP,MM edge 3.9% - no YES basket arb
+2026-03-30T12:00:00Z,multi-outcome,NHL_Stanley_Cup_32mkts,YES_sum,n/a,102.85%,102.85%,-2.85%,high,SKIP,MM edge 2.85% - no YES basket arb
+2026-03-30T12:00:00Z,multi-outcome,Eurovision_50mkts,YES_sum,n/a,102.4%,102.4%,-2.4%,high,SKIP,MM edge 2.4% - no YES basket arb
+2026-03-30T12:00:00Z,dispute,search_result,none_active,n/a,n/a,n/a,0,none,SKIP,No active disputed markets with orderbook liquidity
+2026-03-30T12:00:00Z,scan_summary,top_50_markets,3_scan_types,9_intra+4_corr+3_multi+dispute,>=1.001,n/a,0%,all,COMPLETE,Markets efficient. MMs tight. Multi-outcome sum 102-104% = normal MM edge.
+2026-03-30T18:05:22Z,intra-market,top_50_by_volume,50_markets,YES+NO,all>=1.00,~1.001,0%,high,SKIP,All 50 markets efficient - no YES+NO < 0.98 found
+2026-03-30T18:05:22Z,correlation,BTC_March30_thresholds,0k-8k,99%->0%,monotonic,n/a,0%,high,SKIP,BTC at 6.7k - market expects 6-68k range. Consistent hierarchy.
+2026-03-30T18:05:22Z,correlation,Crude_Oil_March31,0-20,100%->1%,monotonic,n/a,0%,high,SKIP,Consistent - higher thresholds lower probability
+2026-03-30T18:05:22Z,correlation,MegaETH_FDV_launch,00M-B,43%->3%,monotonic,n/a,0%,high,SKIP,Consistent - higher FDV targets lower probability
+2026-03-30T18:05:22Z,correlation,BTC_2026_annual,0k-00k,100%->4%,monotonic,n/a,0%,high,SKIP,Consistent - 70k/180k both at 7% but within margin
+2026-03-30T18:05:22Z,delta-neutral,BTC_Mar30_range,6k-8k,99%/0%,boundary,1.99,0.5%,high,SKIP,Range already priced in - no spread opportunity
+2026-03-30T18:05:22Z,dispute,search_result,none_found,n/a,n/a,n/a,0%,none,SKIP,No disputed markets with trading opportunity
+2026-03-30T18:05:22Z,near-term,resolution<7d,15_events,BTC/Oil/Iran/Ukraine,n/a,n/a,n/a,high,MONITOR,High-volume events resolving Mar30-Apr3 - monitor for last-minute moves
+2026-03-30T18:05:22Z,scan_summary,top_50_markets,3_scan_types,intra+corr+dispute,>=1.00,n/a,0%,all,COMPLETE,Markets efficient. MMs maintaining tight spreads. No structural arb available.
+2026-03-30T23:59:00Z,intra-market,Netanyahu_Mar31,YES+NO,0.002,0.999,1.001,0%,high,SKIP,Efficient - expires tomorrow
+2026-03-30T23:59:00Z,intra-market,Iran_Regime_Mar31,YES+NO,0.002,0.999,1.001,0%,high,SKIP,Efficient - expires tomorrow
+2026-03-30T23:59:00Z,intra-market,US_Forces_Iran_Mar31,YES+NO,0.047,0.955,1.002,0%,high,SKIP,Efficient - 0.2% MM spread
+2026-03-30T23:59:00Z,intra-market,Trump_Greenland_2027,YES+NO,0.094,0.907,1.001,0%,high,SKIP,Efficient pricing
+2026-03-30T23:59:00Z,intra-market,US_Iran_Ceasefire_Mar31,YES+NO,0.008,0.994,1.002,0%,high,SKIP,Efficient pricing
+2026-03-30T23:59:00Z,intra-market,Jesus_Christ_2027,YES+NO,0.039,0.962,1.001,0%,high,SKIP,Efficient pricing
+2026-03-30T23:59:00Z,intra-market,LeBron_James_2028,YES+NO,0.005,0.996,1.001,0%,high,SKIP,Efficient pricing
+2026-03-30T23:59:00Z,intra-market,Oprah_2028,YES+NO,0.011,0.990,1.001,0%,high,SKIP,Efficient pricing
+2026-03-30T23:59:00Z,intra-market,BitBoy_Convicted_Mar31,YES+NO,0.197,0.862,1.059,0%,medium,SKIP,5.9% MM spread - no arb
+2026-03-30T23:59:00Z,intra-market,Claude5_Mar31,YES+NO,0.009,0.998,1.007,0%,medium,SKIP,Efficient - expires tomorrow
+2026-03-30T23:59:00Z,intra-market,Newsom_2028,YES+NO,0.243,0.759,1.002,0%,high,SKIP,Efficient - tight spread
+2026-03-30T23:59:00Z,intra-market,Pumpfun_Airdrop_Mar31,YES+NO,0.003,0.998,1.001,0%,low,SKIP,Efficient - low liquidity
+2026-03-30T23:59:00Z,multi-outcome,Dem_2028_Nominee,sum,89.45%,n/a,89.45%,-10.55%,high,MONITOR,Sum under 100% - negRisk managed
+2026-03-30T23:59:00Z,multi-outcome,Rep_2028_Nominee,sum,142.2%,n/a,142.2%,+42.2%,high,SKIP,Sum over 100% - normal MM edge in multi-outcome
+2026-03-30T23:59:00Z,correlation,BTC_$150k_timeline,3_dates,Mar/Jun/Dec,0.05%/2.05%/10.5%,monotonic,0%,high,SKIP,Consistent - later dates higher prob
+2026-03-30T23:59:00Z,correlation,MicroStrategy_BTC,4_dates,2025/Mar/Jun/Dec26,0%/0.05%/3.1%/13%,monotonic,0%,high,SKIP,Consistent hierarchy
+2026-03-30T23:59:00Z,correlation,Starmer_out,6_dates,Feb-Dec26,0%->59%,monotonic,0%,medium,SKIP,Consistent - later dates higher prob
+2026-03-30T23:59:00Z,dispute,search_result,none_found,n/a,n/a,n/a,0%,none,SKIP,No disputed markets with liquidity
+2026-03-30T23:59:00Z,scan_summary,top_50_markets,3_scan_types,12_intra+3_corr+2_multi+dispute,>=1.001,n/a,0%,all,COMPLETE,Markets efficient. All YES+NO >= 1.001. No structural arb available.
+2026-03-31T10:00:00Z,intra-market,Netanyahu_Mar31,YES+NO,0.002,0.999,1.001,0%,high,SKIP,Efficient - expires TODAY
+2026-03-31T10:00:00Z,intra-market,Iran_Regime_Mar31,YES+NO,0.002,0.999,1.001,0%,high,SKIP,Efficient - expires TODAY
+2026-03-31T10:00:00Z,intra-market,US_Iran_Ceasefire_Mar31,YES+NO,0.008,0.993,1.001,0%,high,SKIP,Efficient pricing
+2026-03-31T10:00:00Z,intra-market,US_Forces_Iran_Mar31,YES+NO,0.024,0.977,1.001,0%,high,SKIP,Efficient pricing
+2026-03-31T10:00:00Z,intra-market,Jesus_Christ_2027,YES+NO,0.039,0.962,1.001,0%,high,SKIP,Efficient pricing
+2026-03-31T10:00:00Z,intra-market,Chelsea_Clinton_2028,YES+NO,0.009,0.992,1.001,0%,high,SKIP,Efficient pricing
+2026-03-31T10:00:00Z,intra-market,Oprah_2028,YES+NO,0.011,0.990,1.001,0%,high,SKIP,Efficient pricing
+2026-03-31T10:00:00Z,intra-market,Andrew_Yang_2028,YES+NO,0.007,0.994,1.001,0%,high,SKIP,Efficient pricing
+2026-03-31T10:00:00Z,multi-outcome,Weinstein_prison,6_outcomes,sum_ask=1.046,n/a,1.046,-4.6%,medium,SKIP,No arb - costs $1.046 to guarantee $1.00 return
+2026-03-31T10:00:00Z,correlation,MicroStrategy_BTC,4_dates,Mar/Jun/Dec26,0.05%/3.1%/13%,monotonic,0%,high,SKIP,Consistent hierarchy
+2026-03-31T10:00:00Z,correlation,Starmer_out,6_dates,Mar-Dec26,0.3%->58%,monotonic,0%,high,SKIP,Consistent - later dates higher prob
+2026-03-31T10:00:00Z,correlation,Kostyantynivka,11_dates,Mar-Dec26,2.35%->87.5%,monotonic,0%,high,SKIP,Consistent - later dates higher prob
+2026-03-31T10:00:00Z,correlation,BTC_$150k,5_dates,Sep25-Dec26,0%->10.5%,monotonic,0%,high,SKIP,Consistent - later dates higher prob
+2026-03-31T10:00:00Z,correlation,MegaETH_FDV,8_thresholds,$600M-$6B,43.5%->1.7%,monotonic,0%,high,SKIP,Consistent - higher thresholds lower prob
+2026-03-31T10:00:00Z,dispute,search_result,none_found,n/a,n/a,n/a,0%,none,SKIP,No disputed markets with liquidity
+2026-03-31T10:00:00Z,scan_summary,top_50_markets,3_scan_types,8_intra+5_corr+1_multi+dispute,>=1.001,n/a,0%,all,COMPLETE,Markets efficient. MMs tight. Mar31 expiring markets priced at extreme NO. No arb.
+2026-03-31T12:00:00Z,intra-market,Netanyahu_Mar31,YES+NO,0.002,0.999,1.001,0%,high,SKIP,Efficient - resolves today
+2026-03-31T12:00:00Z,intra-market,Iran_ceasefire_Mar31,YES+NO,0.007,0.994,1.001,0%,high,SKIP,Efficient
+2026-03-31T12:00:00Z,intra-market,US_forces_Iran_Mar31,YES+NO,0.028,0.974,1.002,0%,high,SKIP,Efficient
+2026-03-31T12:00:00Z,intra-market,US_forces_Iran_Apr30,YES+NO,0.61,0.40,1.01,0%,high,SKIP,Efficient - 1% spread
+2026-03-31T12:00:00Z,intra-market,Iran_ceasefire_Apr30,YES+NO,0.34,0.67,1.01,0%,high,SKIP,Efficient - 1% spread
+2026-03-31T12:00:00Z,intra-market,Newsom_2028_nom,YES+NO,0.243,0.759,1.002,0%,high,SKIP,Very tight spread
+2026-03-31T12:00:00Z,intra-market,JD_Vance_2028_nom,YES+NO,0.365,0.636,1.001,0%,high,SKIP,Efficient
+2026-03-31T12:00:00Z,intra-market,OKC_Thunder_NBA,YES+NO,0.38,0.63,1.01,0%,high,SKIP,Efficient - 1% spread
+2026-03-31T12:00:00Z,intra-market,Arsenal_CL,YES+NO,0.27,0.74,1.01,0%,high,SKIP,Efficient
+2026-03-31T12:00:00Z,intra-market,George_Russell_F1,YES+NO,0.47,0.54,1.01,0%,medium,SKIP,Efficient - tighter than most
+2026-03-31T12:00:00Z,intra-market,Spain_FIFA,YES+NO,0.16,0.843,1.003,0%,high,SKIP,Very tight
+2026-03-31T12:00:00Z,intra-market,Real_Madrid_CL,YES+NO,0.11,0.90,1.01,0%,high,SKIP,Efficient
+2026-03-31T12:00:00Z,correlation,Netanyahu_sequential,3_dates,Mar31/Jun30/EOY26,0.2%/8.5%/41.5%,monotonic,0%,high,SKIP,Consistent
+2026-03-31T12:00:00Z,correlation,US_forces_Iran,3_dates,Mar31/Apr30/Dec31,2.5%/61.5%/73.5%,monotonic,0%,high,SKIP,Consistent
+2026-03-31T12:00:00Z,correlation,Iran_ceasefire,2_dates,Mar31/Apr30,0.7%/33.5%,monotonic,0%,high,SKIP,Consistent
+2026-03-31T12:00:00Z,correlation,JD_Vance_nom_vs_pres,2_markets,nom/pres,36.45%/17.65%,P(pres)<=P(nom),0%,high,SKIP,Logically consistent
+2026-03-31T12:00:00Z,correlation,Newsom_nom_vs_pres,2_markets,nom/pres,24.2%/16.75%,P(pres)<=P(nom),0%,high,SKIP,Logically consistent
+2026-03-31T12:00:00Z,dispute,scan_v2,none_active,n/a,n/a,n/a,0%,none,SKIP,No disputed markets found with search
+2026-03-31T12:00:00Z,scan_summary,top_50_refresh,3_scan_types,12_intra+5_corr+dispute,all>=1.001,tight_spreads,0%,all,COMPLETE,No structural arbitrage. Markets very efficient. Best spreads at 1.001 on high-profile markets.
+2026-03-31T18:00:00Z,intra-market,OKC Thunder YES+NO,n/a,0.38,0.63,1.01,0,high,SKIP,1% MM spread - no arb
+2026-03-31T18:00:00Z,intra-market,George Russell F1 YES+NO,n/a,0.46,0.55,1.01,0,high,SKIP,1% MM spread - no arb
+2026-03-31T18:00:00Z,intra-market,Netanyahu 2026 YES+NO,n/a,0.42,0.60,1.02,0,high,SKIP,2% MM spread - no arb
+2026-03-31T18:00:00Z,intra-market,US Iran ceasefire Apr YES+NO,n/a,0.37,0.64,1.01,0,high,SKIP,1% MM spread - no arb
+2026-03-31T18:00:00Z,intra-market,Carolina Hurricanes YES+NO,n/a,0.12,0.89,1.01,0,high,SKIP,1% MM spread - no arb
+2026-03-31T18:00:00Z,intra-market,Arsenal CL YES+NO,n/a,0.27,0.74,1.01,0,high,SKIP,1% MM spread - no arb
+2026-03-31T18:00:00Z,cross-correlation,BTC reach ladder,n/a,multi,multi,n/a,0,high,SKIP,Ladder logically consistent
+2026-03-31T18:00:00Z,cross-correlation,BTC dip ladder,n/a,multi,multi,n/a,0,high,SKIP,Ladder logically consistent
+2026-03-31T18:00:00Z,dispute,RU-UA ceasefire Mar31,n/a,0.0005,0.9995,n/a,0,high,SKIP,Essentially resolved NO - no discount
+2026-03-31T18:00:00Z,dispute,Trump-Putin Mar31,n/a,0,1,n/a,0,high,SKIP,Already resolved - no discount
+2026-03-31T23:59:00Z,full_scan,N/A,N/A,N/A,N/A,N/A,0,N/A,NONE,No arb opportunities found in top 50 markets. BTC price correlation anomalies not executable.
+2026-04-01T06:00:00Z,intra-market,US forces Iran Apr30 YES+NO,n/a,0.57,0.44,1.01,0,high,SKIP,No arb - 1% overpriced
+2026-04-01T06:00:00Z,intra-market,Jesus vs GTA YES+NO,n/a,0.49,0.52,1.01,0,high,SKIP,No arb - 1% overpriced
+2026-04-01T06:00:00Z,intra-market,JD Vance Rep YES+NO,n/a,0.367,0.635,1.002,0,high,SKIP,No arb - efficient 0.2% spread
+2026-04-01T06:00:00Z,intra-market,Newsom YES+NO,n/a,0.242,0.759,1.001,0,high,SKIP,No arb - efficient 0.1% spread
+2026-04-01T06:00:00Z,intra-market,RU/UA Ceasefire YES+NO,n/a,0.27,0.74,1.01,0,high,SKIP,No arb - 1% overpriced
+2026-04-01T06:00:00Z,intra-market,MegaETH $1B YES+NO,n/a,0.28,0.74,1.02,0,med,SKIP,No arb - 2% overpriced
+2026-04-01T06:00:00Z,intra-market,Greenland YES+NO,n/a,0.086,0.916,1.002,0,high,SKIP,No arb - efficient
+2026-04-01T06:00:00Z,cross-market,MegaETH FDV thresholds,n/a,n/a,n/a,n/a,0,med,SKIP,Consistent: higher threshold = lower prob
+2026-04-01T06:00:00Z,cross-market,JD Vance Prez vs Rep Nom,n/a,0.177,0.366,n/a,0,high,SKIP,Consistent: Prez 17.7% < Rep Nom 36.6%
+2026-04-01T06:00:00Z,cross-market,BTC dip $55k vs $45k,n/a,0.735,0.49,n/a,0,high,SKIP,Consistent: $55k dip 73.5% > $45k dip 49%
+2026-04-01T06:00:00Z,cross-market,Iran ceasefire timelines,n/a,0.515,0.66,n/a,0,med,SKIP,Consistent: May 51.5% < June 66%
+2026-04-01T06:00:00Z,dispute,n/a,n/a,n/a,n/a,n/a,0,n/a,SKIP,No disputed markets found in active listings
+2026-04-01T08:19:59Z,scan_all,intra_market,none,NA,NA,NA,0,NA,no_action,"Checked 10 diverse markets. All YES+NO > 0.98. No arb."
+2026-04-01T08:19:59Z,scan_all,cross_correlation,BTC_150k_timeseries,NA,NA,NA,0,NA,no_action,"BTC 50k markets: Mar26=0.05% Jun26=1.7% Dec26=10.5% - logically consistent"
+2026-04-01T08:19:59Z,scan_all,dispute_discount,MicroStrategy_BTC_2025,NA,NA,NA,0,NA,no_action,"Disputed but orderbook suspended - not tradeable"
+2026-04-01T12:02:35Z,intra_market,top_50_scan,N/A,N/A,N/A,1.01,0,N/A,none,All spreads ~1% - no pure YES/NO arb found
+2026-04-01T12:02:35Z,temporal,Netanyahu_series,N/A,0.15-40.5%,N/A,N/A,0,N/A,none,Monotonically increasing - no temporal arb
+2026-04-01T12:02:35Z,dispute,general_scan,N/A,N/A,N/A,N/A,0,N/A,none,No disputed markets found in top 200
+2026-04-01T12:03:39Z,multi_outcome,GOP_2028_nominee,sum_check,132.75%,N/A,N/A,0,N/A,none,Displayed prices misleading - actual orderbooks efficient at ~100%
+2026-04-01T$(date +%H:%M:%S),scan-summary,top-50-markets,,,,,,,"Scanned 50 markets. No intra-market arb (all YES+NO >= 1.00). BTC price thresholds correctly ordered. No active disputes found."
+2026-04-01T22:21:19Z,intra_market,top_50_volume_scan,dem2028/sports/crypto,N/A,N/A,1.00-1.01,0,N/A,none,"Scanned Oprah/Clooney/Raimondo/Buttigieg/Obama/GTA-VI/Spain-FIFA/Real-UCL/OKC-NBA/Netanyahu - all at ~1.00-1.01"
+2026-04-01T22:21:19Z,correlation,megaeth_fdv_thresholds,8_thresholds,51.5%-2.05%,N/A,N/A,0,N/A,none,"Monotonically decreasing from $600M to $6B - logically consistent"
+2026-04-01T22:21:19Z,correlation,time_series_markets,NATO/Starmer/Kostyantynivka,N/A,N/A,N/A,0,N/A,none,"All time series consistent - later dates have higher probabilities"
+2026-04-01T22:21:19Z,multi_outcome,harvey_weinstein_prison,6_outcomes,96.25%,N/A,N/A,0,N/A,monitor,"Sum 96.25% leaves 3.75% gap - not pure arb but potential value"
+2026-04-01T22:21:19Z,multi_outcome,nhl_stanley_cup_2026,32_teams,100.6%,N/A,N/A,0,N/A,none,"Sum 100.6% - within normal fee range"
+2026-04-01T22:21:19Z,multi_outcome,nba_champion_2026,30_teams,101.9%,N/A,N/A,0,N/A,none,"Sum 101.9% - within normal fee range"
+2026-04-01T22:21:19Z,dispute,uma_scan,general,N/A,N/A,N/A,0,N/A,none,"No active disputes found in scanned markets"
+2026-04-01T22:21:19Z,illiquid,edgex_fdv_boundary,600M-700M,99.95%/0.05%,N/A,N/A,0,low,"Sharp price cliff but no orderbook liquidity - market expects FDV in $600-700M range"
+2026-04-01T20:00:00Z,intra-market,Netanyahu 2026 YES+NO,n/a,0.40,0.61,1.01,0,high,SKIP,No arb - combined > 0.98
+2026-04-01T20:00:00Z,intra-market,RU-UA Ceasefire/GTAVI YES+NO,n/a,0.55,0.46,1.01,0,high,SKIP,No arb - combined > 0.98
+2026-04-01T20:00:00Z,intra-market,Trump out/GTAVI YES+NO,n/a,0.53,0.48,1.01,0,medium,SKIP,No arb - combined > 0.98
+2026-04-01T20:00:00Z,intra-market,Jesus/GTAVI YES+NO,n/a,0.49,0.52,1.01,0,very_high,SKIP,No arb but $166k+ liquidity
+2026-04-01T20:00:00Z,intra-market,Iran Apr30 YES+NO,n/a,0.038,0.963,1.001,0,high,SKIP,No arb - efficient pricing
+2026-04-01T20:00:00Z,intra-market,Iran Jun30 YES+NO,n/a,0.11,0.90,1.01,0,very_high,SKIP,No arb - $57k/$33k liquidity
+2026-04-01T20:00:00Z,cross-market,Harvey Weinstein outcomes,n/a,0.278+0.088+0.092+0.241+0.24+0.075,1.014,n/a,0,tiny,SKIP,Sum > 1 - no multi-outcome arb
+2026-04-01T20:00:00Z,cross-market,Starmer timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent (Apr 2.85% < Jun 24.5% < Dec 59.5%)
+2026-04-01T20:00:00Z,cross-market,Kostyantynivka timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent (Apr 19% < Jun 59% < Dec 85%)
+2026-04-01T20:00:00Z,cross-market,MicroStrategy BTC timeline,n/a,n/a,n/a,n/a,0,n/a,SKIP,Consistent (Mar 0% < Jun 3.25% < Dec 13.5%)
+2026-04-01T20:00:00Z,dispute,No disputed markets found,n/a,n/a,n/a,n/a,0,n/a,SKIP,0 markets in dispute state

@@ -1,0 +1,37 @@
+# template.yaml
+name: professor-polygon
+display_name: Professor Polygon - Trader Decision Quality
+description: |
+  Grades polygon-vybe's trading decisions via the praxis-professor-core
+  library. Issues directives (Platt updates, new correction skills)
+  committed back to polygon-vybe via Trinity git-sync.
+avatar_prompt: A stern but kind university professor in a tweed jacket with elbow patches, holding a red grading pen over a spreadsheet of probabilities and calibration curves, standing in front of a blackboard filled with Brier-score equations, warm desk-lamp lighting, scholarly and exacting expression
+version: 0.1.0
+
+resources:
+  cpu: "2"
+  memory: "4g"
+
+capabilities:
+  - decision_analysis
+  - calibration_tracking
+  - self_rewrite
+  - cornelius_backprop
+
+allowed_agents:
+  - polygon-vybe
+  - cornelius
+
+commands:
+  grade:
+    description: Daily grading cycle — reads polygon-vybe's brier-log, writes directives
+    skill: grade
+  backtest:
+    description: Retrospective grading over full historical brier-log
+    skill: backtest
+  self-rewrite:
+    description: Apply a pending directive to polygon-vybe (Platt update or new skill)
+    skill: self-rewrite
+  cornelius-backprop:
+    description: Feed resolved outcome back to Cornelius for Q-value update
+    skill: cornelius-backprop

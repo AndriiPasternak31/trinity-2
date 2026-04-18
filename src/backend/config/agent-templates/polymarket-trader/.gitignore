@@ -1,0 +1,11 @@
+# Exclude sensitive and temporary files
+.bash_logout
+.bashrc
+.profile
+.bash_history
+.cache/
+.local/
+.npm/
+.ssh/
+
+content/

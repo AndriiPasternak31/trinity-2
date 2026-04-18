@@ -1,0 +1,180 @@
+# =============================================================================
+# TRINITY PLATFORM - REQUIRED EXCLUSIONS
+# =============================================================================
+
+# Credentials and secrets (NEVER commit these)
+.mcp.json
+.mcp.backup.json
+.env
+*.pem
+*.key
+*.p12
+*.pfx
+
+# User-specific Claude settings
+.claude/settings.local.json
+.claude/claude_desktop_config.json
+settings.local.json
+
+# Claude runtime state (NOT agent value - these are ephemeral)
+# Agent value (.claude/skills/, rules/, agents/, commands/, memory/) MUST be tracked
+.claude/debug/
+.claude/projects/
+.claude/cache/
+.claude/credentials/
+
+# Obsidian app settings (user-specific)
+.obsidian/
+
+# Trinity platform-managed directories
+.trinity/
+.claude/commands/trinity/
+
+# =============================================================================
+# SYSTEM FILES
+# =============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# =============================================================================
+# IDE AND EDITOR
+# =============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+
+# =============================================================================
+# DEVELOPMENT
+# =============================================================================
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =============================================================================
+# BUILD OUTPUTS
+# =============================================================================
+
+# General
+dist/
+build/
+*.log
+
+# Quartz (static site generator)
+quartz-site/public/
+quartz-site/.quartz-cache/
+
+# =============================================================================
+# LARGE FILES (Consider using Git LFS)
+# =============================================================================
+
+# PDF documents (large)
+*.pdf
+
+# Backup files
+*.bak
+*.backup
+
+# =============================================================================
+# AGENT-SPECIFIC
+# =============================================================================
+
+# Smart Connections plugin environment
+.smart-env/
+
+# Local search index (regenerated on demand)
+resources/local-brain-search/*.faiss
+resources/local-brain-search/*.pkl
+resources/local-brain-search/embeddings/
+
+# Brain search daemon runtime
+resources/local-brain-search/daemon.pid
+resources/local-brain-search/daemon.log
+
+# Python virtual environments
+resources/pdf_env/
+resources/local-brain-search/venv/
+
+# Temporary workspace files
+resources/temp/
+resources/scratch/
+
+# Session-specific outputs (if not needed in version control)
+# outputs/temp/
+# outputs/draft/
+
+# Temporary extraction scripts (one-off utilities)
+extract_*.py
+list_epub_contents.py
+call_abliterated.py
+test_abliterated.py
+final_extraction.py
+run_extraction.sh
+test_with_token.sh
+EPUB_EXTRACTION_*.md
+EXTRACTION_COMPLETE.md
+
+# External reference folders (symlinks or copies)
+Eugene Personal Brand/
+.local/
+content/
+
+# Claude runtime state (ephemeral, should not be tracked)
+.claude/statsig/
+.claude/todos/
+.claude/shell-snapshots/
+.claude/stats-cache.json
+.cache/

@@ -1,0 +1,275 @@
+borkiss 空っぽ [LT], Піктограма ролі, Mentor — 23.02.26, 13:09
+всем привет @Polymarket 
+
+я буду освещать техническую составляющую работы с полимаркетом
+borkiss 空っぽ [LT], Піктограма ролі, Mentor — 23.02.26, 20:24
+⁠┃spirit⁠
+
+так-же от меня бот, который пока в бете. https://t.me/eqfeed_bot
+
+идея: смотреть последние алерты по землетрясениях из того же источника что полик, но на прямую по апи. 
+
++ сразу там есть цены на шейры
++  алерт M6.5 >= (под ставку на полике)
+Telegram
+EQ Feed
+Powered by dreambound.org
+Зображення
+ну и так-же скоро в доступе будет терминал с глобусом, с землетрусами и не только!
+
+borkiss 空っぽ [LT], Піктограма ролі, Mentor — 25.02.26, 10:44
+https://t.me/borkiss_notes/1226
+https://github.com/lubluniky/bs-p
+
+ядро для ММ ботов. если будут вопросы, пишите
+Telegram
+borkiss notes
+🔗 github.com/lubluniky/bs-p
+
+сразу говорю: это не готовый бот с кнопкой «бабло», а именно движок для расчета рисков. По сути, это адаптация знаменитой модели Блэка-Шоулза (которую используют профи на фо...
+обновил ядро.
+
+фишки:
+защита от лудомании (Adaptive Kelly). ядро теперь само считает оптимальный размер ставки (clip size). оно берет ваше преимущество над рынком (edge), текущий портфель и жесткие лимиты риска - и выдает идеальный сайзинг. математически не даст боту перегрузить депо.
+
+радар скрытого страха (Implied Volatility). код умеет "вытаскивать" из текущего спреда ту волатильность, которую прямо сейчас прайсят маркет-мейкеры. вы сразу видите, на каких рынках крупняк закладывает огромную неопределенность.
+
+стресс-тесты всего портфеля (What-If симуляции). хотите узнать, что будет с вашим PnL и рисками, если вероятность события резко прыгнет на 10%? ядро пересчитает этот шок-сценарий для тысяч позиций за микросекунды.
+
+датчик давления стакана (OBI/VWM). показывает реальную картину того, куда агрессивно бьет толпа. формирует сигнал "давления", чтобы бот понимал, не лезет ли он под каток покупателей или продавцов.
+схлопывание рисков (Portfolio Greeks). если вы торгуете кучу связанных рынков (например, исход выборов в разных штатах), ядро соберет это всё в единую цифру риска с учетом корреляций. сразу видно, нет ли скрытого перекоса.
+так-же на завтра-после завтра планируем выкатить первый набор инструментов нашего торгово-аналитического движка HolyPoly Grail
+фреймворк для создания ботов проходит финальные лайв тесты :smnv:
+
+Всем привет! @Polymarket 
+
+holypoly.ca в лайве, наша аналитическая платформа
+
+что уже есть
+
+B01 // SEISMIC - карта для мониторинга землятрясений + бот с алертами в ТГ (под рынок с с earthquackes)
+https://www.holypoly.ca/boards/earthquake
+
+B02 // SIGINT - карта под мониторинг всей ситуации и новостей вокруг ирана (под какие рынки тут я думаю понятно)
+https://www.holypoly.ca/boards/iran
+
+B03 // CACL - борд для дельта нейтральных стратежек на любых рынках, но в особености BTC / SOL / ETH - 1D
+https://www.holypoly.ca/boards/calculator
+ 
+B04 // SCREENER - скринер для много ногого арбитража, погодных и климатических рынков
+https://www.holypoly.ca/boards/screener
+
+B01 - B02 (доступны всем без логина)
+B03 - требует просто логина в гугл акаунт
+B04 - доступен только учасникам лт, кому автоматом не выдался доступ пишите в лс https://t.me/borkiss 
+
+
+
+
+SpiritПіктограма ролі, Mentor — 23.02.26, 16:53
+Аккаунты за которыми слежу:
+
+Все подряд
+https://polymarket.com/@bobe2
+https://polymarket.com/@JAHODA
+https://polymarket.com/@Car
+https://polymarket.com/@ImJustKen
+https://polymarket.com/@TheWolfOfPoly
+https://polymarket.com/@kekkone
+https://polymarket.com/@archaic
+https://polymarket.com/@dontshowmyname
+https://polymarket.com/@mango-lassi
+https://polymarket.com/@Euan
+https://polymarket.com/@LlamaEnjoyer
+https://polymarket.com/@AJSV
+https://polymarket.com/@Roflan-ludoman
+https://polymarket.com/@slight-
+https://polymarket.com/@poorsob
+https://polymarket.com/@pako
+https://polymarket.com/@mombil
+https://polymarket.com/@Vespucci
+https://polymarket.com/@Dropper
+https://polymarket.com/@JJo
+https://polymarket.com/@kekkone
+https://polymarket.com/@0xheavy888
+https://polymarket.com/@LlamaEnjoyer
+https://polymarket.com/@HolyMoses7
+https://polymarket.com/@donjo
+https://polymarket.com/@033033033
+
+https://polymarket.com/@0xe3726a1b9c6ba2f06585d1c9e01d00afaedaeb38
+https://polymarket.com/@scottilicious
+https://polymarket.com/@0xe8dd7741ccb12350957ec71e9ee332e0d1e6ec86
+
+Твиты Маска
+https://polymarket.com/@Annica
+https://polymarket.com/@szz
+https://polymarket.com/@Prexpect
+https://polymarket.com/@sb911
+
+Гугл инсайдер
+https://polymarket.com/@beepboopzyx
+
+Долгосрок крипта +15м
+https://polymarket.com/@justdance
+https://polymarket.com/@coinman2
+https://polymarket.com/@x6916Cc00AA1c3e75ECf4081DF7caE7D2f3592fd4
+https://polymarket.com/@0xf705fa045201391d9632b7f3cde06a5e24453ca7
+TGE
+https://polymarket.com/@filthyBera
+
+Израиль
+https://polymarket.com/@Rundeep
+
+Ближний Вотсок
+https://polymarket.com/@Sonix 
+
+15 минутки
+https://polymarket.com/@gabagool22
+https://polymarket.com/@distinct-baguette
+https://polymarket.com/@PBot1
+https://polymarket.com/@1TickWonder2
+https://polymarket.com/@Sharky6999
+https://polymarket.com/@kingofcoinflips
+
+15м , 15к->230К за 2 дня
+https://polymarket.com/@a4385?via=archive
+100К за 2 дня на 5-15 минутках
+https://polymarket.com/@bratanbratishka
+
+Ловит много по 1с
+https://polymarket.com/@megamm2
+
+Погода
+https://polymarket.com/profile/0xa2711d1d311a0b2fa7f88d5c7cb760a3fa062727
+https://polymarket.com/@neobrother
+https://polymarket.com/@VibeTrader
+https://polymarket.com/@1pixel
+https://polymarket.com/@0x594edB9112f526Fa6A80b8F858A6379C8A2c1C11-1762688003124
+https://polymarket.com/@HondaCivic
+
+Кино
+https://polymarket.com/@0xe2b1fc269d0c2e27da11fadd1d9596fe28227d2a
+
+
+Спорт
+0x5350afcd8bd8ceffdf4da32420d6d31be0822fda
+0x204f72f35326db932158cba6adff0b9a1da95e14
+0x2005d16a84ceefa912d4e380cd32e7ff827875ea
+
+Гейминг
+https://polymarket.com/@DaisyFarm
+https://polymarket.com/@BossOfEsports
+
+https://cryptomannn-academy.notion.site/POLYMARKET-30dd878f6f55807bb210d832f4fc7624
+
+Стрим Polymarket от А до Я
+
+
+Holy Snipe
+
+Бот, который алертит действия выбранного вами аккаунта:
+https://t.me/HolySnipeBot
+
+Insider Scanner
+
+Бот, который алертит покупки от потенциальных инсайдеров и крупняка (>$9К бай, <10 сделок в истории):
+
+https://t.me/HolyPolyInsiderScanner
+
+
+Holy Dispute
+
+Бот, который присылает рынки с диспутами 1-2 уровня. Финальные диспуты убраны.
+https://t.me/holy_poly_dispute
+
++ в связке можно использовать этот сервис для просмотра статуса диспута и чекера в какую сторону голосуют: https://www.betmoar.fun/
+Telegram
+Holy Dispute
+You can view and join @holy_poly_dispute right away.
+Зображення
+Не вдалося завантажити зображення.
+
+Betmoar
+The fastest way to bet on your beliefs. Over $600M+ in volume across the leading prediction market trading interface.
+
+Аккаунты ума-вотеров:
+
+https://polymarket.com/@The-Joker
+https://polymarket.com/@bamesjond
+https://polymarket.com/@Car
+https://polymarket.com/@JJo
+https://polymarket.com/@aenews2
+https://polymarket.com/@ImJustKen
+https://polymarket.com/@neformal
+https://polymarket.com/@scout
+https://polymarket.com/@Rex416
+https://polymarket.com/@Infringe
+https://polymarket.com/@cashy
+https://polymarket.com/@ithinkthisisgod
+https://polymarket.com/@Sonix 
+
+
+Запустили бота внутри Holy Poly.
+
+После написания ссылки к рынку или ссылки на аккаунт, он будет автоматом давать подробную статку.
+
++ можно использовать команды для быстрого ресьорча рынков и много всего другого.
+Trading
+
+bm s [query] — поиск рынков.
+bm ob [query] — посмотреть ордербук рынка через прямой поиск.
+bm ob [number] — посмотреть ордербук конкретного рынка.
+
+Portfolio
+
+bm pos [filter] — посмотреть ваши позиции.
+bm profile — посмотреть профиль трейдера.
+bm chart profile [interval] — посмотреть график вашего PNL.
+bm recent [filters] [page] — посмотреть последние сделки.
+bm leaderboard — посмотреть рейтинг трейдеров.
+
+Summary
+
+bm summary [interval] — сделать сводку чата за период (например 3h, 12h).
+bm summary [interval] markets — сводка чата с фокусом на обсуждение рынков.
+
+Betting Tools
+
+bm kelly — рассчитать оптимальный размер ставки по критерию Келли.
+bm apy — рассчитать простую годовую доходность (APY).
+bm tz — конвертировать часовые пояса.
+bm track — отслеживать кошельки и их сделки в реальном времени.
+
+AI Analysis
+
+bm ai cope [@user] — получить «копиум» для проигрышей.
+bm ai flex [@user] — отпраздновать успешные сделки.
+bm ai pvp @user — сравнить результаты с другим трейдером.
+bm ai roast  [@user] — «прожарить» торговую эффективность.
+
+Holy TOP-10 Tracker
+
+https://t.me/poly_market_whale_tracker_bot
+
+Бот, который будет алёртить по покупкам/продажам топ-10 холдеров с каждой стороны (YES/NO) по выбранному рынку. 
+
+
+Пан Car любезно поделился со мной источником откуда он берёт инфу.
+
+https://x.com/clashreport?s=21 
+
+
+Holy Snipe (upd).
+
+У бота новый адрес, старого можете удалять.
+
+Поправили задержку (была 3-5мин, стала до 1 мин).
+
+Бот, который алертит действия выбранного вами аккаунта:
+https://t.me/holy_snipe_bot
+
+SpiritПіктограма ролі, Mentor — 08:32
+https://www.holypoly.ca/boards/musk
+
+Запустили трекер по твитам Маска. Пробуйте, пишите фидбэк.
