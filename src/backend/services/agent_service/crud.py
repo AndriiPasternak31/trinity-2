@@ -623,6 +623,26 @@ async def create_agent_internal(
                 except Exception as e:
                     logger.warning(f"Failed to create git config for {config.name}: {e}")
 
+            # S4 (#383): Materialize persistent-state allowlist into the agent.
+            # Runtime sync/reset paths read `.trinity/persistent-state.yaml`;
+            # template.yaml is only read at creation (10-min cache), so this
+            # is the source of truth going forward. Non-fatal on failure —
+            # reset operations fall back to the default list at read time.
+            persistent_state = (
+                (template_data or {}).get(
+                    "persistent_state", git_service.DEFAULT_PERSISTENT_STATE
+                )
+            )
+            try:
+                await git_service.materialize_persistent_state(
+                    config.name, persistent_state
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[S4] Failed to materialize persistent-state.yaml for "
+                    f"{config.name}: {e}"
+                )
+
             return agent_status
         except Exception as e:
             logger.error(f"Failed to create agent {config.name}: {e}")

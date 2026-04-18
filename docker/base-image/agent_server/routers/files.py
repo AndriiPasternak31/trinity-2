@@ -199,6 +199,46 @@ def _is_edit_protected_path(path: Path) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# S4 — Persistent State Allowlist reader (abilityai/trinity#383)
+#
+# Reads the list of workspace paths that must survive a template-level reset
+# from `.trinity/persistent-state.yaml`, falling back to the default list
+# when the file is missing, empty, or malformed. The file is materialized at
+# agent creation by backend `services.git_service.materialize_persistent_state`.
+#
+# This PR introduces the reader primitive only — it is INTENTIONALLY not
+# wired into `PROTECTED_PATHS` / `EDIT_PROTECTED_PATHS`. Delete/edit
+# protection semantics are unchanged. The reset-preserve-state operation
+# (#384) is the PR that consumes this reader for protection decisions.
+# ---------------------------------------------------------------------------
+
+_PERSISTENT_STATE_PATH = Path("/home/developer/.trinity/persistent-state.yaml")
+
+_DEFAULT_PERSISTENT_STATE = [
+    "workspace/**",
+    ".trinity/**",
+    ".mcp.json",
+    ".claude.json",
+    ".claude/.credentials.json",
+]
+
+
+def _read_persistent_state() -> list[str]:
+    """Read the persistent-state allowlist from disk, with defaults."""
+    import yaml
+    if not _PERSISTENT_STATE_PATH.exists():
+        return list(_DEFAULT_PERSISTENT_STATE)
+    try:
+        data = yaml.safe_load(_PERSISTENT_STATE_PATH.read_text()) or {}
+    except (OSError, yaml.YAMLError):
+        return list(_DEFAULT_PERSISTENT_STATE)
+    patterns = data.get("persistent_state")
+    if not isinstance(patterns, list) or not patterns:
+        return list(_DEFAULT_PERSISTENT_STATE)
+    return [str(p) for p in patterns]
+
+
 @router.delete("/api/files")
 async def delete_file(path: str):
     """

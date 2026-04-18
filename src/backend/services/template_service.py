@@ -130,6 +130,10 @@ def _build_template(repo: str, metadata: dict, admin_override: dict = None) -> d
         or metadata.get("description", "")
     )
 
+    # S4 (#383): import lazily to avoid any circular-import risk with
+    # git_service, which imports database/docker modules at module load.
+    from services.git_service import DEFAULT_PERSISTENT_STATE
+
     return {
         "id": f"github:{repo}",
         "display_name": display_name,
@@ -141,6 +145,12 @@ def _build_template(repo: str, metadata: dict, admin_override: dict = None) -> d
         "skills": metadata.get("skills", []),
         "mcp_servers": metadata.get("mcp_servers", []),
         "required_credentials": metadata.get("required_credentials", []),
+        # Surface `persistent_state` from template.yaml so crud.py can
+        # materialize `.trinity/persistent-state.yaml` at creation. Falls
+        # back to the global default list when the template omits the key.
+        "persistent_state": metadata.get(
+            "persistent_state", list(DEFAULT_PERSISTENT_STATE)
+        ),
     }
 
 
