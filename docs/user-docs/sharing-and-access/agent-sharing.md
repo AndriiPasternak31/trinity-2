@@ -9,6 +9,14 @@ Share agents with team members via email. Shared users get access to interact wi
 3. Click **Share**. The email is automatically added to the platform whitelist.
 4. The shared user can now see and interact with the agent (chat, tasks, view files).
 
+### Proactive Messaging
+
+Enable agents to send proactive messages (via Telegram, Slack, or web) to shared users:
+
+1. In the Sharing tab, find the user in the shared list.
+2. Toggle **Allow Proactive** to enable/disable proactive messaging for that user.
+3. When enabled, the agent can initiate contact with that user without waiting for them to message first.
+
 ## Access Levels
 
 | Level | Permissions |

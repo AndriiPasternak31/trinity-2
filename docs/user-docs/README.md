@@ -7,6 +7,7 @@
 - [Overview](getting-started/overview.md) — What is Trinity, key concepts, architecture
 - [Setup](getting-started/setup.md) — Installation, first-time setup, login
 - [Quick Start](getting-started/quick-start.md) — Create your first agent in 5 minutes
+- [Getting Help](getting-started/help.md) — Docs Q&A bot, community resources
 
 ## Agents
 

@@ -16,6 +16,7 @@ Browser-based xterm.js terminal providing direct access to the agent's Claude Co
 
 ### SSH Access
 
+- **Admin-only**: SSH access is restricted to admin users for security.
 - Generate ephemeral SSH credentials via the API or MCP.
 - ED25519 keys with configurable TTL, controlled by ops settings.
 - API: `POST /api/agents/{name}/ssh-access`
