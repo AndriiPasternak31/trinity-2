@@ -1283,8 +1283,7 @@ CREATE INDEX idx_sync_state_status
 - `ahead_working`/`behind_working` fix P6 (external writes to the working
   branch now visible in `GET /api/git/status`).
 - Powers the dashboard sync-health dot + `sync_failing` operator-queue
-  alerts. Also the data source for the fleet sync-audit endpoint
-  (follow-up #390).
+  alerts + `/api/fleet/sync-audit` aggregator.
 
 **audit_log:** (SEC-001 / Issue #20 — Phase 1, NEW: 2026-04-14)
 ```sql
