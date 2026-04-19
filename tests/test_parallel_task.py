@@ -15,6 +15,7 @@ from utils.assertions import (
     assert_status_in,
     assert_json_response,
     assert_has_fields,
+    poll_execution_until_done,
 )
 
 
@@ -910,21 +911,9 @@ class TestAsyncSessionPersistence:
             pytest.skip("Agent at capacity")
 
         assert_status(response, 200)
-        data = response.json()
-        execution_id = data["execution_id"]
+        execution_id = response.json()["execution_id"]
 
-        # Poll until task completes
-        max_wait = 120
-        start = time.time()
-        while time.time() - start < max_wait:
-            poll = api_client.get(
-                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
-            )
-            if poll.status_code == 200:
-                exec_data = poll.json()
-                if exec_data.get("status") in ["success", "failed"]:
-                    break
-            time.sleep(2)
+        poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
         # Verify chat sessions contain messages
         sessions_resp = api_client.get(
@@ -984,16 +973,7 @@ class TestAsyncSessionPersistence:
         assert_status(async_resp, 200)
         execution_id = async_resp.json()["execution_id"]
 
-        # Poll until complete
-        max_wait = 120
-        start = time.time()
-        while time.time() - start < max_wait:
-            poll = api_client.get(
-                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
-            )
-            if poll.status_code == 200 and poll.json().get("status") in ["success", "failed"]:
-                break
-            time.sleep(2)
+        poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
         # Session should still exist (messages were added to it)
         sessions_resp = api_client.get(
@@ -1031,22 +1011,10 @@ class TestAsyncSessionPersistence:
         assert_status(response, 200)
         execution_id = response.json()["execution_id"]
 
-        # Poll until complete
-        max_wait = 120
-        start = time.time()
-        final_status = None
-        while time.time() - start < max_wait:
-            poll = api_client.get(
-                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
-            )
-            if poll.status_code == 200:
-                final_status = poll.json().get("status")
-                if final_status in ["success", "failed"]:
-                    break
-            time.sleep(2)
+        result = poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
         # If task succeeded, session should exist (WebSocket broadcast happened)
-        if final_status == "success":
+        if result and result.get("status") == "success":
             sessions_resp = api_client.get(
                 f"/api/agents/{created_agent['name']}/chat/sessions"
             )
@@ -1082,16 +1050,7 @@ class TestAsyncCollaborationActivity:
         assert_status(response, 200)
         execution_id = response.json()["execution_id"]
 
-        # Poll until complete
-        max_wait = 120
-        start = time.time()
-        while time.time() - start < max_wait:
-            poll = api_client.get(
-                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
-            )
-            if poll.status_code == 200 and poll.json().get("status") in ["success", "failed"]:
-                break
-            time.sleep(2)
+        poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
         # Check activities timeline for collaboration activity
         time.sleep(1)  # Brief wait for activity completion

@@ -133,3 +133,26 @@ def assert_credential_fields(cred: Dict[str, Any]):
     CRED-002 uses file-based credentials. Kept for backward compatibility.
     """
     pass
+
+
+def poll_execution_until_done(
+    api_client,
+    agent_name: str,
+    execution_id: str,
+    max_wait: int = 120,
+    interval: float = 2.0,
+) -> Optional[Dict[str, Any]]:
+    """Poll execution endpoint until terminal status. Returns final execution data or None on timeout."""
+    import time
+
+    start = time.time()
+    while time.time() - start < max_wait:
+        poll = api_client.get(
+            f"/api/agents/{agent_name}/executions/{execution_id}"
+        )
+        if poll.status_code == 200:
+            data = poll.json()
+            if data.get("status") in ["success", "failed"]:
+                return data
+        time.sleep(interval)
+    return None
