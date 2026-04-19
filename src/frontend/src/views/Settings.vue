@@ -279,6 +279,30 @@
                       </span>
                     </template>
                   </div>
+                  <!-- Propagation result (#211) -->
+                  <div v-if="githubPatPropagation" class="mt-2 text-sm">
+                    <template v-if="githubPatPropagation.error">
+                      <div class="text-red-600 dark:text-red-400">
+                        PAT saved, but propagation failed: {{ githubPatPropagation.error }}
+                      </div>
+                    </template>
+                    <template v-else-if="githubPatPropagation.total_running === 0">
+                      <div class="text-gray-600 dark:text-gray-400">
+                        PAT updated. No running agents to propagate to.
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div :class="githubPatPropagation.failed.length ? 'text-yellow-700 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'">
+                        PAT updated and applied to {{ githubPatPropagation.updated.length }} of {{ githubPatPropagation.total_running }} running agent{{ githubPatPropagation.total_running === 1 ? '' : 's' }}.
+                      </div>
+                      <div v-if="githubPatPropagation.failed.length" class="mt-1 text-red-600 dark:text-red-400">
+                        Failed: {{ githubPatPropagation.failed.map(a => a.agent_name).join(', ') }}
+                      </div>
+                      <div v-if="githubPatPropagation.skipped.length" class="mt-1 text-gray-500 dark:text-gray-400">
+                        Skipped: {{ githubPatPropagation.skipped.map(a => `${a.agent_name} (${a.status === 'skipped_per_agent_pat' ? 'per-agent PAT' : 'no GITHUB_PAT'})`).join(', ') }}
+                      </div>
+                    </template>
+                  </div>
                   <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     Required for creating and pushing agents to GitHub repositories. Get your token at
                     <a href="https://github.com/settings/tokens/new" target="_blank" class="text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -1612,6 +1636,7 @@ const githubPatStatus = ref({
   masked: null,
   source: null
 })
+const githubPatPropagation = ref(null)
 
 // Slack Integration state (SLACK-001)
 const slackClientId = ref('')
@@ -1864,6 +1889,9 @@ async function saveGithubPat() {
       masked: response.data.masked,
       source: 'settings'
     }
+
+    // Propagation result (#211): backend auto-pushes the new PAT to running agents
+    githubPatPropagation.value = response.data.propagation || null
 
     // Clear input and show success
     githubPat.value = ''
