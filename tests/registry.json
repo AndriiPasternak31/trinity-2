@@ -166,6 +166,13 @@
       "added": "2026-04-18",
       "categories": ["backend", "unit", "telegram", "voice", "transcription"],
       "description": "Unit tests for Telegram voice transcription (#318): voice validation (duration/size limits), transcription formatting, placeholder constants, combined validation (22 tests)"
+    },
+    {
+      "file": "test_telegram_login_gate.py",
+      "feature": "Issue #311",
+      "added": "2026-04-19",
+      "categories": ["backend", "unit", "telegram", "access-control"],
+      "description": "Unit tests for Telegram /login access gate: verified+shared returns ready, open_access returns ready, verified+restricted upserts access_request and returns 'pending approval', upsert failures don't break the reply, invalid code short-circuits gate"
     }
   ]
 }

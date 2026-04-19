@@ -587,9 +587,28 @@ class TelegramAdapter(ChannelAdapter):
                 return "❌ Invalid or expired code. Try again or request a new one."
             db.set_telegram_verified_email(binding["id"], message.sender_id, pending_email)
             _clear_pending_login(binding["id"], message.sender_id)
+
+            # Run the same access gate as message_router so the user learns
+            # immediately whether they're in or in the approval queue. Without
+            # this, a verified-but-not-shared user sees "you can chat normally"
+            # and then hits "access pending" on their next message.
+            policy = db.get_access_policy(agent_name)
+            if db.email_has_agent_access(agent_name, pending_email) or policy.get("open_access"):
+                return (
+                    f"✅ Verified! You're now signed in as <code>{pending_email}</code>.\n"
+                    "You can chat normally now."
+                )
+
+            try:
+                db.upsert_access_request(agent_name, pending_email, "telegram")
+            except Exception as e:
+                logger.error(
+                    f"Failed to upsert access_request for {pending_email} on agent={agent_name}: {e}"
+                )
             return (
-                f"✅ Verified! You're now signed in as <code>{pending_email}</code>.\n"
-                "You can chat normally now."
+                f"✅ Verified as <code>{pending_email}</code>.\n"
+                "🔒 Your access request is pending approval — "
+                "I'll let you know once the agent owner responds."
             )
 
         # Email path
