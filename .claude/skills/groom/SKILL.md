@@ -168,8 +168,8 @@ for item in data['items']:
     if item.get('status') == 'Done':
         continue
     
-    epic = item.get('Epic', '')
-    theme = item.get('Theme', '')
+    epic = item.get('epic', '')
+    theme = item.get('theme', '')
     labels = [l['name'] for l in c.get('labels', [])]
     priority = next((l for l in labels if l.startswith('priority-')), 'p3')
     row = (c['number'], c['title'][:55], priority)
@@ -365,18 +365,19 @@ gh api graphql -f query='mutation {
 
 **Add new Epic option** (if creating a new epic):
 
+Note: `updateProjectV2Field` does NOT accept `projectId` — only `fieldId`, `name`, and `singleSelectOptions`. Also, you must pass the **full list** of desired options (new + existing) since this mutation replaces all options. Replacing the list regenerates option IDs, but existing assignments on project items survive because GitHub re-binds them by name. Colors are unquoted enum values (`BLUE`, `PURPLE`, `GREEN`, `ORANGE`, `YELLOW`, `PINK`, `RED`, `GRAY`).
+
 ```bash
 gh api graphql -f query='mutation {
   updateProjectV2Field(input: {
-    projectId: "PVT_kwDOB8r7us4BRY6-",
     fieldId: "PVTSSF_lADOB8r7us4BRY6-zhKSsd8",
-    field: {
-      name: "Epic",
-      singleSelectOptions: [
-        {name: "#NNN New Epic Name", color: "BLUE"}
-      ]
-    }
-  }) { projectV2SingleSelectField { options { id name } } }
+    name: "Epic",
+    singleSelectOptions: [
+      {name: "#20 Audit Trail", color: BLUE, description: ""},
+      {name: "#306 Event Bus", color: PURPLE, description: ""},
+      {name: "#NNN New Epic Name", color: RED, description: ""}
+    ]
+  }) { projectV2Field { ... on ProjectV2SingleSelectField { options { id name } } } }
 }'
 ```
 
