@@ -81,6 +81,18 @@ User sends message -> Telegram API -> Trinity webhook -> Agent -> Response -> Te
 
 The agent receives the message text plus context for any media (photos, documents, voice notes). Responses are sent back as replies in the same chat.
 
+### Voice Messages
+
+Voice notes sent to the bot are automatically transcribed with Google Gemini 2.0 Flash and delivered to the agent as text prefixed with the 🎙️ emoji. Transcription is transparent — users just send voice notes normally.
+
+| Constraint | Limit |
+|------------|-------|
+| Duration | 5 minutes |
+| File size | 10 MB |
+| Config required | `GEMINI_API_KEY` set on the backend |
+
+If transcription fails or `GEMINI_API_KEY` is not configured, the agent receives a placeholder such as `[Voice message received — transcription failed]` so the conversation still progresses.
+
 ### Bot Commands
 
 Users in Telegram can use these commands:
@@ -188,6 +200,7 @@ curl -X PUT http://localhost:8000/api/agents/my-agent/telegram/groups/1 \
 - **Group re-add required** -- After changing Privacy Mode, the bot must be removed and re-added to existing groups.
 - **Welcome messages require admin** -- The bot needs admin rights in the group to see member join events.
 - **20MB file limit** -- Media files larger than 20MB cannot be processed.
+- **Voice transcription limits** -- Voice notes over 5 minutes or 10MB are rejected; transcription requires `GEMINI_API_KEY` on the backend.
 - **No edited message handling** -- Edited messages are not re-processed.
 
 ## Troubleshooting

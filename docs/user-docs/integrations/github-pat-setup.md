@@ -55,6 +55,8 @@ Classic tokens use broad permission scopes. Best when you want agents to access 
 
 The test shows your GitHub username and confirms repo access.
 
+**Saving auto-propagates to running agents.** When the platform PAT changes, Trinity pushes the new token into every running agent's `.env` file within seconds — no restart required. The save response lists which agents were updated, skipped, or failed. Agents with a per-agent PAT override, or agents that never configured GitHub, are skipped. Per-agent failures are reported but never block the save.
+
 ### Option B: Fine-Grained Token (Recommended for Security)
 
 Fine-grained tokens let you limit access to specific repositories and permissions. Best for production environments or when agents should only access designated repos.
@@ -214,10 +216,11 @@ Uses the configured PAT to create/connect a GitHub repository for the agent.
 
 ## Limitations
 
-- Trinity stores one platform-wide GitHub PAT. All agents share it.
+- Trinity stores one platform-wide GitHub PAT. All agents share it unless overridden per-agent.
 - Fine-grained tokens require GitHub to be configured to allow them (enabled by default for personal accounts).
 - Organization-owned fine-grained tokens require org admin approval.
 - Token permissions cannot be changed after creation — regenerate if you need different access.
+- PAT propagation targets only currently-running agents. Stopped agents receive the updated PAT on next start.
 
 ## See Also
 
