@@ -414,7 +414,66 @@ def get_github_pat_for_agent(agent_name: str) -> str:
 - PAT values never returned in API responses (only `configured: true/false`)
 - PAT validated via `GitHubService.validate_token()` before storage
 - Encrypted at rest using platform-wide `CREDENTIAL_ENCRYPTION_KEY`
-- Agent restart required for git operations to use new PAT
+- Per-agent PAT requires agent restart to take effect in git operations; the
+  global PAT is auto-propagated to running agents on update (see next section).
+
+### Global PAT Auto-Propagation (#211)
+
+When an admin updates the global GitHub PAT via
+`PUT /api/settings/api-keys/github`, the new value is pushed into each eligible
+running agent's `.env` so agents pick up the new token without a restart.
+
+**Service:** `src/backend/services/github_pat_propagation_service.py`
+
+**Eligibility (per target agent):**
+1. Container status is `running`.
+2. Agent does NOT have a per-agent PAT configured
+   (`db.has_agent_github_pat(agent_name) == False`). Per-agent PATs override
+   the global and are managed separately.
+3. Agent's current `.env` already contains a `GITHUB_PAT` key. Agents that
+   never set up GitHub are skipped — avoids injecting unused credentials.
+
+**Mechanism:** Reuses existing agent-side endpoints — no new agent surface.
+1. `GET http://agent-{name}:8000/api/credentials/read?paths=.env` — fetch
+   current `.env`.
+2. Regex-patch the `GITHUB_PAT` line (preserves all other keys and matches the
+   agent's `KEY="value"` quoting/escaping format).
+3. `POST http://agent-{name}:8000/api/credentials/inject` with the merged
+   `.env`. The agent-side handler refreshes its credential sanitizer and
+   exports the new value to the in-process environment.
+
+Per-agent calls run concurrently via `asyncio.gather(..., return_exceptions=True)`
+with a 30s per-call timeout. Per-agent failures are captured and do NOT roll
+back the PAT save.
+
+**Response shape** (from `PUT /api/settings/api-keys/github`):
+```json
+{
+  "success": true,
+  "masked": "ghp_****abcd",
+  "propagation": {
+    "total_running": 3,
+    "updated": ["agent-a"],
+    "skipped": [
+      {"agent_name": "agent-b", "status": "skipped_per_agent_pat", "error": null},
+      {"agent_name": "agent-c", "status": "skipped_no_pat", "error": null}
+    ],
+    "failed": []
+  }
+}
+```
+
+**Delete does NOT propagate** — `DELETE /api/settings/api-keys/github` is
+intentionally unchanged; agents keep working with their existing injected PAT
+until the next restart.
+
+**Frontend** (`src/frontend/src/views/Settings.vue`): The
+`githubPatPropagation` ref renders below the PAT status row — success count,
+failed agent list, and skipped reasons.
+
+**Tests:** `tests/test_github_pat_propagation_unit.py` (11 cases: env
+patching, per-agent PAT skip, no-GITHUB_PAT skip, stopped-agent skip, merge
+preserves other keys, partial-failure isolation).
 
 ### GitHub Service Integration
 
