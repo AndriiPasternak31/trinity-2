@@ -11,7 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
-| 2026-04-19 | #389, #390 | Git sync health observability — auto-sync heartbeat, dual ahead/behind (P6 fix), `agent_sync_state` + `sync_failing` operator-queue, dashboard dot, `/api/fleet/sync-audit` with `duplicate_binding` flag | [git-sync-health.md](feature-flows/git-sync-health.md) |
+| 2026-04-19 | #389 | Git sync health observability — auto-sync heartbeat, dual ahead/behind (P6 fix), `agent_sync_state` + `sync_failing` operator-queue entry, dashboard dot | [git-sync-health.md](feature-flows/git-sync-health.md) |
 | 2026-04-18 | DOCS-QA-001 | Trinity Docs Q&A — public Vertex AI Search endpoint + in-app floating help widget (#391) | [trinity-docs-qa.md](feature-flows/trinity-docs-qa.md) |
 | 2026-04-17 | #376 | Proactive messaging UI toggle — SharingPanel shows allow_proactive switch per shared user | [proactive-messaging.md](feature-flows/proactive-messaging.md), [agent-sharing.md](feature-flows/agent-sharing.md) |
 | 2026-04-16 | #321 | Proactive agent messaging — agents send messages to users by verified email via Telegram/Slack/web | [proactive-messaging.md](feature-flows/proactive-messaging.md) |
@@ -225,7 +225,7 @@
 |------|----------|-------------|
 | GitHub Sync | [github-sync.md](feature-flows/github-sync.md) | Source mode (pull-only) or Working Branch mode |
 | GitHub Repo Initialization | [github-repo-initialization.md](feature-flows/github-repo-initialization.md) | Initialize GitHub sync for existing agents |
-| Git Sync Health | [git-sync-health.md](feature-flows/git-sync-health.md) | Auto-sync heartbeat, dual ahead/behind, dashboard dot, `/api/fleet/sync-audit` |
+| Git Sync Health | [git-sync-health.md](feature-flows/git-sync-health.md) | Auto-sync heartbeat, dual ahead/behind, sync-state, dashboard dot |
 
 ### Skills Management
 
