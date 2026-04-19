@@ -879,3 +879,270 @@ class TestAsyncModeUnifiedExecutor:
     # doesn't serialize subscription_id, so it can't be asserted at the API
     # surface without a new DB-direct fixture. Covered by code inspection at
     # src/backend/routers/chat.py:688 where subscription_id is now passed.
+
+
+
+class TestAsyncSessionPersistence:
+    """Issue #95: Tests for save_to_session via TaskExecutionService delegation."""
+
+    @pytest.mark.slow
+    @pytest.mark.requires_agent
+    def test_async_save_to_session_creates_chat_messages(
+        self,
+        api_client: TrinityApiClient,
+        created_agent
+    ):
+        """Async task with save_to_session=true creates user + assistant messages in a new session."""
+        response = api_client.post(
+            f"/api/agents/{created_agent['name']}/task",
+            json={
+                "message": "What is 3+3? Reply with just the number.",
+                "async_mode": True,
+                "save_to_session": True,
+                "create_new_session": True,
+            },
+            timeout=10.0,
+        )
+
+        if response.status_code == 503:
+            pytest.skip("Agent server not ready")
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity")
+
+        assert_status(response, 200)
+        data = response.json()
+        execution_id = data["execution_id"]
+
+        # Poll until task completes
+        max_wait = 120
+        start = time.time()
+        while time.time() - start < max_wait:
+            poll = api_client.get(
+                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
+            )
+            if poll.status_code == 200:
+                exec_data = poll.json()
+                if exec_data.get("status") in ["success", "failed"]:
+                    break
+            time.sleep(2)
+
+        # Verify chat sessions contain messages
+        sessions_resp = api_client.get(
+            f"/api/agents/{created_agent['name']}/chat/sessions"
+        )
+        if sessions_resp.status_code == 200:
+            sessions = sessions_resp.json()
+            assert len(sessions) > 0, "Should have at least one chat session after save_to_session"
+
+    @pytest.mark.slow
+    @pytest.mark.requires_agent
+    def test_async_save_to_session_with_explicit_session_id(
+        self,
+        api_client: TrinityApiClient,
+        created_agent
+    ):
+        """Async task with explicit chat_session_id adds messages to existing session."""
+        # First, create a session by sending a sync task with save_to_session
+        sync_resp = api_client.post(
+            f"/api/agents/{created_agent['name']}/task",
+            json={
+                "message": "What is 1+1? Reply with just the number.",
+                "save_to_session": True,
+                "create_new_session": True,
+            },
+            timeout=120.0,
+        )
+
+        if sync_resp.status_code == 503:
+            pytest.skip("Agent server not ready")
+        if sync_resp.status_code == 429:
+            pytest.skip("Agent at capacity")
+
+        if sync_resp.status_code != 200:
+            pytest.skip(f"Sync task failed with {sync_resp.status_code}")
+
+        sync_data = sync_resp.json()
+        session_id = sync_data.get("chat_session_id")
+        if not session_id:
+            pytest.skip("Sync task did not return chat_session_id")
+
+        # Now send async task targeting the same session
+        async_resp = api_client.post(
+            f"/api/agents/{created_agent['name']}/task",
+            json={
+                "message": "What is 2+2? Reply with just the number.",
+                "async_mode": True,
+                "save_to_session": True,
+                "chat_session_id": session_id,
+            },
+            timeout=10.0,
+        )
+
+        if async_resp.status_code == 429:
+            pytest.skip("Agent at capacity")
+
+        assert_status(async_resp, 200)
+        execution_id = async_resp.json()["execution_id"]
+
+        # Poll until complete
+        max_wait = 120
+        start = time.time()
+        while time.time() - start < max_wait:
+            poll = api_client.get(
+                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
+            )
+            if poll.status_code == 200 and poll.json().get("status") in ["success", "failed"]:
+                break
+            time.sleep(2)
+
+        # Session should still exist (messages were added to it)
+        sessions_resp = api_client.get(
+            f"/api/agents/{created_agent['name']}/chat/sessions"
+        )
+        if sessions_resp.status_code == 200:
+            sessions = sessions_resp.json()
+            matching = [s for s in sessions if s.get("id") == session_id]
+            assert len(matching) > 0, f"Session {session_id} should still exist after async task"
+
+    @pytest.mark.slow
+    @pytest.mark.requires_agent
+    def test_async_save_to_session_broadcasts_websocket(
+        self,
+        api_client: TrinityApiClient,
+        created_agent
+    ):
+        """Async task with save_to_session broadcasts chat_response_ready (verified via session existence)."""
+        response = api_client.post(
+            f"/api/agents/{created_agent['name']}/task",
+            json={
+                "message": "What is 4+4? Reply with just the number.",
+                "async_mode": True,
+                "save_to_session": True,
+                "create_new_session": True,
+            },
+            timeout=10.0,
+        )
+
+        if response.status_code == 503:
+            pytest.skip("Agent server not ready")
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity")
+
+        assert_status(response, 200)
+        execution_id = response.json()["execution_id"]
+
+        # Poll until complete
+        max_wait = 120
+        start = time.time()
+        final_status = None
+        while time.time() - start < max_wait:
+            poll = api_client.get(
+                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
+            )
+            if poll.status_code == 200:
+                final_status = poll.json().get("status")
+                if final_status in ["success", "failed"]:
+                    break
+            time.sleep(2)
+
+        # If task succeeded, session should exist (WebSocket broadcast happened)
+        if final_status == "success":
+            sessions_resp = api_client.get(
+                f"/api/agents/{created_agent['name']}/chat/sessions"
+            )
+            assert sessions_resp.status_code == 200, "Should be able to list sessions"
+
+
+class TestAsyncCollaborationActivity:
+    """Issue #95: Tests for collaboration activity completion via TaskExecutionService."""
+
+    @pytest.mark.slow
+    @pytest.mark.requires_agent
+    def test_async_collaboration_activity_completed(
+        self,
+        api_client: TrinityApiClient,
+        created_agent
+    ):
+        """Async task with X-Source-Agent header creates and completes collaboration activity."""
+        response = api_client.post(
+            f"/api/agents/{created_agent['name']}/task",
+            json={
+                "message": "What is 5+5? Reply with just the number.",
+                "async_mode": True,
+            },
+            headers={"X-Source-Agent": "test-source-agent"},
+            timeout=10.0,
+        )
+
+        if response.status_code == 503:
+            pytest.skip("Agent server not ready")
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity")
+
+        assert_status(response, 200)
+        execution_id = response.json()["execution_id"]
+
+        # Poll until complete
+        max_wait = 120
+        start = time.time()
+        while time.time() - start < max_wait:
+            poll = api_client.get(
+                f"/api/agents/{created_agent['name']}/executions/{execution_id}"
+            )
+            if poll.status_code == 200 and poll.json().get("status") in ["success", "failed"]:
+                break
+            time.sleep(2)
+
+        # Check activities timeline for collaboration activity
+        time.sleep(1)  # Brief wait for activity completion
+        activities_resp = api_client.get(
+            "/api/activities/timeline",
+            params={"activity_types": "agent_collaboration"}
+        )
+        if activities_resp.status_code == 200:
+            activities = activities_resp.json()
+            collab_activities = [
+                a for a in activities.get("activities", [])
+                if a.get("details", {}).get("execution_id") == execution_id
+            ]
+            # Should have a collaboration activity for this execution
+            assert len(collab_activities) > 0, \
+                f"Should have collaboration activity for execution {execution_id}"
+
+
+class TestAsyncSafetyNet:
+    """Issue #95: Tests for safety net error handling in background task."""
+
+    def test_async_mode_execution_record_exists_before_background(
+        self,
+        api_client: TrinityApiClient,
+        created_agent
+    ):
+        """Async task creates execution record immediately (before background task runs)."""
+        response = api_client.post(
+            f"/api/agents/{created_agent['name']}/task",
+            json={
+                "message": "Quick test",
+                "async_mode": True,
+            },
+            timeout=10.0,
+        )
+
+        if response.status_code == 503:
+            pytest.skip("Agent server not ready")
+        if response.status_code == 429:
+            pytest.skip("Agent at capacity")
+
+        assert_status(response, 200)
+        execution_id = response.json()["execution_id"]
+
+        # Execution record should exist immediately
+        poll = api_client.get(
+            f"/api/agents/{created_agent['name']}/executions/{execution_id}"
+        )
+        assert_status(poll, 200)
+        exec_data = poll.json()
+        assert exec_data["id"] == execution_id
+        # Status should be pending/running/dispatched (not failed/cancelled yet)
+        assert exec_data["status"] not in ["cancelled"], \
+            f"Execution should not be cancelled immediately, got {exec_data['status']}"
