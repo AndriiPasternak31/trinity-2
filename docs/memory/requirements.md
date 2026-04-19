@@ -425,6 +425,13 @@ Trinity is autonomous agent orchestration and infrastructure — sovereign infra
 - **Description**: Initialize GitHub sync for existing agents
 - **Flow**: `docs/memory/feature-flows/github-repo-initialization.md`
 
+### 11.3 Reset-to-Main-Preserve-State (S3, #384)
+- **Status**: ✅ Implemented (2026-04-18)
+- **Description**: First-class UI-accessible recovery path for the parallel-history deadlock — hard-reset the agent's working branch to `origin/main` while preserving files listed in the persistent-state allowlist (#383 / S4)
+- **Key Features**: Pre-destructive backup to `.trinity/backup/<iso-ts>/`, `git push --force-with-lease`, three 409 guardrails (`agent_busy`, `no_git_config`, `no_remote_main`), owner-only auth, integration with S4's `_read_persistent_state()` reader
+- **Endpoint**: `POST /api/agents/{name}/git/reset-to-main-preserve-state`
+- **Flow**: `docs/memory/feature-flows/github-sync.md` (Recovery section)
+
 ---
 
 ## 12. Platform Operations
