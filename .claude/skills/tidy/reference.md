@@ -7,16 +7,22 @@ Detailed audit procedures and patterns for the `/tidy` skill.
 ### Files That Belong in Root
 - `README.md` - Project overview
 - `CONTRIBUTING.md` - Contribution guidelines
+- `CODE_OF_CONDUCT.md` - Community standards
+- `SECURITY.md` - Security disclosure policy
 - `LICENSE` - License file
 - `CHANGELOG.md` - Version history (if not in docs/)
+- `VERSION` - Current release tag
 - `CLAUDE.md` - Claude Code instructions
 - `CLAUDE.local.md` - Local Claude instructions (gitignored)
+- `CLAUDE.local.md.example` - Template for CLAUDE.local.md
 - `.gitignore` - Git ignore rules
 - `.gitattributes` - Git attributes
 - `docker-compose.yml` - Docker composition
-- `docker-compose.*.yml` - Docker variants
+- `docker-compose.*.yml` - Docker variants (prod, override, gitea, ...)
 - `.env.example` - Environment template
 - `deploy.config.example` - Deployment template
+- `install.sh` - Installer script
+- `template.yaml` - Trinity agent template manifest
 - `package.json` - If Node.js project root
 - `pyproject.toml` - If Python project root
 - `Makefile` - If using make
@@ -40,15 +46,35 @@ Detailed audit procedures and patterns for the `/tidy` skill.
 ## Docs Folder Audit Checklist
 
 ### Structure Expectations
+
+The `docs/` tree has grown organically. Current top-level subdirs (not exhaustive):
+
 ```
 docs/
-├── memory/              # Project memory (requirements, roadmap, etc.)
-├── demos/               # Demo documentation
-├── drafts/              # Work in progress
-├── testing/             # Testing guides
-├── archive/             # Archived docs (if not using top-level)
-└── *.md                 # Top-level docs
+├── memory/               # Project memory — requirements.md, architecture.md,
+│                         # feature-flows.md (index), feature-flows/ (70+ flow files),
+│                         # roadmap-archive.md, project_index.json
+├── feature-flows/        # (legacy location; prefer docs/memory/feature-flows/)
+├── demos/                # Demo documentation
+├── demo-screenshots/
+├── drafts/               # Work in progress
+├── testing/              # Testing guides
+├── development/          # Dev workflow docs
+├── user-docs/            # End-user documentation
+├── user-scenarios/       # User journey docs
+├── onboarding/
+├── planning/ , plans/    # Planning artifacts
+├── research/ , reports/  # Research output and reports
+├── requirements/         # Per-feature requirement files
+├── concepts/ , diagrams/ , assets/
+├── bugs/                 # Bug write-ups
+├── security/ , security-reports/
+├── screenshots/          # Documentation screenshots (gitignored root *.png, allowed here)
+├── archive/              # Older archived docs (alongside top-level /archive/)
+└── *.md                  # Top-level topic docs
 ```
+
+When auditing, walk the tree and cross-reference only — don't assume any particular subdir layout.
 
 ### Cross-Reference Checks
 
@@ -59,10 +85,13 @@ docs/
    - Flag for archive
 
 2. **Feature Flow Cross-Check**
-   - Read `docs/memory/feature-flows.md`
-   - List all documented flows
-   - Check each flow file exists
-   - Find orphan flow docs not in index
+   - Read `docs/memory/feature-flows.md` (the index)
+   - Walk `docs/memory/feature-flows/*.md` (the actual flow files — 70+ today)
+   - Check every link in the index resolves to an existing file
+   - Find orphans on either side:
+     - Files in `feature-flows/` that the index never links to
+     - Links in the index pointing to files that don't exist
+   - Also check the legacy `docs/feature-flows/` location for strays that should move into `docs/memory/feature-flows/`
 
 3. **Demo Cross-Check**
    - List `docs/demos/*/`

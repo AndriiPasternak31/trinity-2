@@ -27,7 +27,8 @@ from typing import NamedTuple
 EXCLUDE_DIRS = {
     '.git', 'node_modules', '.venv', 'venv', '__pycache__',
     '.pytest_cache', 'htmlcov', '.mypy_cache', '.ruff_cache',
-    'dist', 'build', '.next', '.nuxt', 'archive'
+    'dist', 'build', '.next', '.nuxt', 'archive',
+    '.playwright-mcp', 'backups', 'trinity-data', 'repositories',
 }
 
 # Files that are safe to delete without approval
@@ -47,14 +48,16 @@ SAFE_DELETE_PATTERNS = [
 
 # Files that belong in root
 ROOT_ALLOWED = {
-    'README.md', 'CONTRIBUTING.md', 'LICENSE', 'CHANGELOG.md',
-    'CLAUDE.md', 'CLAUDE.local.md', '.gitignore', '.gitattributes',
-    'docker-compose.yml', 'docker-compose.prod.yml', 'docker-compose.override.yml',
+    'README.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'SECURITY.md',
+    'LICENSE', 'CHANGELOG.md', 'VERSION',
+    'CLAUDE.md', 'CLAUDE.local.md', 'CLAUDE.local.md.example',
+    '.gitignore', '.gitattributes',
     '.env.example', 'deploy.config.example', 'deploy.config',
     'package.json', 'package-lock.json', 'pyproject.toml', 'poetry.lock',
     'Makefile', 'requirements.txt', '.env', '.python-version',
     '.nvmrc', '.node-version', 'tsconfig.json', '.prettierrc',
     '.eslintrc.js', '.eslintrc.json', 'vite.config.js', 'vite.config.ts',
+    'install.sh', 'template.yaml',
 }
 
 # Extensions that indicate code (don't touch)
@@ -187,13 +190,28 @@ def find_safe_deletes(root: Path) -> list[Path]:
         if not should_exclude(p):
             safe.append(p)
 
-    # Find test output files
+    # Find test output files (all gitignored per .gitignore)
     tests_dir = root / 'tests'
     if tests_dir.exists():
         for p in tests_dir.rglob('raw-test-output-*.txt'):
             safe.append(p)
         for p in tests_dir.rglob('*.log'):
             safe.append(p)
+        reports_dir = tests_dir / 'reports'
+        if reports_dir.exists():
+            patterns = [
+                'test-report-*.md', 'test-report-*.html',
+                'test-summary-*.json',
+            ]
+            for pattern in patterns:
+                for p in reports_dir.glob(pattern):
+                    if p.is_file():
+                        safe.append(p)
+            coverage_dir = reports_dir / 'coverage'
+            if coverage_dir.exists():
+                for p in coverage_dir.rglob('*'):
+                    if p.is_file():
+                        safe.append(p)
 
     return safe
 
@@ -230,6 +248,7 @@ def audit_root(root: Path, report: AuditReport):
                 recommendation="Move to docs/ or delete if obsolete",
             ))
         elif name.endswith(('.yaml', '.yml')) and not name.startswith('docker-compose'):
+            # docker-compose*.yml variants are allowed (e.g., docker-compose.gitea.yml)
             report.add_issue(Issue(
                 path=str(item),
                 issue_type="Config in root",

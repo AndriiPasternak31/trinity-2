@@ -50,13 +50,15 @@ Audit and clean up the repository structure without breaking code.
 
 ### Phase 1: Safe Cleanup (Automatic)
 
-Delete these without asking (they're regenerable artifacts):
+Delete these without asking (they're regenerable artifacts, all gitignored):
 - `__pycache__/` directories
 - `*.pyc`, `*.pyo` files
+- `.DS_Store`, `Thumbs.db`
 - `tests/reports/raw-test-output-*.txt`
-- `.DS_Store` files
+- `tests/reports/test-report-*.md`, `test-report-*.html`
+- `tests/reports/test-summary-*.json`
+- `tests/reports/coverage/` (regenerable)
 - `*.log` files in non-essential locations
-- `node_modules/.cache/`
 
 Report what was cleaned.
 
@@ -163,6 +165,10 @@ These directories are always excluded from audit:
 - `__pycache__/` (auto-cleaned, not audited)
 - `.claude/` (except for orphan detection)
 - `archive/` (already archived)
+- `.playwright-mcp/` (browser-test artifacts, gitignored)
+- `backups/` (database backups, gitignored, sensitive)
+- `trinity-data/` (SQLite DB bind mount)
+- `repositories/` (dynamic test repos, gitignored)
 - `*.db` files (databases)
 - `.env*` files (secrets)
 
