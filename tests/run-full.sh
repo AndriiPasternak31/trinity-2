@@ -16,11 +16,17 @@ echo "  Expected time: 5-8 minutes"
 echo "========================================="
 echo ""
 
-# Run with HTML report
-time python -m pytest -v --tb=short \
+# Unit tests and integration tests must run in separate pytest invocations:
+# unit/ installs src/backend/utils under the name `utils` in sys.modules,
+# which shadows tests/utils (used by integration tests for utils.api_client).
+time python -m pytest --ignore=unit --ignore=process_engine -v --tb=short \
   --html=reports/test-report-${TIMESTAMP}.html \
   --self-contained-html \
   "$@"
 
+time python -m pytest unit/ -v --tb=short \
+  --html=reports/test-report-${TIMESTAMP}-unit.html \
+  --self-contained-html
+
 echo ""
-echo "HTML report saved to: reports/test-report-${TIMESTAMP}.html"
+echo "HTML reports saved to: reports/test-report-${TIMESTAMP}*.html"

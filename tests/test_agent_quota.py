@@ -50,12 +50,20 @@ resources:
     return base64.b64encode(buffer.read()).decode('utf-8')
 
 
+@pytest.fixture
+def reset_quota_setting(api_client: TrinityApiClient):
+    """Clear any stale max_agents_per_user setting left by prior runs."""
+    api_client.delete("/api/settings/max_agents_per_user")
+    yield
+    api_client.delete("/api/settings/max_agents_per_user")
+
+
 class TestAgentQuotaSetting:
     """Tests for max_agents_per_user setting."""
 
     pytestmark = pytest.mark.smoke
 
-    def test_default_quota_is_three(self, api_client: TrinityApiClient):
+    def test_default_quota_is_three(self, api_client: TrinityApiClient, reset_quota_setting):
         """Default max_agents_per_user should be 3 (or not set, implying default)."""
         response = api_client.get("/api/settings/max_agents_per_user")
         # Either 404 (not set, default applies) or 200 with value "3"

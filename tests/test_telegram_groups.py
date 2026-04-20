@@ -13,6 +13,9 @@ import pytest
 from utils.api_client import TrinityApiClient
 from utils.assertions import assert_status, assert_json_response, assert_status_in
 
+# Module-scoped agent fixture + telegram config setup can exceed 30s.
+pytestmark = pytest.mark.timeout(120)
+
 
 # =============================================================================
 # API Tests: Trigger Mode Validation

@@ -76,6 +76,17 @@ def _ensure_module_stubs() -> None:
         database.db = _Db()
         sys.modules["database"] = database
 
+    # Make "services" a package rooted at src/backend/services so that
+    # `from services import git_service` picks up the real module.
+    # Force-overwrite: a sibling test (test_s5_conflict_classifier.py)
+    # may have installed a bare "services" ModuleType without __path__,
+    # which would prevent `from services import git_service` from working.
+    services_pkg = sys.modules.get("services")
+    if services_pkg is None or not getattr(services_pkg, "__path__", None):
+        services_pkg = types.ModuleType("services")
+        services_pkg.__path__ = [str(_BACKEND / "services")]  # type: ignore[attr-defined]
+        sys.modules["services"] = services_pkg
+
     if "services.docker_service" not in sys.modules:
         docker_service = types.ModuleType("services.docker_service")
         docker_service.get_agent_container = lambda *a, **kw: None
@@ -84,12 +95,6 @@ def _ensure_module_stubs() -> None:
             return {"exit_code": 0, "output": ""}
 
         docker_service.execute_command_in_container = _exec
-        # Make "services" a package rooted at src/backend/services so that
-        # `from services import git_service` picks up the real module.
-        if "services" not in sys.modules:
-            services_pkg = types.ModuleType("services")
-            services_pkg.__path__ = [str(_BACKEND / "services")]  # type: ignore[attr-defined]
-            sys.modules["services"] = services_pkg
         sys.modules["services.docker_service"] = docker_service
 
 

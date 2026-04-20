@@ -21,6 +21,9 @@ from utils.assertions import (
     assert_has_fields,
 )
 
+# Subscription injection into agent containers can exceed 30s.
+pytestmark = pytest.mark.timeout(120)
+
 
 # =============================================================================
 # Test Data

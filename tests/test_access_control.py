@@ -210,6 +210,7 @@ class TestAdminOnlyEndpoints:
 
     # -- alerts.py threshold endpoints --
 
+    @pytest.mark.skip(reason="Process Engine archived — /api/alerts/thresholds endpoints removed")
     def test_set_threshold_requires_admin(self, regular_user_client):
         response = regular_user_client.put(
             "/api/alerts/thresholds/fake-process-id",
@@ -217,6 +218,7 @@ class TestAdminOnlyEndpoints:
         )
         assert_status(response, 403)
 
+    @pytest.mark.skip(reason="Process Engine archived — /api/alerts/thresholds endpoints removed")
     def test_delete_threshold_requires_admin(self, regular_user_client):
         response = regular_user_client.delete(
             "/api/alerts/thresholds/fake-process-id/daily"
@@ -405,6 +407,7 @@ class TestRegularUserCanAccessOwnResources:
 # =============================================================================
 
 
+@pytest.mark.skip(reason="Process Engine archived — /api/approvals endpoints removed")
 class TestApprovalsRequireAuth:
     """Verify unauthenticated users get 401 on all approval endpoints."""
 
@@ -444,6 +447,7 @@ class TestApprovalsRequireAuth:
 # =============================================================================
 
 
+@pytest.mark.skip(reason="Process Engine archived — /api/triggers endpoints removed")
 class TestTriggersRequireAuth:
     """Verify unauthenticated users get 401 on trigger management endpoints."""
 
@@ -479,6 +483,7 @@ class TestTriggersRequireAuth:
 # =============================================================================
 
 
+@pytest.mark.skip(reason="Process Engine archived — /api/approvals and /api/triggers endpoints removed")
 class TestAuthenticatedUsersCanAccessApprovalsAndTriggers:
     """Verify authenticated users get 200 (not 401) on these endpoints."""
 

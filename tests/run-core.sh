@@ -14,4 +14,8 @@ echo "  Expected time: 3-5 minutes"
 echo "========================================="
 echo ""
 
-time python -m pytest -m "not slow" -v --tb=short "$@"
+# Unit tests and integration tests must run in separate pytest invocations:
+# unit/ installs src/backend/utils under the name `utils` in sys.modules,
+# which shadows tests/utils (used by integration tests for utils.api_client).
+time python -m pytest -m "not slow" --ignore=unit --ignore=process_engine -v --tb=short "$@"
+time python -m pytest unit/ -m "not slow" -v --tb=short
