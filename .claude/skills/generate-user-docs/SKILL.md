@@ -30,6 +30,7 @@ Read backend routers, frontend views, feature flows, and recent changes to produ
 | Feature flow index | `docs/memory/feature-flows.md` | Yes | No |
 | Requirements | `docs/memory/requirements.md` | Yes | No |
 | Architecture | `docs/memory/architecture.md` | Yes | No |
+| Deployment config | `.env.example`, `scripts/deploy/*.sh`, `docker-compose.yml` | Yes | No |
 | Trinity Docs site | `../trinity-docs/app/getting-started/*.tsx` | Yes | No |
 | Abilities repo | `github.com/abilityai/abilities` (README) | Yes | No |
 | Git history | `git log --since` | Yes | No |
@@ -50,7 +51,7 @@ These tutorial-style guides walk users through end-to-end tasks. Keep them in sy
 | `guides/using-trinity.md` | `trinity-docs/app/getting-started/using-trinity/page.tsx` | UI tour: dashboard, agents, monitoring |
 | `guides/building-agents.md` | `trinity-docs/app/getting-started/building-agents/page.tsx` | Create, develop, deploy with abilities |
 
-**Sync rule**: When the trinity-docs source changes, update the corresponding guide to match. Convert TSX to markdown, preserving structure and content.
+**Sync rule**: When the trinity-docs source changes, update the corresponding guide to match. Convert TSX to markdown, preserving structure and content. **Code wins on conflict** — if trinity-docs disagrees with `.env.example`, `scripts/deploy/*.sh`, or `docker-compose.yml`, fix the local guide to match observed repo behavior and note the divergence for upstream.
 
 ## Target Structure
 
@@ -139,12 +140,14 @@ git log --oneline --since="2 weeks ago" | head -30
 ```
 This identifies what has changed recently and which docs may need updating.
 
-**2e. Backend routers** — Glob `src/backend/routers/*.py` and read router files relevant to the section being written. Extract:
+**2e. Deployment config (for deploying/setup guides)** — Read `.env.example`, `scripts/deploy/start.sh`, `scripts/deploy/stop.sh`, and `docker-compose.yml`. Extract: required env vars, auto-generated vs user-set secrets, default ports and override vars (e.g., `FRONTEND_PORT`), first-boot behavior, and what the start/stop scripts actually print and do. This is the authoritative source for deploy/setup docs.
+
+**2f. Backend routers** — Glob `src/backend/routers/*.py` and read router files relevant to the section being written. Extract:
 - Endpoint paths and HTTP methods
 - Request/response patterns
 - Business logic and validation rules
 
-**2f. Frontend views** — Glob `src/frontend/src/views/*.vue` and read views relevant to the section being written. Extract:
+**2g. Frontend views** — Glob `src/frontend/src/views/*.vue` and read views relevant to the section being written. Extract:
 - UI layout and tab structure
 - User-facing labels and actions
 - State management patterns

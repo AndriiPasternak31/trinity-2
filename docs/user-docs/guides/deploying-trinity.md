@@ -47,21 +47,41 @@ Done. Your agent is now running on ability.ai.
 - 8GB RAM minimum
 - Modern web browser
 
-### Step 1: Clone and start
+### Step 1: Clone the repo
 
 ```bash
 git clone https://github.com/abilityai/trinity.git
 cd trinity
+```
+
+### Step 2: Configure `.env`
+
+```bash
+cp .env.example .env
+```
+
+Four variables are security-critical and must be set before first boot:
+
+| Variable | How to set |
+|---|---|
+| `SECRET_KEY` | `openssl rand -hex 32` |
+| `INTERNAL_API_SECRET` | `openssl rand -hex 32` |
+| `CREDENTIAL_ENCRYPTION_KEY` | Auto-generated on first start if blank. Once set, **do not change** — encrypted credentials become unrecoverable. |
+| `ADMIN_PASSWORD` | Choose a strong password (minimum 12 characters). This is the password you use to log in as `admin`. |
+
+**Port conflicts:** The frontend binds `:80` by default. If another process already holds `:80`, add `FRONTEND_PORT=8090` (or any free port) to `.env`.
+
+### Step 3: Start services
+
+```bash
 ./scripts/deploy/start.sh
 ```
 
-This builds the base agent image and starts all services (backend, frontend, MCP server, Redis, Vector).
+This builds the base agent image and starts all services (backend, frontend, MCP server, Redis, Vector). If `CREDENTIAL_ENCRYPTION_KEY` was blank, the script generates it and writes it back to `.env`.
 
-### Step 2: Complete the setup wizard
+Open `http://localhost` (or `http://localhost:$FRONTEND_PORT` if you remapped) and log in with `admin` + the password you set in `.env`.
 
-Open `http://localhost` in your browser. Set your admin password on first visit.
-
-### Step 3: Connect from Claude Code
+### Step 4: Connect from Claude Code
 
 ```bash
 /trinity:connect
@@ -69,10 +89,10 @@ Open `http://localhost` in your browser. Set your admin password on first visit.
 # When prompted, enter:
 # URL: http://localhost:8080/mcp
 # Username: admin
-# Password: (your admin password)
+# Password: (your ADMIN_PASSWORD from .env)
 ```
 
-### Step 4: Deploy your first agent
+### Step 5: Deploy your first agent
 
 ```bash
 /trinity:onboard
