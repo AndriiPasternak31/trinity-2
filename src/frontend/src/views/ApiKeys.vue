@@ -309,6 +309,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import axios from 'axios'
 import NavBar from '../components/NavBar.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useAuthStore } from '../stores/auth'
@@ -341,14 +342,28 @@ const confirmDialog = reactive({
   onConfirm: () => {}
 })
 
+// MCP server URL: use admin-configured URL if set, otherwise auto-detect from hostname
+const configuredMcpUrl = ref(null)
+
 const mcpServerUrl = computed(() => {
+  if (configuredMcpUrl.value) {
+    return configuredMcpUrl.value
+  }
   const host = window.location.hostname
   if (host === 'localhost' || host === '127.0.0.1') {
     return 'http://localhost:8080/mcp'
   }
-  // Production: MCP server runs on port 8080 (not proxied through nginx)
   return `http://${host}:8080/mcp`
 })
+
+const fetchMcpUrl = async () => {
+  try {
+    const response = await axios.get('/api/settings/mcp-url')
+    configuredMcpUrl.value = response.data.url || null
+  } catch (error) {
+    console.error('Failed to fetch MCP URL setting:', error)
+  }
+}
 
 // Filter out agent-scoped keys for non-admin users
 const displayedKeys = computed(() => {
@@ -551,8 +566,7 @@ const formatDate = (dateString) => {
 }
 
 onMounted(async () => {
-  await fetchUserRole()
-  await fetchApiKeys()
+  await Promise.all([fetchMcpUrl(), fetchUserRole(), fetchApiKeys()])
   // After loading keys, ensure user has a default key (for first-time users)
   await ensureDefaultKey()
 })
