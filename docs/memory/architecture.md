@@ -589,6 +589,17 @@ picks up on its next poll. (#389 S1a)
 | GET | `/oauth/{provider}/callback` | OAuth callback |
 | GET | `/api/health` | Health check |
 
+### Fleet Sync Audit (#390 / S6)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/fleet/sync-audit` | Aggregate per-agent sync state + `duplicate_binding` flag. Admins see all; non-admins see accessible agents. |
+
+The `duplicate_binding` field flags agents whose
+`(github_repo, working_branch)` pair is shared with another non-source-mode
+agent — detects the §P5 silent-clobber setup at fleet level.
+
+
 ### Operator Queue (OPS-001)
 
 | Method | Path | Description |
@@ -1072,7 +1083,8 @@ CREATE INDEX idx_sync_state_status
 - `consecutive_failures` incremented on `failed`, reset on `success`.
 - `ahead_working`/`behind_working` fix P6 (external writes to the working
   branch now visible in `GET /api/git/status`).
-- Powers the dashboard sync-health dot + `sync_failing` operator-queue alerts.
+- Powers the dashboard sync-health dot + `sync_failing` operator-queue
+  alerts + `/api/fleet/sync-audit` aggregator.
 
 
 **audit_log:** (SEC-001 / Issue #20 — Phase 1, NEW: 2026-04-14)
