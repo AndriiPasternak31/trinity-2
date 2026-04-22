@@ -3,7 +3,7 @@
 **Date:** 2026-04-13 (revised 2026-04-20)
 **Status:** Proposed sequencing for execution-time orchestration, event subscriptions, and multi-agent reliability.
 
-**Progress:** Sprint A — **7/7 complete**. Sprint B — **1/1 complete**. Sprint C — **3/5 complete**: #260 (PR #316), #271 (PR #332), #264 (PR #334). **#294 and #291 paused pending #306.** **Next: #306 (push event bus).**
+**Progress:** Sprint A — **7/7 complete**. Sprint B — **1/1 complete**. Sprint C — **3/5 complete**: #260 (PR #316), #271 (PR #332), #264 (PR #334). **#294 closed** (pause rationale vindicated — see Sprint C row). **#291 remains paused pending #430.** Sprint D — **1/4 complete: #306 shipped.** **Next: #428 (CAPACITY-CONSOLIDATE) after 2-week soak on #306.**
 
 **2026-04-20 revision:** After reviewing the accumulated orchestration surface (three queue abstractions, nine cleanup paths, twelve status-column writers, seven dispatch sites), the next priority shifted from finishing Sprint C to **push-based completion (#306) + consolidation** — see *Tier 2.5 — Simplification* below. The cleanup pyramid is load-bearing, so simplification is **additive-first**: new paths ship alongside old ones and the watchdog is retired only after push has soaked.
 
@@ -101,9 +101,9 @@ Sprint F (scale):       #24, #18
 |---|-------|---------------|
 | ~~#260~~ ✅ | ~~Persistent task backlog (BACKLOG-001)~~ | **Shipped** in PR #316. SQLite-backed FIFO backlog with `status=queued`. Drain via `BacklogService.try_drain_one()` called on slot release. 24h stale expiry. Depth cap configurable per-agent. |
 | ~~#271~~ ✅ | ~~Retry mechanism for scheduled executions~~ | **Shipped** in PR #332. Configurable `max_retries` (0-5, default 1) and `retry_delay_seconds` (30-600, default 60). Rate-limited (429) failures use 2x delay. Retries persist to DB and survive scheduler restart via `_recover_pending_retries()`. New status: `pending_retry`. |
-| #294 ⏸️ | Business task validation (VALIDATE-001) **— PAUSED 2026-04-20** | Clean-context auditor session after execution. Re-examine after #306: a second full Claude session per task is a 2x cost feature that may be subsumable by cheaper primitives (output schemas, post-hoc validators) running in-process. |
+| ~~#294~~ 🚫 | ~~Business task validation (VALIDATE-001)~~ **— CLOSED** | Closed without implementation. Pause rationale held up: a second full Claude session per task is a 2x cost feature that's better subsumed by cheaper in-process primitives (output schemas, post-hoc validators). No new execution machinery shipped. |
 | ~~#264~~ ✅ | ~~Self-execute during chat (SELF-EXEC-001)~~ | **Shipped** in PR #334. Detects source==target, sets `X-Self-Task` header, optionally injects result back into chat session via `inject_result` parameter. Uses backlog for overflow when at capacity. |
-| #291 ⏸️ | Agent webhook triggers (WEBHOOK-001) **— PAUSED 2026-04-20** | External → agent dispatch. The "reuse process-engine triggers vs. parallel surface" decision is easier after #430 (PROCESS-ENGINE-DECISION) (Tier 2.5) resolves whether the engine stays at all. Re-open after that. |
+| #291 ⏸️ | Agent webhook triggers (WEBHOOK-001) **— PAUSED pending #430** | External → agent dispatch. The "reuse process-engine triggers vs. parallel surface" decision is easier after #430 (PROCESS-ENGINE-DECISION) (Tier 2.5) resolves whether the engine stays at all. Re-open after that. |
 
 ### Architectural shift
 
@@ -149,7 +149,7 @@ Retry and validation are **not new infrastructure** — they're just new trigger
 
 | # | Title | Why it's here |
 |---|-------|---------------|
-| #306 | **Redis Streams event bus (RELIABILITY-003)** — keystone | Enables push-based completion from agents. Retires the 1h blocking HTTP call in `TaskExecutionService` (dissolves #408). Replaces in-process `ConnectionManager.broadcast()` (`main.py:125-130`, currently `except: pass`) with `XADD`/`XREAD` + reconnect replay. Explicit `lastEventId` work on the frontend. |
+| ~~#306~~ ✅ | ~~Redis Streams event bus (RELIABILITY-003)~~ — keystone | **Shipped.** `services/event_bus.py` (`EventBus` publisher + `StreamDispatcher` consumer), `XADD`/`XREAD BLOCK`, reconnect replay via `last-event-id` query param (regex-gated, `REPLAY_GAP_LIMIT=5000` → `resync_required`), 3-failure client eviction, MAXLEN-trimmed stream. Frontend tracks `_eid` and handles `resync_required`. `ConnectionManager.broadcast()` now funnels through `XADD`. 2-week soak window before Tier 2.5 consolidation — track push success rate + orphan count. |
 | **NEW** | **#428 (CAPACITY-CONSOLIDATE)** | Merge `ExecutionQueue` + `SlotService` + `BacklogService` into one `CapacityManager` with `(max_concurrent, overflow_policy)` config. `/chat` = `(1, queue_in_memory)`. `/task` = `(N, queue_persistent)`. Depends on #306 so the drain/TTL logic has the event consumer to lean on. |
 | **NEW** | **#429 (CLEANUP-COLLAPSE)** | Once agent is authoritative for "is this running?" (via push), retire Phase 1/1b/1c/3 reconciliation. Slot TTL disappears — capacity is recomputed from DB, not TTL'd. Target: 9 paths → 1 periodic `DB ⟷ agent./api/running` sync. **Do not ship until #306 has been in prod ≥2 weeks with zero observed orphans.** |
 | **NEW** | **#430 (PROCESS-ENGINE-DECISION)** | Today `process_engine/engine/handlers/agent_task.py` bypasses `TaskExecutionService` entirely (architecture.md marks engine as "dormant, out of scope"). Ship one of: (a) fold `agent_task` through TES, or (b) delete the engine. Sitting in the middle means every orchestration invariant has a silent exception. |
@@ -332,9 +332,10 @@ New triggers, all funnel into the same executor:
 5. ~~Confirm scope cuts for #260: FIFO-only v1, depth 50 default, 24h expiry.~~ ✅ Shipped with these cuts in PR #316.
 6. ~~Rescope #132 against `src/scheduler/service.py`~~ — ✅ Shipped in PR #328.
 7. ~~Re-estimate #56~~ — ✅ Shipped in PR #329.
-8. ~~Decide #291 direction~~ — **Paused 2026-04-20 pending #430 (PROCESS-ENGINE-DECISION).**
-9. ~~**Next:** Pick up #294 (validation).~~ — **Paused 2026-04-20 pending #306.**
-10. **Next (2026-04-20):** Pick up **#306 (Redis Streams event bus)** — keystone for Tier 2.5 simplification.
-11. **Follow-up:** Create and rank the three new issues from Tier 2.5: #428 (CAPACITY-CONSOLIDATE), #429 (CLEANUP-COLLAPSE), #430 (PROCESS-ENGINE-DECISION).
-12. **After #306 lands:** 2-week soak period; instrument push success rate and orphan count; *then* schedule #428 (CAPACITY-CONSOLIDATE).
-13. **Re-evaluate #408** once #306 is live — expected outcome: close as dissolved (no direct code change needed).
+8. ~~Decide #291 direction~~ — **Paused pending #430 (PROCESS-ENGINE-DECISION).**
+9. ~~**Next:** Pick up #294 (validation).~~ — **Closed without implementation.**
+10. ~~**Next (2026-04-20):** Pick up **#306**~~ — ✅ **Shipped.** Soak window started on merge date; track push success rate + orphan count.
+11. ~~**Follow-up:** Create and rank the three new issues from Tier 2.5~~ — Issues #428, #429, #430 exist; rank + tier assignment tracked in the Roadmap project board (groomed 2026-04-22).
+12. **Next (current):** Pick up **#428 (CAPACITY-CONSOLIDATE)** once #306 has ≥2 weeks of clean soak (zero orphan recoveries, push success ≥99.9%). In parallel, pick up **#430 (PROCESS-ENGINE-DECISION)** — no soak dependency, unblocks #291.
+13. **Re-evaluate #408** — #306 is live, so the predicted dissolution condition now holds. Verify no long-running HTTP call remains in `TaskExecutionService` and close as dissolved (no direct code change needed).
+14. **Then:** #429 (CLEANUP-COLLAPSE) gated on #428 landing + continued clean soak — the riskiest step per §"Additive-first migration."
