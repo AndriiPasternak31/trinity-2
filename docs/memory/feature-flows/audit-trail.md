@@ -6,16 +6,16 @@ WHAT across agent lifecycle, authentication, authorization, configuration,
 credentials, MCP operations, git operations, and system events. Distinct from
 the Process Engine's `audit_entries` table which is workflow-specific.
 
-**Status**: Phase 1 implemented 2026-04-14. Phases 2–4 deferred to follow-up
-PRs (issue #20 stays open until all phases ship).
+**Status**: All phases implemented 2026-04-16. Issue #20 can be closed
+after merge.
 
 | Phase | Scope | Status |
 |---|---|---|
-| **Phase 1** | Schema, immutability triggers, `PlatformAuditService`, `db/audit.py`, admin query API, unit tests | ✅ This PR |
-| **Phase 2a** | Agent lifecycle integration (create / start / stop / delete) as working smoke test | ✅ This PR |
-| Phase 2b | Remaining integrations (auth, sharing, settings, credentials, request_id middleware) | ⏳ Follow-up |
-| Phase 3 | MCP server integration — TypeScript audit logging for MCP tool calls | ⏳ Follow-up |
-| Phase 4 | Hash chain verification, CSV/JSON export, retention automation | ⏳ Follow-up |
+| **Phase 1** | Schema, immutability triggers, `PlatformAuditService`, `db/audit.py`, admin query API, unit tests | ✅ Merged |
+| **Phase 2a** | Agent lifecycle integration (create / start / stop / delete) as working smoke test | ✅ Merged |
+| **Phase 2b** | Auth, sharing, credentials, settings, rename integrations + request_id middleware | ✅ This PR |
+| **Phase 3** | MCP server integration — TypeScript audit logging for all tool calls | ✅ This PR |
+| **Phase 4** | Hash chain verification, CSV/JSON export, enable/disable toggle | ✅ This PR |
 
 ## User Story
 As a platform admin, I want a tamper-evident record of every administrative
@@ -235,21 +235,161 @@ deleted, etc.) — if the action fails partway, no audit row appears.
 Audit failures are swallowed by the service layer and never fail the caller's
 primary operation (verified by `test_service_never_raises_on_db_failure`).
 
-## Out of Scope (Phase 2b–4 follow-ups)
+## Phase 2b — Remaining Write Integrations (shipped in this PR)
 
-- **Phase 2b** — remaining write integrations:
-  - Authentication (`routers/auth.py` — login success/failure)
-  - Authorization (`routers/sharing.py`, permission grant/revoke)
-  - Settings changes (`routers/settings.py`)
-  - Credential operations (`routers/credentials.py`)
-  - Agent rename / recreate
-  - Request-ID middleware for correlation
-- **Phase 3** — MCP server integration (TypeScript) for tool-call audit
-- **Phase 4** — hash chain verification, CSV/JSON export, retention automation, frontend admin UI, unified `/api/audit?system=platform|process`
+### Request-ID Middleware (`main.py`)
+
+HTTP middleware generates a UUID `X-Request-ID` for every request (or respects an
+incoming header from nginx/proxy). Stored on `request.state.request_id` and
+returned in the response header. All audit calls pass this for correlation.
+
+### Authentication (`routers/auth.py`)
+
+| Handler | Event action | Details payload |
+|---|---|---|
+| `login` (admin) — success | `login_success` | `{method: "admin"}` |
+| `login` (admin) — failure | `login_failed` | `{method: "admin", username}` |
+| `verify_email_login_code` — success | `login_success` | `{method: "email", email}` |
+| `verify_email_login_code` — failure | `login_failed` | `{method: "email", email}` |
+
+Failed logins have no `actor_user` — the service falls back to
+`actor_type=system`. The `actor_ip` is always captured for forensic queries.
+
+### Authorization (`routers/sharing.py`)
+
+| Handler | Event action | Details payload |
+|---|---|---|
+| `share_agent_endpoint` | `share` | `{shared_with}` |
+| `unshare_agent_endpoint` | `unshare` | `{removed_email}` |
+| `decide_access_request_endpoint` (approve) | `access_request_approved` | `{email, access_request_id}` |
+| `decide_access_request_endpoint` (reject) | `access_request_rejected` | `{email, access_request_id}` |
+
+### Credentials (`routers/credentials.py`)
+
+| Handler | Event action | Details payload |
+|---|---|---|
+| `inject_credentials` | `inject` | `{files: [".env", ...]}` |
+| `export_credentials` | `export` | `{files_exported: N}` |
+| `import_credentials` | `import` | `{files_imported: [".env", ...]}` |
+
+Credential *values* are never logged — only file paths and counts (security invariant).
+
+### Configuration (`routers/settings.py`)
+
+| Handler | Event action | Details payload |
+|---|---|---|
+| `update_anthropic_key` | `settings_change` | `{setting: "anthropic_api_key", action: "update"}` |
+| `delete_anthropic_key` | `settings_change` | `{setting: "anthropic_api_key", action: "delete"}` |
+| `update_github_pat` | `settings_change` | `{setting: "github_pat", action: "update"}` |
+| `delete_github_pat` | `settings_change` | `{setting: "github_pat", action: "delete"}` |
+| `update_setting` (generic) | `settings_change` | `{setting: key, action: "update"}` |
+| `delete_setting` (generic) | `settings_change` | `{setting: key, action: "delete"}` |
+
+API key *values* are never logged — only the setting name and action.
+
+### Agent Rename (`routers/agent_rename.py`)
+
+| Handler | Event action | Details payload |
+|---|---|---|
+| `rename_agent_endpoint` | `rename` | `{old_name, new_name}` |
+
+Uses `AGENT_LIFECYCLE` event type. Target ID is set to the *new* name.
+
+## Phase 3 — MCP Server Tool Call Audit (shipped in this PR)
+
+### Architecture
+
+MCP tool calls are audited via a transparent wrapper — no individual tool
+files need modification. The flow:
+
+```
+Tool execute() → withAudit() wrapper → logToolCall() → POST /api/internal/audit
+```
+
+### Files
+
+| File | Purpose |
+|---|---|
+| `src/mcp-server/src/audit.ts` | `withAudit()` wrapper + `logToolCall()` — fire-and-forget POST to backend |
+| `src/mcp-server/src/server.ts` | `addAllTools()` wraps every tool with `withAudit()` at registration |
+| `src/backend/routers/internal.py` | `POST /api/internal/audit` — receives MCP audit entries (C-003 auth) |
+| `docker-compose.yml` | `INTERNAL_API_SECRET` env var added to mcp-server service |
+
+### Audit Wrapper (`withAudit`)
+
+Wraps each tool's `execute` function:
+1. Records start time
+2. Calls original execute
+3. Fires non-blocking `logToolCall()` with tool name, auth context, duration, success
+4. Returns original result (or re-throws error)
+
+Never blocks or delays tool execution. Never throws.
+
+### Internal Audit Endpoint
+
+`POST /api/internal/audit` accepts:
+```json
+{
+  "event_type": "mcp_operation",
+  "event_action": "tool_call",
+  "source": "mcp",
+  "mcp_key_id": "key-42",
+  "mcp_key_name": "dev-key",
+  "mcp_scope": "user",
+  "actor_agent_name": null,
+  "details": {"tool": "list_agents", "duration_ms": 150, "success": true}
+}
+```
+
+Authenticated via `X-Internal-Secret` header (C-003), same as scheduler.
+
+### Coverage
+
+All 66+ MCP tools across 14 modules are wrapped automatically. Adding new
+tools to any module requires zero audit code — `addAllTools()` wraps them.
+
+## Phase 4 — Hash Chain + Export (shipped in this PR)
+
+### Hash Chain Verification
+
+Opt-in via `POST /api/audit-log/hash-chain/enable?enabled=true` (admin-only).
+When enabled:
+- Each new entry gets `entry_hash` (SHA-256 of event_id, event_type, event_action,
+  actor_id, target_id, timestamp, details, previous_hash)
+- `previous_hash` links to the prior entry's hash
+
+Verify with `POST /api/audit-log/verify?start_id=1&end_id=100`:
+```json
+{"valid": true, "checked": 100, "first_invalid_id": null}
+```
+
+Entries written before hash chain was enabled are skipped during verification.
+
+### Export
+
+`GET /api/audit-log/export?start_time=...&end_time=...&format=json|csv`
+
+- **JSON**: Returns `{entries: [...], count: N, format: "json"}`
+- **CSV**: Returns downloadable CSV file with `Content-Disposition: attachment`
+
+### Endpoints Added
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/audit-log/verify` | Verify hash chain integrity (admin) |
+| POST | `/api/audit-log/hash-chain/enable` | Toggle hash chain (admin) |
+| GET | `/api/audit-log/export` | Export entries as JSON or CSV (admin) |
+
+## Out of Scope (future follow-ups)
+
+- Retention automation (cron job to delete entries >365 days)
+- Frontend admin UI for browsing audit log
+- Unified query surface spanning `audit_log` + Process Engine `audit_entries`
+- WebSocket events for real-time audit feed
 
 ## Testing
 
-`tests/test_audit_log_unit.py` — 29 unit tests covering:
+`tests/test_audit_log_unit.py` — 51 unit tests covering:
 
 | Area | Tests |
 |---|---|
@@ -262,7 +402,16 @@ primary operation (verified by `test_service_never_raises_on_db_failure`).
 | Service actor resolution | user, agent, mcp_client, system mcp_scope |
 | Service serialization | JSON details encoding, request metadata (ip / request_id / endpoint) |
 | Error contract | DB failure must return None and never raise; unique event_ids across rapid calls |
-| Lifecycle integration | create / start / stop / delete produce correctly-shaped rows; full create→start→stop→delete flow produces 4 rows in temporal order |
+| Lifecycle integration | create / start / stop / delete / rename produce correctly-shaped rows |
+| Auth integration | login_success (admin + email), login_failed (no actor fallback) |
+| Sharing integration | share, unshare, access_request_approved, access_request_rejected |
+| Credentials integration | inject, export, import with file lists |
+| Configuration integration | settings_change for update and delete |
+| Request-ID propagation | request_id stored and queryable |
+| Cross-category query | mixed event types are independently queryable; stats aggregate all |
+| MCP tool call audit | tool_call with user/agent scope, success/failure, details |
+| Hash chain | entries get hashes when enabled; verify_chain validates integrity |
+| Export | time-range query for export (DB layer) |
 
 Run: `.venv/bin/python -m pytest tests/test_audit_log_unit.py -v`
 

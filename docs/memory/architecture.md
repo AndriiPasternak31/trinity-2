@@ -625,10 +625,24 @@ agent — detects the §P5 silent-clobber setup at fleet level.
 | GET | `/api/audit-log` | Admin | List entries (filters: event_type, actor_type, actor_id, target_type, target_id, source, start_time, end_time, limit, offset) |
 | GET | `/api/audit-log/stats` | Admin | Aggregate counts by event_type and actor_type |
 | GET | `/api/audit-log/{event_id}` | Admin | Single entry by UUID |
+| GET | `/api/audit-log/export` | Admin | Export time-range entries as `json` or `csv` (Phase 4) |
+| POST | `/api/audit-log/verify` | Admin | Verify SHA-256 hash chain over `start_id..end_id` (Phase 4) |
+| POST | `/api/audit-log/hash-chain/enable` | Admin | Toggle hash chain computation for new entries (Phase 4) |
+| POST | `/api/internal/audit` | Internal secret | Fire-and-forget write path for MCP server tool-call audit (Phase 3) |
 
 **Storage**: append-only `audit_log` table in main SQLite DB. SQLite triggers block UPDATE unconditionally and DELETE within the 365-day retention window.
 
-**Phase 1 + agent lifecycle smoke test.** Phase 1 ships infrastructure; Phase 2a ships agent lifecycle audit. Remaining integrations (auth, sharing, settings, credentials — Phase 2b), MCP TypeScript audit (Phase 3), and hash-chain verification (Phase 4) follow as separate PRs.
+**Distinct from `/api/audit`**: the existing `/api/audit` router exposes the
+Process Engine's workflow audit (`audit_entries` table). The new `/api/audit-log`
+covers cross-cutting platform events (lifecycle, auth, MCP, credentials, etc.)
+via the new `audit_log` table. Both are intentionally separate per the SEC-001
+architecture; a unified surface can be added later.
+
+**All phases complete.** Phase 1: infrastructure. Phase 2a: agent lifecycle
+audit. Phase 2b: auth, sharing, credentials, settings, rename, request-ID
+middleware. Phase 3: MCP tool call audit via transparent wrapper (all 66+
+tools, zero per-tool code). Phase 4: hash chain verification, CSV/JSON
+export, enable/disable toggle. Issue #20 can be closed.
 
 ### Nevermined Payments (NVM-001)
 

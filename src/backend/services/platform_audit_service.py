@@ -183,9 +183,71 @@ class PlatformAuditService:
             return (AuditActorType.MCP_CLIENT.value, mcp_key_id, None)
         return (AuditActorType.SYSTEM.value, "trinity-system", None)
 
+    def enable_hash_chain(self, enabled: bool = True) -> None:
+        """Toggle hash chain computation for new entries (Phase 4)."""
+        self._hash_chain_enabled = enabled
+        if enabled:
+            # Seed from the last entry in DB so chain continues
+            try:
+                entries = db.get_audit_entries(limit=1, offset=0)
+                if entries and isinstance(entries, list) and len(entries) > 0:
+                    last = entries[0]
+                    if isinstance(last, dict) and last.get("entry_hash"):
+                        self._last_hash = last["entry_hash"]
+            except Exception as e:
+                # Non-fatal: chain will start from None and verify_chain skips
+                # entries written before seeding succeeded.
+                logger.warning(
+                    "[PlatformAuditService] failed to seed hash chain from last entry: %s",
+                    e,
+                )
+
+    async def verify_chain(self, start_id: int, end_id: int) -> Dict[str, Any]:
+        """Verify hash chain integrity between two row IDs (inclusive).
+
+        Returns:
+            {"valid": bool, "checked": int, "first_invalid_id": int | None}
+        """
+        entries = db.get_audit_entries_range(start_id, end_id)
+        if not entries:
+            return {"valid": True, "checked": 0, "first_invalid_id": None}
+
+        checked = 0
+        for i, entry in enumerate(entries):
+            if not entry.get("entry_hash"):
+                # Entry was written before hash chain was enabled — skip
+                continue
+            expected = self._compute_hash(entry)
+            if entry["entry_hash"] != expected:
+                return {
+                    "valid": False,
+                    "checked": checked + 1,
+                    "first_invalid_id": entry["id"],
+                }
+            if i > 0 and entry.get("previous_hash"):
+                prev = entries[i - 1]
+                if prev.get("entry_hash") and entry["previous_hash"] != prev["entry_hash"]:
+                    return {
+                        "valid": False,
+                        "checked": checked + 1,
+                        "first_invalid_id": entry["id"],
+                    }
+            checked += 1
+
+        return {"valid": True, "checked": checked, "first_invalid_id": None}
+
     @staticmethod
     def _compute_hash(entry: Dict[str, Any]) -> str:
         """SHA-256 over a stable subset of the entry. Used only when hash chain is enabled."""
+        # Details round-trips through DB as JSON text: string at write-time (see log()),
+        # dict at read-time (see db/audit.py::_row_to_dict). Normalize to dict so the
+        # hash is stable across both paths.
+        details = entry.get("details")
+        if isinstance(details, str):
+            try:
+                details = json.loads(details)
+            except (TypeError, ValueError):
+                pass
         content = json.dumps(
             {
                 "event_id": entry["event_id"],
@@ -194,7 +256,7 @@ class PlatformAuditService:
                 "actor_id": entry.get("actor_id"),
                 "target_id": entry.get("target_id"),
                 "timestamp": entry["timestamp"],
-                "details": entry.get("details"),
+                "details": details,
                 "previous_hash": entry.get("previous_hash"),
             },
             sort_keys=True,

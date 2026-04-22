@@ -106,6 +106,14 @@ from services.sync_health_service import sync_health_service
 from services.cleanup_service import cleanup_service, set_cleanup_ws_manager
 
 
+# Import process engine WebSocket publisher
+from services.process_engine.events import set_websocket_publisher_broadcast
+from services.platform_audit_service import platform_audit_service, AuditEventType
+
+# Import execution recovery function
+from routers.executions import run_execution_recovery
+
+
 # Import logging configuration
 import logging
 from logging_config import setup_logging
@@ -296,6 +304,13 @@ async def lifespan(app: FastAPI):
                     int(os.getenv("REDIS_STREAM_MAXLEN", "10000")))
     except Exception as e:
         logger.error(f"Event bus startup failed (broadcasts will degrade): {e}")
+
+    await platform_audit_service.log(
+        event_type=AuditEventType.SYSTEM,
+        event_action="startup",
+        source="system",
+        details={"otel_enabled": bool(_otel_enabled)},
+    )
 
     # Report OpenTelemetry status (RELIABILITY-002)
     if _otel_enabled:
@@ -557,6 +572,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error closing agent HTTP client pool: {e}")
 
+    try:
+        await platform_audit_service.log(
+            event_type=AuditEventType.SYSTEM,
+            event_action="shutdown",
+            source="system",
+        )
+    except Exception as e:
+        print(f"Error writing shutdown audit entry: {e}")
+
     # Drain event bus + stop dispatcher last so late-lifecycle broadcasts
     # (e.g. "agent_stopped" emitted during service shutdown) still land on
     # the stream. 2s drain window per #306.
@@ -588,6 +612,20 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Source-Agent", "Accept"],
 )
+
+# Request-ID middleware — generates a correlation ID for every request.
+# Stored on request.state.request_id for use by audit logging (SEC-001 Phase 2b).
+# Respects an incoming X-Request-ID header if present (e.g. from nginx or upstream proxy).
+import uuid as _uuid
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(_uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
 
 # Security headers middleware — covers API responses when accessed directly (dev mode)
 # or through nginx proxy. X-Frame-Options is omitted here to avoid conflicting with
