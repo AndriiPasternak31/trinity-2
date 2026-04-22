@@ -28,6 +28,7 @@ GitHub-native agents can synchronize with GitHub repositories in two modes:
 | **API** | `POST /api/agents/{name}/git/sync` | Push changes to GitHub (working branch mode) |
 | **API** | `GET /api/agents/{name}/git/status` | Get git repository status |
 | **API** | `GET /api/agents/{name}/git/config` | Get stored git config |
+| **API** | `POST /api/agents/{name}/git/reset-to-main-preserve-state` | Adopt `origin/main`, preserve persistent-state allowlist (S3, #384) |
 
 ---
 
@@ -242,6 +243,124 @@ sequenceDiagram
     Container->>Backend: Return commit SHA (or 409 on stale lease)
     Backend->>UI: Show notification (or branch_ownership_collision modal)
 ```
+
+---
+
+## Recovery: Reset-to-Main-Preserve-State (S3, #384)
+
+### Purpose
+
+A first-class recovery path for the **parallel-history deadlock** — when an
+agent's `trinity/<agent>/<id>` working branch and `origin/main` share no
+common ancestor (e.g., agent was initialised from a state older than a
+subsequent rewrite of `main`). Neither "Pull First" nor "Force Push" fixes
+this: pull re-applies the conflicting commit and fails identically; force
+push overwrites remote with stale parallel history.
+
+The correct recovery — and the only one safe for data — is: **adopt
+`origin/main` as the new baseline, overlay instance-specific state, push
+with `--force-with-lease`.** This operation exposes that as a first-class
+endpoint so operators with UI-only access can recover without SSH-ing into
+the container.
+
+Paired with the [persistent-state allowlist](../architecture.md) from S4
+(#383) — the allowlist names which paths survive the reset.
+
+### API contract
+
+```
+POST /api/agents/{name}/git/reset-to-main-preserve-state
+  Auth: OwnedAgentByName (owner or admin)
+  Body: none
+
+  200 -> {
+    success: true,
+    snapshot_dir: ".trinity/backup/2026-04-18T120000Z/",
+    files_preserved: ["workspace/decisions.csv", ".trinity/config.yaml", ...],
+    commit_sha: "abc1234...",
+    working_branch: "trinity/my-agent/abcd1234"
+  }
+  409 (X-Conflict-Type: agent_busy)     -> agent currently executing a task
+  409 (X-Conflict-Type: no_git_config)  -> .git missing or origin unset
+  409 (X-Conflict-Type: no_remote_main) -> origin has no `main` branch
+  500 -> snapshot/reset/push failure (detail includes the failing step)
+```
+
+### Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant Op as Operator
+    participant Backend
+    participant AS as Agent-Server
+    participant GH as GitHub
+
+    Op->>Backend: POST .../git/reset-to-main-preserve-state
+    Backend->>Backend: activity_service.get_current_activities(agent_name)
+    alt agent is busy
+        Backend-->>Op: 409 X-Conflict-Type: agent_busy
+    else agent is idle
+        Backend->>AS: POST /api/git/reset-to-main-preserve-state
+        AS->>AS: _read_persistent_state()  (from S4)
+        AS->>AS: build_snapshot(home_dir, patterns)
+        AS->>AS: write .trinity/backup/<ts>/snapshot.tar + files.txt
+        AS->>GH: git fetch origin main
+        AS->>AS: git reset --hard origin/main
+        AS->>AS: restore_from_tar(home_dir, tar, patterns)
+        AS->>AS: git add -A && git commit -m "Adopt main baseline, preserve state"
+        AS->>GH: git push --force-with-lease origin HEAD:<working_branch>
+        AS-->>Backend: {snapshot_dir, files_preserved, commit_sha, working_branch}
+        Backend-->>Op: 200 {success: true, ...}
+    end
+```
+
+### Guardrails (in order)
+
+1. **Backend: agent_busy** — `activity_service.get_current_activities()`
+   returns a non-empty list (chat, schedule, tool-call, collaboration in
+   progress). Returned before any HTTP call to the agent-server so the
+   agent is never interrupted mid-task.
+2. **Agent-server: no_git_config** — `/home/developer/.git` missing or
+   `git remote get-url origin` fails. Prevents destructive git ops on an
+   agent that was never initialised for sync.
+3. **Agent-server: no_remote_main** — `git rev-parse --verify origin/main`
+   fails after fetch. Prevents resetting to a non-existent baseline.
+4. **Always snapshot first** — the compose routine writes the backup tar
+   to `.trinity/backup/<iso-ts>/snapshot.tar` *before* `git reset --hard`.
+   Even if the push later fails, the operator can pull the tar via the
+   Files panel and restore manually.
+5. **`--force-with-lease`, never bare `--force`** — aligns with S7 (#382);
+   prevents silent clobber of a peer Trinity instance that happens to share
+   the working branch.
+
+### Primitives Used
+
+| Component | Purpose | File |
+|-----------|---------|------|
+| `build_snapshot(home_dir, paths)` | Pure function: walk home_dir, tar files matching allowlist globs | `docker/base-image/agent_server/routers/snapshot.py` |
+| `restore_from_tar(home_dir, tar, paths)` | Pure function: extract tar, enforcing allowlist + path-traversal guards | `docker/base-image/agent_server/routers/snapshot.py` |
+| `_read_persistent_state()` | S4 reader: load allowlist from `.trinity/persistent-state.yaml` with default fallback | `docker/base-image/agent_server/routers/files.py` |
+| `reset_to_main_preserve_state_impl(home_dir, ...)` | Compose routine: snapshot → fetch → reset → overlay → commit → push | `docker/base-image/agent_server/routers/git.py` |
+| Backend proxy | Adds `agent_busy` guardrail on top of agent-server response | `src/backend/services/git_service.py` |
+
+### Code References
+
+- Backend endpoint: `src/backend/routers/git.py` (bottom of file)
+- Backend service: `src/backend/services/git_service.py::reset_to_main_preserve_state`
+- Agent-server endpoint: `docker/base-image/agent_server/routers/git.py` (bottom)
+- Agent-server primitives: `docker/base-image/agent_server/routers/snapshot.py`
+- Unit tests (mirror pattern):
+  - `tests/unit/test_reset_preserve_state_allowlist.py` (snapshot/restore)
+  - `tests/unit/test_reset_preserve_state_guardrails.py` (compose + backend proxy)
+- Pure-git regression: `tests/git-sync/s3_reset_preserve.sh`
+- Integration (opt-in): `tests/test_reset_preserve_state_integration.py`
+
+### Non-goals (owned by other PRs)
+
+- **UI** — the "third modal button" wiring on `GitConflictModal.vue` belongs to S2 (#385 / PR #395).
+- **Auto-sync cadence** — S1 (#389).
+- **Branch-ownership enforcement** — S7 (#382).
+- **`PROTECTED_PATHS` / `EDIT_PROTECTED_PATHS` wiring to the allowlist** — explicitly out of S4/S3 scope.
 
 ---
 
@@ -988,6 +1107,7 @@ Working - Pull fix for working branches (2026-03-26)
 | 2026-04-19 | **S7 Layer 3 push-time guard** (#382, PR #396): `sync_to_github()` `force_push` strategy now uses `git push --force-with-lease=<branch>:<expected-sha>` instead of plain `--force` (`docker/base-image/agent_server/routers/git.py`). The expected-sha is the remote value last observed at fetch, persisted to `~/.trinity/last-remote-sha/<branch>` via `_persist_last_remote_sha()` after every successful fetch. Stale-lease rejection returns HTTP 409 with header `X-Conflict-Type: branch_ownership_collision` and appends a structured alert to `~/.trinity/operator-queue.json` (`_record_push_collision()`), which the backend's `OperatorQueueSyncService` surfaces in the Operating Room on its next 5s poll. Persistence/append failures are logged, never raised. Response to the 2026-04-17 alpaca-vybe-live silent clobber; Tier-1 regression at `tests/git-sync/test_p5_branch_ownership.sh`. Layers 0 and 2 (reservation helper + partial UNIQUE index) are documented in `github-repo-initialization.md`. |
 | 2026-04-19 | **S5 — operator-readable conflict diagnosis** (#386, PR #397): Added `ConflictClass` enum + pure `classify_conflict()` in `src/backend/services/git_service.py`, mirrored in new `docker/base-image/agent_server/utils/git_conflict.py`. New `conflict_class` field on `GitSyncResult` and `X-Conflict-Class` response header on 409s. Agent-server collapsed 5 `HTTPException` sites behind a shared `_conflict_response()` helper. `GitConflictModal.vue` picks per-class title/body/recommendation from a `COPY` lookup; raw stderr in an expandable `<details>`; pre-S5 fallback preserves old strings. Composable `useGitSync.js` reads the header into the existing `gitConflict` ref. Regression coverage in `tests/git-sync/test_s5_conflict_classifier.py` (11 pytest cases) and `tests/git-sync/test_s5_modal.spec.js` (5 Vitest snapshots). |
 | 2026-04-19 | **S2 — Parallel-history detection at modal open** (#385, PR #395): `get_git_status()` in `docker/base-image/agent_server/routers/git.py` now also returns `pull_branch`, `common_ancestor_sha`, and `common_ancestor_age_days`, computed via `git merge-base HEAD origin/<pull_branch>` and `git log -1 --format=%cI`. Existing `ahead`/`behind` are unchanged. Frontend `useGitSync.js` adds `pullBranch`, `isParallelHistory` predicate (threshold 30 days), and an `adoptUpstreamPreserveState()` resolver that POSTs to `/api/agents/{name}/git/reset-to-main-preserve-state` (S3 / #384, not yet live — surfaces a clear "blocked on #384" notification on 404 / missing store method). `GitConflictModal.vue` adds a sibling `<div v-if="show && isParallelHistory">` variant titled "Your agent cannot sync" with primary "Adopt latest upstream (preserve my state)" and secondary "Force push anyway"; the existing variant's outer `v-if` is narrowed to `show && !isParallelHistory` so the new branch takes priority. All copy uses `{{ pullBranchLabel }}` — no hardcoded "main". `AgentDetail.vue` forwards the two new reactives into the modal mount. Regression tests: `tests/git-sync/test_p2_parallel_history_detection.sh` and `tests/git-sync/test_s2_usegitsync.test.js`. |
+| 2026-04-18 | **Reset-preserve-state operation** (S3, #384): Added `POST /api/agents/{name}/git/reset-to-main-preserve-state` plus two agent-server primitives (`/api/agent-server/snapshot`, `/api/agent-server/restore` in `routers/snapshot.py`) and a compose routine in `agent_server/routers/git.py`. Recovery path: snapshot allowlist (S4) → `git reset --hard origin/main` → overlay snapshot → commit `Adopt main baseline, preserve state` → `git push --force-with-lease`. Guardrails: 409 `agent_busy` (backend checks activity service), `no_git_config`, `no_remote_main`. Backup always written to `.trinity/backup/<iso-ts>/` before destructive ops. Mirrored unit tests in `tests/unit/test_reset_preserve_state_*.py` plus pure-git regression `tests/git-sync/s3_reset_preserve.sh`. |
 | 2026-04-16 | **Per-Agent GitHub PAT** (#347): Added per-agent PAT configuration. Agents can now use their own GitHub PAT instead of the global one. DB column `github_pat_encrypted` in `agent_git_config`, encrypted with AES-256-GCM. 3 new API endpoints (GET/PUT/DELETE), 2 MCP tools, GitPanel.vue settings UI. Helper `get_github_pat_for_agent()` provides fallback logic. |
 | 2026-03-26 | **Fix git pull for working branches** (#195): Added `_get_pull_branch()` helper that detects `trinity/*` branches and redirects pull/status to `origin/main`. Fixed `git fetch --dry-run` → `git fetch origin` in status endpoint. Fixed `initialize_git_in_container()` to preserve remote history via `git fetch + reset` instead of `git init + force push`. Tests in `tests/unit/test_git_pull_branch.py`. |
 | 2026-02-28 | **Git Branch Support** (GIT-002): Added complete data flow documentation with line numbers. URL syntax (`github:owner/repo@branch`) parses branch in crud.py:102-113. MCP types.ts:29 and agents.ts:201-207 expose `source_branch` parameter. template_service.py:22-41 passes branch to git clone. startup.sh:38-45 uses `-b` flag. Added testing checklist from requirements spec. |
