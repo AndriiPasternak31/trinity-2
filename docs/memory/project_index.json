@@ -65,7 +65,8 @@
       "per_agent_github_pat",
       "github_pat_auto_propagation",
       "persistent_state_allowlist",
-      "git_reset_preserve_state"
+      "git_reset_preserve_state",
+      "git_sync_health_observability"
     ],
     "in_progress": [
       "github_native_agents"
