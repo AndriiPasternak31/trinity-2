@@ -1,6 +1,6 @@
 # Trinity User Documentation
 
-> Auto-generated from source code. Run `/generate-user-docs` to update. Last sync: 2026-04-21.
+> Auto-generated from source code. Run `/generate-user-docs` to update. Last sync: 2026-04-23.
 
 ## Guides
 
@@ -71,6 +71,7 @@
 - [GitHub Sync](integrations/github-sync.md) — Source mode, working branch mode, branch selection
 - [Slack Integration](integrations/slack-integration.md) — Multi-agent channels, DMs, thread routing
 - [Telegram Integration](integrations/telegram-integration.md) — Bot setup, group chats, privacy mode, trigger modes
+- [WhatsApp Integration](integrations/whatsapp-integration.md) — Twilio binding, sandbox setup, email verification
 - [MCP Server](integrations/mcp-server.md) — 62 MCP tools, API keys, tool categories
 - [Nevermined Payments](integrations/nevermined-payments.md) — x402 payment monetization
 
