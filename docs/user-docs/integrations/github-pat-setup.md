@@ -45,9 +45,7 @@ Classic is faster to operate. Fine-grained is safer. Pick the tradeoff that matc
 
 A classic PAT with `repo` scope grants access to **every repository your GitHub user can see** — personal repos, plus any org repos your account has access to. Best when you're comfortable with that reach and want zero-maintenance setup.
 
-<!-- screenshot: classic token creation — name + expiration + scope checkboxes -->
-<!-- screenshot: classic token copy screen (the one-time "save this now" view) -->
-<!-- screenshot: pasting the token into Trinity Settings -->
+![GitHub new classic personal access token page with the `repo` scope checked](../images/pat/classic-token-scopes.png)
 
 
 **Step 1: Create the token**
@@ -82,11 +80,6 @@ The test shows your GitHub username and confirms repo access.
 ### Option B: Fine-Grained Token (scoped, safer, more maintenance)
 
 A fine-grained PAT is limited to a **specific list of repositories** and a **specific set of permissions**. Agents can only touch what you listed — not the admin's other repos. Best for production and for admins whose personal GitHub account also holds unrelated work you don't want agents near.
-
-<!-- screenshot: fine-grained token creation page — resource owner + expiration + repository selector -->
-<!-- screenshot: fine-grained permissions panel — Contents: Read and write, Issues: Read and write, Metadata: Read -->
-<!-- screenshot: fine-grained token copy screen -->
-<!-- screenshot: pasting into Trinity Settings -->
 
 
 **Step 1: Create the token**

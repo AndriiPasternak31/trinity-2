@@ -120,6 +120,7 @@ repositories/
 !src/frontend/public/icons/*.png
 # Allow documentation screenshots
 !docs/screenshots/*.png
+!docs/user-docs/images/**/*.png
 
 # Frontend build output
 src/frontend/dist/
