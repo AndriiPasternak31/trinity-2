@@ -72,6 +72,9 @@ class ProactiveMessageService:
     Channel resolution:
     - telegram: Look up telegram_chat_links by verified_email
     - slack: Look up Slack user by email via users.lookupByEmail API
+    - whatsapp: Look up whatsapp_chat_links by verified_email (explicit only;
+      NOT part of `auto` fallback because Twilio's 24-hour session window can
+      cause unexpected failures outside recent user interaction)
     - web: WebSocket push + persist to public_chat_messages
     - auto: Try channels in order: telegram -> slack -> web
     """
@@ -156,7 +159,7 @@ class ProactiveMessageService:
         agent_name: str,
         recipient_email: str,
         text: str,
-        channel: Literal["auto", "telegram", "slack", "web"] = "auto",
+        channel: Literal["auto", "telegram", "slack", "whatsapp", "web"] = "auto",
         reply_to_thread: bool = False,
     ) -> DeliveryResult:
         """
@@ -242,6 +245,8 @@ class ProactiveMessageService:
             return await self._deliver_telegram(agent_name, recipient_email, text)
         elif channel == "slack":
             return await self._deliver_slack(agent_name, recipient_email, text)
+        elif channel == "whatsapp":
+            return await self._deliver_whatsapp(agent_name, recipient_email, text)
         elif channel == "web":
             return await self._deliver_web(agent_name, recipient_email, text)
         else:
@@ -343,6 +348,69 @@ class ProactiveMessageService:
         raise RecipientNotFoundError(
             f"User '{recipient_email}' not found in any connected Slack workspace"
         )
+
+    async def _deliver_whatsapp(
+        self,
+        agent_name: str,
+        recipient_email: str,
+        text: str,
+    ) -> DeliveryResult:
+        """Deliver via WhatsApp (Twilio).
+
+        Note: Twilio enforces a 24-hour session window for business-initiated
+        freeform messages. Outside the window, Twilio returns error 63016 and
+        delivery fails. The failure surfaces in `DeliveryResult.error`; the
+        agent owner is responsible for configuring approved message templates
+        for out-of-window outreach.
+        """
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+
+        binding = db.get_whatsapp_binding(agent_name)
+        if not binding:
+            raise RecipientNotFoundError(f"No WhatsApp binding configured for agent '{agent_name}'")
+
+        chat_link = db.get_whatsapp_chat_link_by_verified_email(binding["id"], recipient_email)
+        if not chat_link:
+            raise RecipientNotFoundError(
+                f"No WhatsApp user with verified email '{recipient_email}' for agent '{agent_name}'"
+            )
+
+        auth_token = db.get_whatsapp_auth_token(agent_name)
+        if not auth_token:
+            raise ChannelDeliveryError("Failed to retrieve Twilio AuthToken")
+
+        adapter = WhatsAppAdapter()
+        try:
+            formatted_text = adapter.format_response(text)
+            # Respect Twilio's 1600-char WhatsApp body limit — agent-generated
+            # proactive messages can exceed it; split the same way send_response does.
+            chunks = adapter._split_message(formatted_text)
+            last_sid: Optional[str] = None
+            for chunk in chunks:
+                result = await adapter._send_message(
+                    account_sid=binding["account_sid"],
+                    auth_token=auth_token,
+                    from_number=binding["from_number"],
+                    messaging_service_sid=binding.get("messaging_service_sid"),
+                    to_number=chat_link["wa_user_phone"],
+                    body=chunk,
+                )
+                if not result:
+                    return DeliveryResult(
+                        success=False,
+                        channel="whatsapp",
+                        error="Send failed (Twilio returned error — see logs)",
+                    )
+                last_sid = result.get("sid") or last_sid
+
+            return DeliveryResult(
+                success=True,
+                channel="whatsapp",
+                message_id=str(last_sid) if last_sid else None,
+            )
+        except Exception as e:
+            logger.error(f"WhatsApp delivery failed: {e}")
+            return DeliveryResult(success=False, channel="whatsapp", error=str(e))
 
     async def _deliver_web(
         self,
