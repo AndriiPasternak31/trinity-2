@@ -200,6 +200,14 @@ Only include if meaningful.]
 [Cross-references to related docs in this folder. Use relative links.]
 ```
 
+**The template above is the minimum, not the maximum.** Add domain-specific sections between **How It Works** and **Limitations** when the content doesn't fit the default flow. Common extensions:
+
+- **Decision tables** — when the feature exposes a meaningful user choice (e.g., classic vs. fine-grained PAT, source mode vs. working branch mode). Lead with the tradeoff, not the mechanics.
+- **Workflow / pattern sections** — when the feature unlocks a multi-party workflow worth documenting explicitly (e.g., "Hosting Agents from External Contributors" for PATs, "Thread Routing" for Slack). These don't map cleanly to "How It Works" because they cross features or involve external actors.
+- **Maintenance guidance** — when post-setup ongoing operations are non-obvious (e.g., "Updating the Token Later" for PATs, "Rotating Keys" for MCP). Covers what's editable in-place vs. what requires recreation.
+
+Use judgment: if the same content keeps needing to sit awkwardly inside "How It Works" or "Limitations," promote it to its own `##` section.
+
 3. **No redundancy** — Do not repeat information from other docs. Cross-reference instead. The `Concepts` section in `getting-started/overview.md` is the canonical glossary; other docs reference it rather than re-defining terms.
 
 4. **Code-derived accuracy** — Every claim must trace to code or a feature flow. Do not invent features. If a feature flow says "planned" or a router has TODO comments, note it as upcoming rather than documenting it as available.
@@ -207,6 +215,14 @@ Only include if meaningful.]
 5. **Clear, direct tone** — Active voice. Short sentences. No filler ("In order to", "It should be noted that"). Say what happens, not what "can" happen.
 
 6. **Placeholder values** — Use `your-domain.com`, `your-api-key`, `user@example.com` in all examples. Never include real credentials or internal URLs.
+
+7. **External references for integration docs** — Docs under `integrations/*.md` document features that sit on top of third-party services (GitHub, Slack, Telegram, Twilio, Nevermined, etc.). For each, the `See Also` section must include an `**External references:**` subsection with:
+
+   - **The authoritative vendor doc** — the canonical page from the vendor describing the underlying primitive (e.g., [Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) for GitHub PATs). Prefer the evergreen docs URL over blog posts.
+   - **A broader-context vendor doc** if useful (e.g., "About authentication to GitHub" for the full menu of auth methods).
+   - **One clear third-party explainer** when the vendor's own docs are dense or skip the "why." Check the article is current (within ~2 years) and pedagogically clean before linking. Skip this if the vendor docs are already accessible.
+
+   Split `See Also` into **Trinity docs:** and **External references:** subsections so the distinction is visible.
 
 ### Step 4: Generate README.md Index
 

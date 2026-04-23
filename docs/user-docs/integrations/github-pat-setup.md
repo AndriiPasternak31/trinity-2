@@ -22,11 +22,33 @@ A GitHub PAT is required for:
 | Clone from public templates | No |
 | Pull from public repos (read-only) | No |
 
+## Who Owns the Platform PAT
+
+Trinity stores a single **platform-wide PAT** that every agent inherits unless an agent has its own per-agent override. In the standard setup, the **Trinity admin** creates this token in their own GitHub account — which means:
+
+- **The token's reach is the admin's reach.** Anything the admin's GitHub user can do, every agent using the platform PAT can do.
+- **Agents are hosted under the admin's GitHub account / org** for the repos they push to. If an agent needs to push to a repo the admin doesn't have access to, use a per-agent PAT override instead.
+- **The admin's decision up front**: how much of their own GitHub access should bleed through to the agents? This is the question that picks classic vs. fine-grained.
+
+## Choosing a Token Type
+
+| If you want... | Pick | Tradeoff |
+|----------------|------|----------|
+| Simplest setup; fine with agents inheriting access to **every repo your account can reach** | **Classic PAT** | Wider blast radius if the token leaks. New agents work instantly — no GitHub-side steps. |
+| Agents scoped to a **specific list of repos**, nothing else | **Fine-grained PAT** | Smaller blast radius. Every time you add an agent on a new repo, you edit the token to include that repo. |
+
+Classic is faster to operate. Fine-grained is safer. Pick the tradeoff that matches your organization's risk posture.
+
 ## How It Works
 
-### Option A: Classic Token (Recommended for Simplicity)
+### Option A: Classic Token (simplest, widest access)
 
-Classic tokens use broad permission scopes. Best when you want agents to access all your repositories.
+A classic PAT with `repo` scope grants access to **every repository your GitHub user can see** — personal repos, plus any org repos your account has access to. Best when you're comfortable with that reach and want zero-maintenance setup.
+
+<!-- screenshot: classic token creation — name + expiration + scope checkboxes -->
+<!-- screenshot: classic token copy screen (the one-time "save this now" view) -->
+<!-- screenshot: pasting the token into Trinity Settings -->
+
 
 **Step 1: Create the token**
 
@@ -57,9 +79,15 @@ The test shows your GitHub username and confirms repo access.
 
 **Saving auto-propagates to running agents.** When the platform PAT changes, Trinity pushes the new token into every running agent's `.env` file within seconds — no restart required. The save response lists which agents were updated, skipped, or failed. Agents with a per-agent PAT override, or agents that never configured GitHub, are skipped. Per-agent failures are reported but never block the save.
 
-### Option B: Fine-Grained Token (Recommended for Security)
+### Option B: Fine-Grained Token (scoped, safer, more maintenance)
 
-Fine-grained tokens let you limit access to specific repositories and permissions. Best for production environments or when agents should only access designated repos.
+A fine-grained PAT is limited to a **specific list of repositories** and a **specific set of permissions**. Agents can only touch what you listed — not the admin's other repos. Best for production and for admins whose personal GitHub account also holds unrelated work you don't want agents near.
+
+<!-- screenshot: fine-grained token creation page — resource owner + expiration + repository selector -->
+<!-- screenshot: fine-grained permissions panel — Contents: Read and write, Issues: Read and write, Metadata: Read -->
+<!-- screenshot: fine-grained token copy screen -->
+<!-- screenshot: pasting into Trinity Settings -->
+
 
 **Step 1: Create the token**
 
@@ -108,6 +136,45 @@ If you're creating repos in a GitHub Organization:
 | Organization support | Full | Requires org admin approval |
 | Token format | `ghp_...` | `github_pat_...` |
 | Recommended for | Development, personal use | Production, shared teams |
+
+## Hosting Agents from External Contributors
+
+A useful consequence of how classic PATs work: **a classic PAT reaches every repo its owner can access, including repos that were shared with the owner as a collaborator.** This unlocks a simple workflow for letting external agent developers deploy their agents on your Trinity instance without handing over tokens or transferring repos.
+
+**The pattern:**
+1. External developer has their agent code in their own GitHub repo.
+2. They invite the **Trinity admin's GitHub user** as a collaborator, with role:
+   - **Write** — if the agent needs to push back (Working Branch mode, scheduled commits, etc.). This is the usual case.
+   - **Read** — if the agent only pulls (Source mode / deploy-only).
+3. Admin accepts the invitation.
+4. Trinity's classic PAT now reaches the repo immediately — no token change, no restart. Deploy the agent from that repo like any other.
+5. When the engagement ends, the external developer removes the admin as a collaborator. Access disappears the same moment. The PAT is untouched.
+
+**Important caveats:**
+
+- **Only works with classic PATs.** A fine-grained PAT is scoped to a single resource owner (one user or one org) and cannot reach a friend's or another org's repositories, regardless of collaborator status. If you're running fine-grained, use a [per-agent PAT override](#for-agents) instead — the external developer creates their own fine-grained PAT scoped to their repo and you paste it as the agent's override.
+- **SSO-protected orgs.** If the shared repo lives inside an org that enforces SAML SSO, the admin's classic token must be SSO-authorized for that org (token settings → **Configure SSO** → Authorize). Otherwise Git operations fail even though the admin user can see the repo in the browser.
+- **Admin's role caps what the PAT can do.** If the admin was invited with Read, pushes fail with 403 regardless of what the classic PAT's scopes allow.
+- **Blast radius still applies.** The classic PAT can reach *all* repos the admin has collaborator access to — not just the one you intended to deploy. If that's a concern, use a per-agent PAT override instead so each external agent brings its own scoped token.
+
+## Updating the Token Later
+
+Most edits to an existing PAT happen **in-place in GitHub** — the token string stays the same, so you do **not** need to paste a new token into Trinity. The main exceptions are regenerating, rotating, or (for fine-grained tokens) changing permissions in ways that may require org re-approval.
+
+**Fine-grained PAT — editable in-place:**
+- **Repository list** — adding or removing repos. Common when you deploy a new agent that needs access to a repo not in the original list.
+- **Expiration date** — extend or shorten.
+- **Name / description.**
+
+**Fine-grained PAT — when to regenerate:**
+- **Permission changes** (e.g. adding `Issues: Read and write`) — the UI may let you save permission changes in-place, but org PAT policies can require re-approval and some deployments see inconsistent behavior. **Safest path: regenerate the token and paste the new one into Trinity Settings.** If the token is on a personal account with no org policy, in-place editing usually works; you can try it first.
+- **Token lost / suspected compromise** — always regenerate.
+
+**Classic PAT:**
+- Scopes are editable in-place (check/uncheck boxes and save).
+- The token string itself only changes if you click **Regenerate**.
+
+After any change that produces a **new token string**, update it in Trinity via **Settings → GitHub Personal Access Token → Test → Save**. Trinity auto-propagates the new token to all running agents that use the platform PAT within seconds.
 
 ## For Agents
 
@@ -219,11 +286,18 @@ Uses the configured PAT to create/connect a GitHub repository for the agent.
 - Trinity stores one platform-wide GitHub PAT. All agents share it unless overridden per-agent.
 - Fine-grained tokens require GitHub to be configured to allow them (enabled by default for personal accounts).
 - Organization-owned fine-grained tokens require org admin approval.
-- Token permissions cannot be changed after creation — regenerate if you need different access.
 - PAT propagation targets only currently-running agents. Stopped agents receive the updated PAT on next start.
+- See "Updating the Token Later" above for what can be edited in-place vs. what requires regenerating the token.
 
 ## See Also
 
+**Trinity docs:**
 - [GitHub Sync](github-sync.md) — Using git sync after PAT is configured
 - [Creating Agents](../agents/creating-agents.md) — Creating agents from GitHub templates
 - [Platform Settings](../operations/dashboard.md) — Other settings configuration
+
+**GitHub references:**
+- [Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) — Official GitHub docs: how PATs work, creation, deletion, security
+- [About authentication to GitHub](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-authentication-to-github) — Official: full picture of GitHub authentication methods and when to use each
+- [Introducing fine-grained personal access tokens](https://github.blog/security/application-security/introducing-fine-grained-personal-access-tokens-for-github/) — GitHub Blog: why fine-grained PATs exist and what problems they solve
+- [GitHub Classic vs. Fine-grained Personal Access Tokens](https://www.finecloud.ch/blog/github-classic-vs-fine-grained-personal-access-tokens/) — Third-party explainer: clear side-by-side comparison with practical scenarios

@@ -75,6 +75,7 @@ From the Settings page, the admin can configure:
 
 - **Email Whitelist** -- Control which email addresses can log in.
 - **GitHub Templates** -- Manage template repositories for agent creation.
+- **GitHub Personal Access Token** -- Platform-wide PAT so agents can pull/push GitHub repos. See [GitHub PAT Setup](../integrations/github-pat-setup.md) for the recommended setup (classic vs. fine-grained, permissions, and ongoing maintenance).
 - **Platform API Keys** -- Generate and revoke API keys for programmatic access.
 - **Slack Integration** -- Connect Trinity to a Slack workspace.
 - **System Prompt** -- Set the system-wide Trinity prompt applied to all agents.
