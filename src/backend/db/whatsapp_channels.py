@@ -238,6 +238,59 @@ class WhatsAppChannelOperations:
             """, (now, chat_link_id))
             conn.commit()
 
+    def set_verified_email(
+        self, binding_id: int, wa_user_phone: str, email: str
+    ) -> None:
+        """Mark this WhatsApp user as verified for the given email (#311 Phase 2).
+
+        Creates the chat_link row if missing — /login can land before any prior
+        inbound message has touched the row.
+        """
+        now = utc_now_iso()
+        normalized_email = email.strip().lower()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO whatsapp_chat_links
+                (binding_id, wa_user_phone, verified_email, verified_at,
+                 message_count, created_at, last_active)
+                VALUES (?, ?, ?, ?, 0, ?, ?)
+                ON CONFLICT(binding_id, wa_user_phone) DO UPDATE SET
+                    verified_email = excluded.verified_email,
+                    verified_at = excluded.verified_at,
+                    last_active = excluded.last_active
+            """, (binding_id, wa_user_phone, normalized_email, now, now, now))
+            conn.commit()
+
+    def clear_verified_email(self, binding_id: int, wa_user_phone: str) -> None:
+        """Clear the verified email binding for this WhatsApp user."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE whatsapp_chat_links
+                SET verified_email = NULL, verified_at = NULL
+                WHERE binding_id = ? AND wa_user_phone = ?
+            """, (binding_id, wa_user_phone))
+            conn.commit()
+
+    def get_chat_link_by_verified_email(
+        self, binding_id: int, email: str
+    ) -> Optional[dict]:
+        """Resolve a verified email → chat_link row (for proactive delivery)."""
+        normalized_email = email.strip().lower()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, binding_id, wa_user_phone, wa_user_name,
+                       session_id, verified_email, verified_at,
+                       message_count, last_active, created_at
+                FROM whatsapp_chat_links
+                WHERE binding_id = ? AND LOWER(verified_email) = ?
+                LIMIT 1
+            """, (binding_id, normalized_email))
+            row = cursor.fetchone()
+        return self._row_to_chat_link(row) if row else None
+
     # =========================================================================
     # Row converters
     # =========================================================================

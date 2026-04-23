@@ -6,13 +6,14 @@ HMAC-SHA1. Outbound messages go via Twilio REST (`POST /Messages.json`) with
 HTTP Basic auth (AccountSid:AuthToken).
 
 Scope: Phase 1 MVP — direct messages only. Group chats are not supported by
-Twilio's WhatsApp API (see issue #299). Access-control integration (#311) is
-wired minimally via the `verified_email` columns; richer /login flows are
-Phase 2.
+Twilio's WhatsApp API (see issue #299). Phase 2 (#467) adds /login, /logout,
+/whoami commands and wires the adapter into the unified cross-channel access
+control system (#311).
 """
 
 import base64
 import logging
+import re
 from typing import List, Optional
 from urllib.parse import urlparse
 
@@ -25,6 +26,7 @@ from adapters.base import (
     FileAttachment,
     NormalizedMessage,
 )
+from services.email_service import EmailService
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,48 @@ TWILIO_API_BASE = "https://api.twilio.com"
 
 # SSRF allowlist for media downloads — only Twilio-hosted URLs permitted.
 _TWILIO_MEDIA_ALLOWED_HOST_SUFFIXES = (".twilio.com",)
+
+# Pending-login TTL (matches verification-code expiry)
+_PENDING_LOGIN_TTL = 600  # 10 minutes
+
+
+def _get_pending_login_key(binding_id: int, user_id: str) -> str:
+    """Redis key for pending WhatsApp login (scoped by binding + phone)."""
+    return f"whatsapp_pending_login:{binding_id}:{user_id}"
+
+
+def _get_pending_login(binding_id: int, user_id: str) -> Optional[str]:
+    """Get pending login email from Redis."""
+    from routers.auth import get_redis_client
+    try:
+        r = get_redis_client()
+        if r:
+            return r.get(_get_pending_login_key(binding_id, user_id))
+    except Exception as e:
+        logger.warning(f"Redis unavailable for pending login lookup: {e}")
+    return None
+
+
+def _set_pending_login(binding_id: int, user_id: str, email: str) -> None:
+    """Store pending login email in Redis with TTL."""
+    from routers.auth import get_redis_client
+    try:
+        r = get_redis_client()
+        if r:
+            r.setex(_get_pending_login_key(binding_id, user_id), _PENDING_LOGIN_TTL, email)
+    except Exception as e:
+        logger.warning(f"Redis unavailable for pending login store: {e}")
+
+
+def _clear_pending_login(binding_id: int, user_id: str) -> None:
+    """Clear pending login from Redis."""
+    from routers.auth import get_redis_client
+    try:
+        r = get_redis_client()
+        if r:
+            r.delete(_get_pending_login_key(binding_id, user_id))
+    except Exception as e:
+        logger.warning(f"Redis unavailable for pending login clear: {e}")
 
 
 def _mask_phone(phone: str) -> str:
@@ -216,6 +260,9 @@ class WhatsAppAdapter(ChannelAdapter):
         if not text.strip():
             return
 
+        # Agents emit standard markdown; WhatsApp uses its own syntax.
+        text = self._markdown_to_whatsapp(text)
+
         chunks = self._split_message(text)
 
         for chunk in chunks:
@@ -228,6 +275,10 @@ class WhatsAppAdapter(ChannelAdapter):
                 body=chunk,
             )
 
+    def format_response(self, text: str) -> str:
+        """Expose markdown conversion for non-send code paths (e.g. proactive)."""
+        return self._markdown_to_whatsapp(text)
+
     async def get_agent_name(self, message: NormalizedMessage) -> Optional[str]:
         return message.metadata.get("agent_name") or None
 
@@ -238,7 +289,7 @@ class WhatsAppAdapter(ChannelAdapter):
     async def resolve_verified_email(
         self, message: NormalizedMessage
     ) -> Optional[str]:
-        """Look up verified email for this WhatsApp user (filled by Phase 2)."""
+        """Look up verified email for this WhatsApp user (#311 Phase 2)."""
         agent_name = message.metadata.get("agent_name")
         if not agent_name:
             return None
@@ -246,6 +297,152 @@ class WhatsAppAdapter(ChannelAdapter):
         if not binding:
             return None
         return db.get_whatsapp_verified_email(binding["id"], message.sender_id)
+
+    async def prompt_auth(
+        self,
+        message: NormalizedMessage,
+        agent_name: str,
+        bot_token: Optional[str] = None,
+    ) -> None:
+        """Send a WhatsApp-native prompt when the agent requires a verified email."""
+        text = (
+            "🔒 This agent requires a verified email.\n\n"
+            "Send */login your@email.com* and I'll email you a 6-digit code. "
+            "Then reply with */login 123456* to complete verification."
+        )
+        await self.send_response(
+            message.channel_id,
+            ChannelResponse(
+                text=text,
+                metadata={"bot_token": bot_token, "agent_name": agent_name},
+            ),
+            thread_id=message.thread_id,
+        )
+
+    # =========================================================================
+    # Bot commands (#467 Phase 2)
+    # =========================================================================
+
+    def is_command(self, message: NormalizedMessage) -> bool:
+        """Detect WhatsApp bot commands (/login, /logout, /whoami)."""
+        return message.text.startswith("/")
+
+    async def handle_command(self, message: NormalizedMessage) -> Optional[str]:
+        """Dispatch /login, /logout, /whoami. Returns reply text or None."""
+        text = message.text.strip()
+
+        if text == "/login" or text.startswith("/login "):
+            return await self._handle_login_command(message, text)
+
+        if text == "/logout":
+            return await self._handle_logout_command(message)
+
+        if text == "/whoami":
+            email = await self.resolve_verified_email(message)
+            if email:
+                return f"You are verified as `{email}`."
+            return "You are not verified. Send */login your@email.com* to verify."
+
+        return None
+
+    async def _handle_login_command(
+        self, message: NormalizedMessage, text: str
+    ) -> Optional[str]:
+        """Handle /login {email} (request code) and /login {code} (verify)."""
+        agent_name = message.metadata.get("agent_name")
+        if not agent_name:
+            return "Login is unavailable for this chat."
+
+        binding = db.get_whatsapp_binding(agent_name)
+        if not binding:
+            return "Login is unavailable for this chat."
+
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip():
+            return (
+                "Usage:\n"
+                "*/login your@email.com* — request a verification code\n"
+                "*/login 123456* — confirm the code I emailed you"
+            )
+
+        arg = parts[1].strip()
+
+        # 6-digit code path
+        if arg.isdigit() and len(arg) == 6:
+            pending_email = _get_pending_login(binding["id"], message.sender_id)
+            if not pending_email:
+                return (
+                    "I don't have a pending login for you. Send "
+                    "*/login your@email.com* first."
+                )
+            result = db.verify_login_code(pending_email, arg)
+            if not result:
+                return "❌ Invalid or expired code. Try again or request a new one."
+            db.set_whatsapp_verified_email(binding["id"], message.sender_id, pending_email)
+            _clear_pending_login(binding["id"], message.sender_id)
+
+            # Run the same access gate as message_router so the user learns
+            # immediately whether they're in or in the approval queue — avoids
+            # the two-step "you can chat" → "access pending" UX surprise.
+            policy = db.get_access_policy(agent_name)
+            if db.email_has_agent_access(agent_name, pending_email) or policy.get("open_access"):
+                return (
+                    f"✅ Verified! You're now signed in as `{pending_email}`.\n"
+                    "You can chat normally now."
+                )
+
+            try:
+                db.upsert_access_request(agent_name, pending_email, "whatsapp")
+            except Exception as e:
+                logger.error(
+                    f"Failed to upsert access_request for {pending_email} on agent={agent_name}: {e}"
+                )
+            return (
+                f"✅ Verified as `{pending_email}`.\n"
+                "🔒 Your access request is pending approval — "
+                "I'll let you know once the agent owner responds."
+            )
+
+        # Email path
+        email = arg.lower()
+        if "@" not in email or " " in email or len(email) > 254:
+            return "That doesn't look like an email address. Try */login you@example.com*."
+
+        try:
+            code_data = db.create_login_code(email, expiry_minutes=10)
+        except Exception as e:
+            logger.error(f"Failed to create login code for {email}: {e}")
+            return "Couldn't create a verification code. Please try again later."
+
+        try:
+            email_service = EmailService()
+            sent = await email_service.send_verification_code(email, code_data["code"])
+        except Exception as e:
+            logger.error(f"Failed to send verification email to {email}: {e}")
+            sent = False
+
+        _set_pending_login(binding["id"], message.sender_id, email)
+
+        if not sent:
+            return (
+                f"⚠️ I couldn't send the email to `{email}`. "
+                "Ask the agent owner to check email delivery."
+            )
+        return (
+            f"📧 Sent a 6-digit code to `{email}`.\n"
+            "Reply with */login 123456* to finish verification."
+        )
+
+    async def _handle_logout_command(self, message: NormalizedMessage) -> str:
+        agent_name = message.metadata.get("agent_name")
+        if not agent_name:
+            return "Logout is unavailable for this chat."
+        binding = db.get_whatsapp_binding(agent_name)
+        if not binding:
+            return "Logout is unavailable for this chat."
+        db.clear_whatsapp_verified_email(binding["id"], message.sender_id)
+        _clear_pending_login(binding["id"], message.sender_id)
+        return "👋 Logged out. Send */login your@email.com* to sign in again."
 
     # =========================================================================
     # File download — Twilio-hosted media with HTTP Basic auth
@@ -351,6 +548,43 @@ class WhatsAppAdapter(ChannelAdapter):
         except Exception as e:
             logger.error("[WHATSAPP] Twilio send error (to=%s): %s", _mask_phone(to_number), e)
             return None
+
+    @staticmethod
+    def _markdown_to_whatsapp(text: str) -> str:
+        """Convert standard markdown to WhatsApp's native syntax.
+
+        WhatsApp supports: *bold*, _italic_, ~strike~, `mono`, ```code```.
+        It does not render headings or markdown links. Conversions:
+        - **bold** / __bold__ → *bold*
+        - *italic* / _italic_ → _italic_  (italic already matches; star→underscore)
+        - ~~strike~~ → ~strike~
+        - `mono` and ```code``` → unchanged (WhatsApp parses them natively)
+        - # / ## / ### headers → bold line (*Header*)
+        - [text](url) → text (url)
+
+        Conversion order matters: bold runs before italic so that **x** isn't
+        mis-parsed as two *italic* tokens.
+        """
+        if not text:
+            return text
+        try:
+            # Strip headers (# Title, ## Section, ### Sub) → bold line
+            text = re.sub(r'^[ \t]*#{1,6}[ \t]+(.+?)\s*$', r'*\1*', text, flags=re.MULTILINE)
+            # Markdown links → "text (url)"
+            text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'\1 (\2)', text)
+            # Bold: **x** or __x__ → *x*  (must come before italic)
+            text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+            text = re.sub(r'__(.+?)__', r'*\1*', text)
+            # Italic `*x*` is left intact: WhatsApp renders single-asterisk as
+            # bold, so agent-intended italic must use `_x_` (which already
+            # matches WA syntax and passes through unchanged). A Phase 2
+            # compromise — see feature-flows/whatsapp-integration.md.
+            # Strikethrough: ~~x~~ → ~x~
+            text = re.sub(r'~~(.+?)~~', r'~\1~', text)
+            return text
+        except Exception as e:
+            logger.debug("[WHATSAPP] markdown conversion failed, passing through: %s", e)
+            return text
 
     @staticmethod
     def _split_message(text: str) -> List[str]:

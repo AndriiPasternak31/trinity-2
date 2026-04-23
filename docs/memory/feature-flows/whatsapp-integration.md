@@ -1,7 +1,7 @@
 # WhatsApp Integration via Twilio (WHATSAPP-001)
 
-**Issue**: #299
-**Status**: Phase 1 MVP (direct messages only)
+**Issues**: #299 (Phase 1), #467 (Phase 2)
+**Status**: Phase 2 — unified access control wired (#311)
 **Extends**: SLACK-002 `ChannelAdapter` abstraction
 
 Adds WhatsApp as a per-agent channel via Twilio's Programmable Messaging API.
@@ -19,9 +19,19 @@ no platform-level Twilio account required.
 - Webhook HMAC-SHA1 verification via `twilio.request_validator.RequestValidator`
 - Twilio Sandbox auto-detected from the well-known number `whatsapp:+14155238886`
 
+### In scope (Phase 2 — #467, shipped 2026-04-23)
+- `/login`, `/logout`, `/whoami` commands (dispatched by `twilio_webhook._process_update`)
+- Redis-backed pending-login state with 10-minute TTL
+  (keyed `whatsapp_pending_login:{binding_id}:{phone}`)
+- Post-verification access gate inlined into `/login` so users learn their
+  access status (shared / open_access / pending-approval) in the same message
+- `access_requests.channel='whatsapp'` for restrictive-policy DMs
+- `proactive_message_service._deliver_whatsapp()` — explicit-only channel
+  (NOT part of `auto` fallback; see Phase 2 notes below)
+- Markdown → WhatsApp-native syntax conversion in `send_response` so agent
+  markdown (`**bold**`, `[text](url)`) renders correctly
+
 ### Deferred
-- **Phase 2** — unified access control (#311) `/login` flows, verified-email
-  plumbing (schema columns ship now so Phase 2 is application-only)
 - **Phase 3** — SMS on the same Twilio binding, WhatsApp Business templates
   (for outbound-first messaging outside 24h window), interactive buttons,
   voice-note transcription
@@ -91,7 +101,8 @@ WhatsAppAdapter.parse_message() → NormalizedMessage
         ▼
 ChannelMessageRouter.handle_message() (unchanged)
         │  — rate limit
-        │  — access control (#311 — Phase 2 will wire verified_email)
+        │  — access control (#311 — uses resolve_verified_email()
+        │     wired in Phase 2; unverified + require_email → prompt_auth)
         │  — session lookup
         │  — file downloads (via adapter.download_file with SSRF allowlist)
         │  — TaskExecutionService.execute_task()
@@ -105,6 +116,95 @@ Twilio REST: POST /2010-04-01/Accounts/{sid}/Messages.json
         ▼
 WhatsApp user's phone
 ```
+
+## Flow: `/login` command (Phase 2, #467)
+
+```
+WhatsApp user sends "/login user@example.com"
+        │
+        ▼
+twilio_webhook._process_update
+   — detects Body.startswith("/")
+   — parses via WhatsAppAdapter.parse_message
+   — if adapter.is_command(normalized):
+        reply = await adapter.handle_command(normalized)
+        adapter.send_response(channel_id, reply)    ← short-circuits the router
+        return
+        │
+        ▼
+WhatsAppAdapter._handle_login_command("/login user@example.com")
+   1. Validate email shape (contains '@', no spaces, ≤254 chars)
+   2. db.create_login_code(email, expiry_minutes=10)     ← shared with web/Telegram
+   3. EmailService.send_verification_code(email, code)
+   4. _set_pending_login(binding_id, wa_user_phone, email) — Redis SETEX 10min
+   5. Return "📧 Sent a 6-digit code to `user@example.com`..."
+        │
+        ▼
+WhatsApp user sends "/login 123456"
+        │
+        ▼
+_handle_login_command("/login 123456")
+   1. pending_email = _get_pending_login(binding_id, phone)  — Redis GET
+   2. db.verify_login_code(pending_email, "123456")          — crypto gate
+   3. db.set_whatsapp_verified_email(binding_id, phone, email)
+   4. _clear_pending_login(binding_id, phone)
+   5. RUN ACCESS GATE INLINE:
+       if email_has_agent_access OR policy.open_access:
+           → "✅ Verified! You can chat normally."
+       else:
+           db.upsert_access_request(agent_name, email, "whatsapp")
+           → "✅ Verified. 🔒 Access pending approval."
+```
+
+### Why inline the access gate?
+Without it, a verified-but-not-shared user would see *"You can chat normally"*
+at verification time, then hit *"Access pending approval"* on their first real
+message. The inline check matches the Telegram pattern.
+
+## Flow: Outbound markdown conversion
+
+Agents emit standard markdown; WhatsApp uses its own syntax. `send_response`
+runs `_markdown_to_whatsapp` before every Twilio POST so responses render
+correctly. Conversions:
+
+| Markdown | WhatsApp |
+|----------|----------|
+| `**bold**` / `__bold__` | `*bold*` |
+| `*italic*` | unchanged (WA reads as bold — acceptable Phase 2 compromise) |
+| `_italic_` | `_italic_` (passthrough) |
+| `~~strike~~` | `~strike~` |
+| ``` `code` ```  / ``` ```block``` ``` | passthrough |
+| `# Header` / `## Sub` | `*Header*` |
+| `[text](url)` | `text (url)` |
+
+Implemented as a pure static method on `WhatsAppAdapter`; also exposed via
+`format_response` for non-send callsites (e.g. proactive delivery).
+
+## Flow: Proactive messaging (`_deliver_whatsapp`)
+
+```
+proactive_message_service.send_message(agent, email, text, channel="whatsapp")
+        │
+        ▼
+_deliver_whatsapp(agent_name, recipient_email, text)
+   1. binding = db.get_whatsapp_binding(agent_name)
+       → raise RecipientNotFoundError if no binding
+   2. chat_link = db.get_whatsapp_chat_link_by_verified_email(binding.id, email)
+       → raise RecipientNotFoundError if no prior verified user with this email
+   3. auth_token = db.get_whatsapp_auth_token(agent_name)
+   4. text = adapter.format_response(text)  ← markdown conversion
+   5. adapter._send_message(account_sid, auth_token, from_number,
+                            messaging_service_sid, to=phone, body=text)
+   6. return DeliveryResult(success, channel="whatsapp", message_id=sid)
+```
+
+**Important**: WhatsApp is NOT in the default `auto` channel fallback
+(`["telegram", "slack", "web"]`). Callers must pass `channel="whatsapp"`
+explicitly. Rationale: Twilio enforces a 24-hour session window for
+business-initiated freeform messages — outside the window Twilio returns
+error `63016`. Including WhatsApp in `auto` would cause intermittent silent
+failures for inactive recipients. Phase 3 (approved message templates) will
+revisit this once template support lands.
 
 ## Security
 

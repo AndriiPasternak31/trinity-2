@@ -557,3 +557,437 @@ class TestWebhookTransport:
         assert second == {"ok": True}
         # Dispatch was scheduled only once — check by inspecting the dedup ring
         assert "SM_duplicated" in _SEEN_MESSAGE_SIDS
+
+
+# =============================================================================
+# Phase 2 (#467) — Markdown conversion
+# =============================================================================
+
+class TestMarkdownConversion:
+    @pytest.mark.unit
+    def test_bold_double_asterisk_to_single(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        assert WhatsAppAdapter._markdown_to_whatsapp("**bold**") == "*bold*"
+
+    @pytest.mark.unit
+    def test_bold_double_underscore_to_single_asterisk(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        assert WhatsAppAdapter._markdown_to_whatsapp("__bold__") == "*bold*"
+
+    @pytest.mark.unit
+    def test_strikethrough_double_tilde_to_single(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        assert WhatsAppAdapter._markdown_to_whatsapp("~~gone~~") == "~gone~"
+
+    @pytest.mark.unit
+    def test_markdown_link_to_text_and_url(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        out = WhatsAppAdapter._markdown_to_whatsapp("Visit [docs](https://x.com/docs)")
+        assert out == "Visit docs (https://x.com/docs)"
+
+    @pytest.mark.unit
+    def test_headers_become_bold(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        out = WhatsAppAdapter._markdown_to_whatsapp("## Section")
+        assert out == "*Section*"
+
+    @pytest.mark.unit
+    def test_code_span_passes_through(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        # WhatsApp's `mono` syntax matches markdown — no transformation needed
+        assert WhatsAppAdapter._markdown_to_whatsapp("use `cmd -x`") == "use `cmd -x`"
+
+    @pytest.mark.unit
+    def test_empty_string_passes(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        assert WhatsAppAdapter._markdown_to_whatsapp("") == ""
+
+
+# =============================================================================
+# Phase 2 (#467) — Command detection (is_command)
+# =============================================================================
+
+class TestIsCommand:
+    @pytest.mark.unit
+    def test_slash_prefix_is_command(self):
+        from adapters.base import NormalizedMessage
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        msg = NormalizedMessage(sender_id="whatsapp:+1", text="/login",
+                                channel_id="whatsapp:+1", timestamp="")
+        assert WhatsAppAdapter().is_command(msg) is True
+
+    @pytest.mark.unit
+    def test_no_slash_is_not_command(self):
+        from adapters.base import NormalizedMessage
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        msg = NormalizedMessage(sender_id="whatsapp:+1", text="hello",
+                                channel_id="whatsapp:+1", timestamp="")
+        assert WhatsAppAdapter().is_command(msg) is False
+
+
+# =============================================================================
+# Phase 2 (#467) — /login flow
+# =============================================================================
+
+def _msg_with_text(text: str, sender: str = "whatsapp:+14155551234",
+                   agent: str = "my-agent"):
+    from adapters.base import NormalizedMessage
+    return NormalizedMessage(
+        sender_id=sender,
+        text=text,
+        channel_id=sender,
+        thread_id="SM_test",
+        timestamp="",
+        metadata={"agent_name": agent, "binding_id": 1, "message_sid": "SM_test"},
+    )
+
+
+class TestLoginFlow:
+    @pytest.mark.unit
+    def test_login_no_arg_shows_usage(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login")))
+        assert "Usage" in reply
+        assert "/login your@email.com" in reply
+
+    @pytest.mark.unit
+    def test_login_no_binding_returns_unavailable(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = None
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login foo@bar.com")))
+        assert reply == "Login is unavailable for this chat."
+
+    @pytest.mark.unit
+    def test_login_malformed_email(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login not-an-email")))
+        assert "doesn't look like an email" in reply
+
+    @pytest.mark.unit
+    def test_login_email_sends_code_and_stores_pending(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._set_pending_login") as mock_set, \
+             patch("adapters.whatsapp_adapter.EmailService") as mock_email_cls:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.create_login_code.return_value = {"code": "123456"}
+            mock_email_instance = MagicMock()
+            mock_email_instance.send_verification_code = AsyncMock(return_value=True)
+            mock_email_cls.return_value = mock_email_instance
+
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login user@example.com")))
+            assert "Sent a 6-digit code" in reply
+            mock_db.create_login_code.assert_called_once_with("user@example.com", expiry_minutes=10)
+            mock_set.assert_called_once_with(1, "whatsapp:+14155551234", "user@example.com")
+
+    @pytest.mark.unit
+    def test_login_email_send_failure(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._set_pending_login"), \
+             patch("adapters.whatsapp_adapter.EmailService") as mock_email_cls:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.create_login_code.return_value = {"code": "123456"}
+            mock_email_instance = MagicMock()
+            mock_email_instance.send_verification_code = AsyncMock(return_value=False)
+            mock_email_cls.return_value = mock_email_instance
+
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login user@example.com")))
+            assert "couldn't send the email" in reply
+
+    @pytest.mark.unit
+    def test_login_code_without_pending(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._get_pending_login", return_value=None):
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login 123456")))
+        assert "don't have a pending login" in reply
+
+    @pytest.mark.unit
+    def test_login_code_invalid(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._get_pending_login", return_value="user@example.com"):
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.verify_login_code.return_value = None
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login 000000")))
+        assert "Invalid or expired" in reply
+
+
+# =============================================================================
+# Phase 2 (#467) — Post-verification access gate
+# =============================================================================
+
+class TestAccessGate:
+    @pytest.mark.unit
+    def test_verified_shared_user_gets_all_clear(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._get_pending_login", return_value="user@example.com"), \
+             patch("adapters.whatsapp_adapter._clear_pending_login") as mock_clear:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.verify_login_code.return_value = {"email": "user@example.com"}
+            mock_db.get_access_policy.return_value = {"require_email": True, "open_access": False}
+            mock_db.email_has_agent_access.return_value = True
+
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login 123456")))
+            assert "✅ Verified" in reply
+            assert "You can chat normally" in reply
+            mock_db.set_whatsapp_verified_email.assert_called_once_with(
+                1, "whatsapp:+14155551234", "user@example.com"
+            )
+            mock_clear.assert_called_once()
+            # No access request for shared user
+            mock_db.upsert_access_request.assert_not_called()
+
+    @pytest.mark.unit
+    def test_verified_open_access_gets_all_clear(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._get_pending_login", return_value="user@example.com"), \
+             patch("adapters.whatsapp_adapter._clear_pending_login"):
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.verify_login_code.return_value = {"email": "user@example.com"}
+            mock_db.get_access_policy.return_value = {"require_email": False, "open_access": True}
+            mock_db.email_has_agent_access.return_value = False
+
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login 123456")))
+            assert "You can chat normally" in reply
+            mock_db.upsert_access_request.assert_not_called()
+
+    @pytest.mark.unit
+    def test_verified_restricted_creates_access_request(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._get_pending_login", return_value="user@example.com"), \
+             patch("adapters.whatsapp_adapter._clear_pending_login"):
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.verify_login_code.return_value = {"email": "user@example.com"}
+            mock_db.get_access_policy.return_value = {"require_email": True, "open_access": False}
+            mock_db.email_has_agent_access.return_value = False
+
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/login 123456")))
+            assert "pending approval" in reply
+            mock_db.upsert_access_request.assert_called_once_with(
+                "my-agent", "user@example.com", "whatsapp"
+            )
+
+
+# =============================================================================
+# Phase 2 (#467) — /logout and /whoami
+# =============================================================================
+
+class TestLogoutWhoami:
+    @pytest.mark.unit
+    def test_logout_clears_verified_email(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db, \
+             patch("adapters.whatsapp_adapter._clear_pending_login") as mock_clear:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/logout")))
+            assert "Logged out" in reply
+            mock_db.clear_whatsapp_verified_email.assert_called_once_with(
+                1, "whatsapp:+14155551234"
+            )
+            mock_clear.assert_called_once()
+
+    @pytest.mark.unit
+    def test_whoami_verified(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.get_whatsapp_verified_email.return_value = "user@example.com"
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/whoami")))
+        assert "user@example.com" in reply
+        assert "verified" in reply.lower()
+
+    @pytest.mark.unit
+    def test_whoami_unverified(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        with patch("adapters.whatsapp_adapter.db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {"id": 1, "agent_name": "my-agent"}
+            mock_db.get_whatsapp_verified_email.return_value = None
+            reply = _run(WhatsAppAdapter().handle_command(_msg_with_text("/whoami")))
+        assert "not verified" in reply
+        assert "/login" in reply
+
+
+# =============================================================================
+# Phase 2 (#467) — prompt_auth
+# =============================================================================
+
+class TestPromptAuth:
+    @pytest.mark.unit
+    def test_prompt_auth_sends_instructions(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        adapter = WhatsAppAdapter()
+        adapter.send_response = AsyncMock()
+        msg = _msg_with_text("blocked message")
+        _run(adapter.prompt_auth(msg, "my-agent", bot_token="AC_sid:token"))
+        adapter.send_response.assert_awaited_once()
+        call_kwargs = adapter.send_response.await_args
+        response = call_kwargs.args[1]
+        assert "verified email" in response.text
+        assert "/login your@email.com" in response.text
+
+
+# =============================================================================
+# Phase 2 (#467) — Proactive delivery via WhatsApp
+# =============================================================================
+
+class TestProactiveWhatsApp:
+    @pytest.mark.unit
+    def test_deliver_whatsapp_no_binding_raises(self):
+        import importlib
+        pms = importlib.import_module("services.proactive_message_service")
+        with patch.object(pms, "db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = None
+            # Bypass rate + auth checks by calling _deliver_whatsapp directly
+            svc = pms.ProactiveMessageService()
+            with pytest.raises(pms.RecipientNotFoundError):
+                _run(svc._deliver_whatsapp("my-agent", "user@example.com", "hi"))
+
+    @pytest.mark.unit
+    def test_deliver_whatsapp_no_chat_link_raises(self):
+        import importlib
+        pms = importlib.import_module("services.proactive_message_service")
+        with patch.object(pms, "db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {
+                "id": 1, "agent_name": "my-agent", "account_sid": "AC_sid",
+                "from_number": "whatsapp:+14155238886", "messaging_service_sid": None,
+            }
+            mock_db.get_whatsapp_chat_link_by_verified_email.return_value = None
+            svc = pms.ProactiveMessageService()
+            with pytest.raises(pms.RecipientNotFoundError):
+                _run(svc._deliver_whatsapp("my-agent", "user@example.com", "hi"))
+
+    @pytest.mark.unit
+    def test_deliver_whatsapp_happy_path(self):
+        import importlib
+        pms = importlib.import_module("services.proactive_message_service")
+        with patch.object(pms, "db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {
+                "id": 1, "agent_name": "my-agent", "account_sid": "AC_sid",
+                "from_number": "whatsapp:+14155238886", "messaging_service_sid": None,
+            }
+            mock_db.get_whatsapp_chat_link_by_verified_email.return_value = {
+                "id": 10, "binding_id": 1, "wa_user_phone": "whatsapp:+14155551234",
+                "verified_email": "user@example.com",
+            }
+            mock_db.get_whatsapp_auth_token.return_value = "tok_abc"
+
+            from adapters import whatsapp_adapter as wa_mod
+            send_mock = AsyncMock(return_value={"sid": "SM_outbound_xyz"})
+            with patch.object(wa_mod.WhatsAppAdapter, "_send_message", send_mock):
+                svc = pms.ProactiveMessageService()
+                result = _run(svc._deliver_whatsapp("my-agent", "user@example.com", "**ping**"))
+
+            assert result.success is True
+            assert result.channel == "whatsapp"
+            assert result.message_id == "SM_outbound_xyz"
+            # Verify markdown was converted before sending
+            kwargs = send_mock.await_args.kwargs
+            assert kwargs["body"] == "*ping*"
+            assert kwargs["to_number"] == "whatsapp:+14155551234"
+
+    @pytest.mark.unit
+    def test_deliver_whatsapp_chunks_long_messages(self):
+        """I1 fix — proactive messages >1600 chars must be split before send."""
+        import importlib
+        pms = importlib.import_module("services.proactive_message_service")
+        with patch.object(pms, "db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {
+                "id": 1, "agent_name": "my-agent", "account_sid": "AC_sid",
+                "from_number": "whatsapp:+14155238886", "messaging_service_sid": None,
+            }
+            mock_db.get_whatsapp_chat_link_by_verified_email.return_value = {
+                "id": 10, "binding_id": 1, "wa_user_phone": "whatsapp:+14155551234",
+                "verified_email": "user@example.com",
+            }
+            mock_db.get_whatsapp_auth_token.return_value = "tok_abc"
+
+            # Build text well over Twilio's 1600-char WhatsApp body limit
+            long_text = ("Paragraph. " * 300).strip()  # ~3300 chars
+            assert len(long_text) > 1600
+
+            from adapters import whatsapp_adapter as wa_mod
+            send_mock = AsyncMock(side_effect=[
+                {"sid": "SM_chunk_1"},
+                {"sid": "SM_chunk_2"},
+                {"sid": "SM_chunk_3"},
+                {"sid": "SM_chunk_4"},
+            ])
+            with patch.object(wa_mod.WhatsAppAdapter, "_send_message", send_mock):
+                svc = pms.ProactiveMessageService()
+                result = _run(svc._deliver_whatsapp("my-agent", "user@example.com", long_text))
+
+            # Must have invoked the sender at least twice
+            assert send_mock.await_count >= 2
+            # Every chunk must respect Twilio's WhatsApp body limit
+            for call in send_mock.await_args_list:
+                assert len(call.kwargs["body"]) <= wa_mod.TWILIO_WHATSAPP_MAX_LENGTH
+            assert result.success is True
+            assert result.channel == "whatsapp"
+            # message_id should be the *last* chunk's sid
+            assert result.message_id == f"SM_chunk_{send_mock.await_count}"
+
+    @pytest.mark.unit
+    def test_deliver_whatsapp_partial_send_failure(self):
+        """If any chunk fails mid-send, return failure — don't silently report success."""
+        import importlib
+        pms = importlib.import_module("services.proactive_message_service")
+        with patch.object(pms, "db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {
+                "id": 1, "agent_name": "my-agent", "account_sid": "AC_sid",
+                "from_number": "whatsapp:+14155238886", "messaging_service_sid": None,
+            }
+            mock_db.get_whatsapp_chat_link_by_verified_email.return_value = {
+                "id": 10, "binding_id": 1, "wa_user_phone": "whatsapp:+14155551234",
+                "verified_email": "user@example.com",
+            }
+            mock_db.get_whatsapp_auth_token.return_value = "tok_abc"
+            long_text = ("Paragraph. " * 300).strip()
+
+            from adapters import whatsapp_adapter as wa_mod
+            # First chunk sends, second fails (Twilio error → None)
+            send_mock = AsyncMock(side_effect=[{"sid": "SM_chunk_1"}, None])
+            with patch.object(wa_mod.WhatsAppAdapter, "_send_message", send_mock):
+                svc = pms.ProactiveMessageService()
+                result = _run(svc._deliver_whatsapp("my-agent", "user@example.com", long_text))
+
+            assert result.success is False
+            assert "Send failed" in (result.error or "")
+
+
+# =============================================================================
+# Phase 2 (#467) — send_response applies markdown conversion
+# =============================================================================
+
+class TestSendResponseMarkdown:
+    @pytest.mark.unit
+    def test_send_response_converts_markdown(self):
+        from adapters.whatsapp_adapter import WhatsAppAdapter
+        from adapters.base import ChannelResponse
+
+        with patch("adapters.whatsapp_adapter.db") as mock_db:
+            mock_db.get_whatsapp_binding.return_value = {
+                "id": 1, "agent_name": "my-agent", "account_sid": "AC_sid",
+                "from_number": "whatsapp:+14155238886", "messaging_service_sid": None,
+            }
+            adapter = WhatsAppAdapter()
+            send_mock = AsyncMock(return_value={"sid": "SM_ok"})
+            with patch.object(WhatsAppAdapter, "_send_message", send_mock):
+                response = ChannelResponse(
+                    text="**hello** [world](https://x.com)",
+                    metadata={"bot_token": "AC_sid:tok_abc", "agent_name": "my-agent"},
+                )
+                _run(adapter.send_response("whatsapp:+14155551234", response))
+
+            kwargs = send_mock.await_args.kwargs
+            assert kwargs["body"] == "*hello* world (https://x.com)"

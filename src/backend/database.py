@@ -1617,6 +1617,15 @@ class DatabaseManager:
     def get_whatsapp_verified_email(self, binding_id, wa_user_phone):
         return self._whatsapp_channel_ops.get_verified_email(binding_id, wa_user_phone)
 
+    def set_whatsapp_verified_email(self, binding_id, wa_user_phone, email):
+        return self._whatsapp_channel_ops.set_verified_email(binding_id, wa_user_phone, email)
+
+    def clear_whatsapp_verified_email(self, binding_id, wa_user_phone):
+        return self._whatsapp_channel_ops.clear_verified_email(binding_id, wa_user_phone)
+
+    def get_whatsapp_chat_link_by_verified_email(self, binding_id, email):
+        return self._whatsapp_channel_ops.get_chat_link_by_verified_email(binding_id, email)
+
     def increment_whatsapp_message_count(self, chat_link_id):
         return self._whatsapp_channel_ops.increment_message_count(chat_link_id)
 

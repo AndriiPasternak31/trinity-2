@@ -13,7 +13,7 @@ Enables agents to send proactive messages to specific users by verified email ac
 - **Explicit opt-in consent**: Users must enable `allow_proactive` flag on their sharing record
 - **Redis-based rate limiting**: 10 messages per recipient per hour (survives restarts)
 - **Mandatory audit logging**: All proactive sends logged via platform_audit_service
-- **Multi-channel delivery**: Auto-selection tries telegram → slack → web
+- **Multi-channel delivery**: Auto-selection tries telegram → slack → web. WhatsApp is an explicit-only channel (`channel="whatsapp"`) and not part of `auto` — Twilio's 24-hour session window makes it unreliable for inactive recipients.
 - **MCP tool access**: Agents use `send_message` MCP tool for outreach
 
 ## Architecture
@@ -129,6 +129,9 @@ Max: 10 messages per key
 2. **Slack**: Call `users.lookupByEmail` API in each connected workspace
 3. **Web**: (Deferred to v2 — requires refactoring public_chat)
 
+**Explicit-only channels** (not in `auto`):
+- **WhatsApp** (`channel="whatsapp"`, #467): look up `whatsapp_chat_links` by `verified_email`; send via Twilio REST with `_send_message`, chunked to Twilio's 1600-char body limit. Out-of-24h-window messages fail with Twilio error 63016; the failure surfaces in `DeliveryResult.error`.
+
 ### 4. Audit Logging
 
 Every send attempt logged via `platform_audit_service`:
@@ -153,7 +156,9 @@ target_id=recipient_email
 | `src/backend/db/schema.py` | `allow_proactive INTEGER DEFAULT 0` column |
 | `src/backend/db/migrations.py` | Migration for `allow_proactive` column |
 | `src/backend/db/telegram_channels.py` | `get_chat_link_by_verified_email()` reverse lookup |
+| `src/backend/db/whatsapp_channels.py` | `get_chat_link_by_verified_email()` reverse lookup (#467) |
 | `src/backend/services/slack_service.py` | `get_user_by_email()` for DM delivery |
+| `src/backend/adapters/whatsapp_adapter.py` | `_send_message`, `_split_message`, `format_response` used by `_deliver_whatsapp` |
 | `src/backend/services/platform_audit_service.py` | `PROACTIVE_MESSAGE` event type |
 
 ### MCP Server
@@ -176,7 +181,7 @@ Content-Type: application/json
 {
   "recipient_email": "user@example.com",
   "text": "Your report is ready!",
-  "channel": "auto"  // auto | telegram | slack | web
+  "channel": "auto"  // auto | telegram | slack | whatsapp | web
 }
 
 Response 200:
@@ -250,7 +255,7 @@ Response 200:
   parameters: {
     recipient_email: z.string().email(),
     text: z.string().min(1).max(4096),
-    channel: z.enum(["auto", "telegram", "slack", "web"]).default("auto"),
+    channel: z.enum(["auto", "telegram", "slack", "whatsapp", "web"]).default("auto"),
     reply_to_thread: z.boolean().default(false),
     agent_name: z.string().optional()  // Required for user-scoped keys
   }

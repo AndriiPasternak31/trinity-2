@@ -65,6 +65,7 @@ After #311, all three channels share one gate, one allow-list (`agent_sharing`),
 |---------|---------------------------------|------------------|
 | Telegram | `telegram_chat_links.verified_email` (set by `/login`) | HTML message with `/login` instructions |
 | Slack | `slack_service.get_user_email(bot_token, user_id)` (workspace OAuth) | Default text (rarely triggered — OAuth always resolves) |
+| WhatsApp (Twilio) | `whatsapp_chat_links.verified_email` (set by `/login`) | WhatsApp message with `*/login*` instructions (WA-native markdown) |
 | Web public link | Session token's verified email (6-digit email verification, see [public-agent-links.md](public-agent-links.md)) | Public chat page prompts for email verification before chat is enabled |
 
 Web public-chat runs the same gate inline in `src/backend/routers/public.py` (it doesn't go through the `ChannelMessageRouter`), but uses the identical decision tree and the same `db.email_has_agent_access` / `db.upsert_access_request` primitives. The trigger is the agent-level `agent_ownership.require_email` flag (via `db.get_access_policy`), not a per-link flag.
@@ -317,6 +318,33 @@ async def resolve_verified_email(self, message):
 ```
 
 No `prompt_auth` override is needed — the default text reply is the fallback for the rare case Slack doesn't return an email (e.g. workspace where bot lacks `users:read.email` scope).
+
+### WhatsApp (`src/backend/adapters/whatsapp_adapter.py`, #467 Phase 2)
+
+WhatsApp mirrors Telegram's `/login` state machine 1:1, with three adjustments:
+
+1. **Pending state lives in Redis**, not a per-process dict. Key:
+   `whatsapp_pending_login:{binding_id}:{wa_user_phone}`, TTL 600s. Survives a
+   single backend process restart, though the Redis service itself would need
+   to stay up. If Redis is unavailable, login silently fails and the user
+   re-issues `/login email` (same recovery as Telegram).
+2. **Command dispatch lives in the transport**, not the router. The Twilio
+   webhook (`transports/twilio_webhook._process_update`) detects
+   `Body.startswith("/")`, parses, calls `adapter.handle_command`, and sends
+   the reply directly — short-circuiting the normal router pipeline. This
+   matches the Telegram pattern so verification-state-changing commands don't
+   pass through the access gate that's gating on them.
+3. **Messages use WhatsApp-native markdown**. `*bold*` not `<b>`. The adapter's
+   `prompt_auth` + login responses emit WhatsApp syntax directly; agent-
+   generated markdown is converted via `_markdown_to_whatsapp` in
+   `send_response`.
+
+Post-verification access gate is inlined into `_handle_login_command` so users
+learn their access status (shared / open_access / pending) in the same message
+they verify on — matches Telegram's UX decision.
+
+`access_requests.channel` takes literal `'whatsapp'` (no CHECK constraint;
+purely a string discriminator for the admin review UI).
 
 ---
 

@@ -147,8 +147,36 @@ class TwilioWebhookTransport(ChannelTransport):
         return {"ok": True}
 
     async def _process_update(self, raw_event: dict, binding: dict) -> None:
-        """Route parsed event through adapter → router pipeline."""
+        """Route parsed event through adapter → router pipeline.
+
+        Commands (`/login`, `/logout`, `/whoami`) are handled inline by the
+        adapter before the standard router pipeline runs — this mirrors the
+        Telegram webhook pattern so verification state changes don't pass
+        through the access gate that's gating on them.
+        """
         try:
+            body = (raw_event.get("Body") or "").strip()
+            if body.startswith("/"):
+                normalized = self.adapter.parse_message(raw_event)
+                if normalized and self.adapter.is_command(normalized):
+                    command_response = await self.adapter.handle_command(normalized)
+                    if command_response:
+                        from adapters.base import ChannelResponse
+                        bot_token = self.adapter.get_bot_token(normalized)
+                        if bot_token:
+                            await self.adapter.send_response(
+                                normalized.channel_id,
+                                ChannelResponse(
+                                    text=command_response,
+                                    metadata={
+                                        "bot_token": bot_token,
+                                        "agent_name": binding["agent_name"],
+                                    },
+                                ),
+                                thread_id=normalized.thread_id,
+                            )
+                        return
+
             await self.on_event(raw_event)
         except Exception as e:
             logger.error("[WHATSAPP] Update processing error: %s", e, exc_info=True)

@@ -142,6 +142,8 @@ The test suite covers:
 - **Team Share Gate Unit** (test_team_share_gate_unit.py) - Isolated `SharingMixin` tests: team-shared email passes gate, mixed-case normalization, stale pending `access_requests` cleanup on `share_agent`, cleanup scope (#446) [UNIT]
 - **Channel Access Control** (test_channel_access_control.py) - Per-agent access policy (require_email, open_access, group_auth_mode), access requests inbox (#311) [SMOKE + Agent]
 - **Telegram Groups** (test_telegram_groups.py) - Trigger mode validation (mention/all/observe), proactive message endpoint validation (#349) [SMOKE + Agent]
+- **WhatsApp Adapter Unit** (test_whatsapp_adapter.py) - Phone masking, SSRF allowlist, Twilio webhook transport, HMAC validation, markdown→WhatsApp conversion, `/login`/`/logout`/`/whoami` command flow, access gate, proactive delivery with chunking (WHATSAPP-001 #299 + Phase 2 #467) [UNIT]
+- **WhatsApp Integration** (test_whatsapp_integration.py) - Live-backend webhook simulator: signed Twilio POSTs → adapter → DB state assertions for full `/login` flow, restrictive/open-access gate outcomes, `/logout`, signature rejection (WHATSAPP-001 Phase 2 #467) [SLOW + Agent]
 - **Agent Permissions** (test_agent_permissions.py) - Agent-to-agent permission CRUD, defaults, cascade delete, bulk edges endpoint (#359) (Req 9.10)
 - **Agent Git** (test_agent_git.py) - Git sync operations
 - **Agent GitHub PAT** (test_github_pat.py) - Per-agent GitHub PAT: status, set, clear, encryption roundtrip (#347) [SMOKE + Agent]
@@ -229,11 +231,11 @@ The test suite covers:
 
 ## Test Suite Statistics
 
-**Total Tests**: ~2,219 tests across 122 test files
+**Total Tests**: ~2,257 tests across 124 test files
 **Smoke Tests**: ~578 tests (fast, no agent creation)
-**Unit Tests**: ~98 tests (no backend needed, rate limit detection, watchdog logic, context formula, OTel trace logging, file upload, voice transcription, inter-agent timeout, scheduler sync loop, team-share gate)
-**Core Tests (not slow)**: ~2,084 tests
-**Slow Tests**: ~89 tests (chat execution, fleet ops, system agent ops, execution termination)
+**Unit Tests**: ~165 tests (no backend needed, rate limit detection, watchdog logic, context formula, OTel trace logging, file upload, voice transcription, inter-agent timeout, scheduler sync loop, team-share gate, WhatsApp adapter (67))
+**Core Tests (not slow)**: ~2,112 tests
+**Slow Tests**: ~99 tests (chat execution, fleet ops, system agent ops, execution termination, WhatsApp live-backend integration)
 **WebSocket Tests**: ~10 tests (web terminal, execution streaming)
 
 ## Expected Skipped Tests (~38 tests)
@@ -260,6 +262,19 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 - **Healthy**: >90% pass rate, 0 critical failures
 - **Warning**: 75-90% pass rate, <5 failures
 - **Critical**: <75% pass rate or >5 failures
+
+## Recent Test Additions (2026-04-23)
+
+| Test File | Description | Tests Added |
+|-----------|-------------|-------------|
+| `test_whatsapp_adapter.py` | WhatsApp Phase 2 (#467) adapter tests — markdown→WhatsApp conversion (7), command detection (2), `/login` flow (7), post-verification access gate (3), `/logout`+`/whoami` (3), `prompt_auth` (1), proactive `_deliver_whatsapp` including chunking + partial-failure (4), send_response markdown integration (1) | 28 tests added (file total 67) |
+| `test_whatsapp_integration.py` | WhatsApp Phase 2 (#467) **live-backend integration** — simulates real Twilio webhook POSTs with HMAC-SHA1 signing; asserts on DB state transitions in `whatsapp_chat_links`, `email_login_codes`, `access_requests`. Covers `/login` round-trip, pending-login Redis race, invalid code rejection, restrictive vs open-access gate outcomes, `/logout` clears verified_email, `/whoami`, unknown-command fall-through, bad-signature 403, unknown-secret 200 | 10 tests |
+
+**WhatsApp Phase 2 (#467)** unit + integration:
+
+The unit tests (`test_whatsapp_adapter.py`) are pure, DB-mocked, fast (~0.3s). They cover the adapter logic and markdown converter in isolation and run against the backend stubbed via `sys.modules`.
+
+The integration tests (`test_whatsapp_integration.py`) are live-backend SLOW tests: they require `trinity-backend` running at `http://localhost:8000` with the current code deployed. Each test POSTs a real Twilio-shaped form-encoded payload with a valid HMAC-SHA1 signature (via `twilio.request_validator.RequestValidator`) to the public webhook endpoint `/api/whatsapp/webhook/{secret}`, then polls DB state via `docker exec trinity-backend python …` (since `/data/trinity.db` is on a named Docker volume, not a bind mount). A known race — the adapter sets the pending-login Redis key **after** the SMTP send attempt — is handled by waiting for the pending key in Redis (via `docker exec trinity-redis redis-cli GET …`) before submitting the code, not just for the code in the DB.
 
 ## Recent Test Additions (2026-04-22)
 

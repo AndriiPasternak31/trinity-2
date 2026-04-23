@@ -215,13 +215,13 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `transports/telegram_webhook.py` - Telegram Bot API webhook (inbound POST + setWebhook registration)
 
 *WhatsApp (via Twilio):*
-- `whatsapp_adapter.py` - WhatsApp adapter: DMs via Twilio (WHATSAPP-001); media with SSRF-gated downloads
+- `whatsapp_adapter.py` - WhatsApp adapter: DMs via Twilio (WHATSAPP-001); media with SSRF-gated downloads; `/login`/`/logout`/`/whoami` command handlers + markdown→WhatsApp syntax conversion (#467)
 - `transports/twilio_webhook.py` - Twilio webhook transport: HMAC-SHA1 signature (via `twilio.request_validator`), MessageSid dedup, form-encoded body
 
 *Database:*
 - `db/slack_channels.py` - Workspace connections (encrypted bot tokens), channel-agent bindings, active threads
 - `db/telegram_channels.py` - Telegram bindings (encrypted bot tokens), group configs, chat links
-- `db/whatsapp_channels.py` - WhatsApp (Twilio) bindings (encrypted AuthToken), chat links
+- `db/whatsapp_channels.py` - WhatsApp (Twilio) bindings (encrypted AuthToken), chat links, verified-email read/write/by-email lookup (#467 Phase 2)
 
 *Content & Media:*
 - `image_generation_service.py` - Platform image generation via Gemini (prompt refinement + image gen) (IMG-001)
@@ -770,7 +770,7 @@ CREATE TABLE access_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     agent_name TEXT NOT NULL,
     email TEXT NOT NULL,                  -- verified email of requester
-    channel TEXT NOT NULL,                -- 'web' | 'telegram' | 'slack'
+    channel TEXT NOT NULL,                -- 'web' | 'telegram' | 'slack' | 'whatsapp'
     status TEXT NOT NULL DEFAULT 'pending', -- pending, approved, rejected
     decided_by TEXT,                      -- user_id of approver
     decided_at TEXT,
