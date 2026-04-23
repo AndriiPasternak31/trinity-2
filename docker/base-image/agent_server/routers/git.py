@@ -477,6 +477,7 @@ async def get_git_status():
         # ancestor between HEAD and origin/<pull_branch> so the frontend can
         # distinguish "simple behind" from "parallel history" (where both
         # Pull First and Force Push are wrong answers).
+        pull_branch = _get_pull_branch(current_branch, home_dir)
         common_ancestor_sha = ""
         common_ancestor_age_days = None
         merge_base_result = subprocess.run(
