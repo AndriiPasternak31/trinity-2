@@ -55,7 +55,7 @@ Automate the complete Trinity development workflow:
 ## Prerequisites
 
 - Git working tree is clean (`git status` shows no uncommitted changes)
-- On `main` branch (or specify base branch)
+- On `dev` branch (default base for feature work)
 - Docker running (if implementation touches containers)
 
 ## Process
@@ -220,9 +220,9 @@ If missing critical detail:
 gh issue edit [NUMBER] --repo abilityai/trinity \
   --add-label "status-in-progress"
 
-# Create feature branch from main
-git checkout main
-git pull origin main
+# Create feature branch from dev
+git checkout dev
+git pull origin dev
 git checkout -b feature/[NUMBER]-[slug]
 ```
 
@@ -416,7 +416,7 @@ Next steps:
 ## Completion Checklist
 
 - [ ] Issue selected and validated
-- [ ] Feature branch created from latest main
+- [ ] Feature branch created from latest `dev`
 - [ ] Plan reviewed and approved (via /autoplan)
 - [ ] Implementation complete (via /implement)
 - [ ] Code review passed (via /review)
@@ -436,7 +436,7 @@ Next steps:
 | Implementation fails | Show error, ask user to intervene or skip |
 | Tests fail | Fix failures before proceeding; if unfixable, note in PR |
 | Branch already exists | Ask user: reuse, delete and recreate, or pick different issue |
-| Merge conflicts | Rebase on main, resolve conflicts, continue |
+| Merge conflicts | Rebase on `dev`, resolve conflicts, continue |
 | Push fails | Check remote, auth; retry or ask user |
 
 ## Self-Improvement

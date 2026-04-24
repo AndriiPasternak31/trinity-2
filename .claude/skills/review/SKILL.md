@@ -28,18 +28,20 @@ Analyze the current branch's diff against the base branch for issues that automa
 
 ## Arguments
 
-- No argument: review current branch against `main`
-- Branch name: review that branch against `main`
+- No argument: review current branch against `dev` (or the PR's actual base if a PR exists)
+- Branch name: review that branch against `dev`
 
 ## Process
 
 ### Step 0: Detect Base Branch
 
 ```bash
-git fetch origin main --quiet 2>/dev/null
-BASE=$(gh pr view --json baseRefName -q .baseRefName 2>/dev/null || echo "main")
+git fetch origin dev --quiet 2>/dev/null
+BASE=$(gh pr view --json baseRefName -q .baseRefName 2>/dev/null || echo "dev")
 echo "BASE: $BASE"
 ```
+
+Note: release-cut PRs use `main` as base — the `gh pr view` lookup picks that up automatically. The `dev` fallback only applies when no PR exists yet.
 
 ### Step 1: Check Branch
 
@@ -48,7 +50,7 @@ CURRENT=$(git branch --show-current)
 echo "CURRENT: $CURRENT"
 ```
 
-If on `main` or no diff against base: "Nothing to review — you're on the base branch or have no changes against it." Stop.
+If on the base branch or no diff against it: "Nothing to review — you're on the base branch or have no changes against it." Stop.
 
 ```bash
 git diff origin/$BASE --stat

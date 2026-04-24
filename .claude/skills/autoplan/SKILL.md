@@ -66,7 +66,7 @@ Every auto-decision is classified:
 ## Prerequisites
 
 - A plan exists (plan file, issue, or description in conversation)
-- On a feature branch (not `main`)
+- On a feature branch (not `main` or `dev`)
 - `docs/memory/requirements.md` and `docs/memory/architecture.md` readable
 
 ## Process
@@ -76,7 +76,7 @@ Every auto-decision is classified:
 **Step 1: Read context**
 - Read CLAUDE.md, `docs/memory/requirements.md`, `docs/memory/architecture.md`
 - `git log --oneline -20`
-- `git diff main --stat` (or appropriate base branch)
+- `git diff dev --stat` (or the PR's actual base branch — `main` for release-cut PRs)
 - Identify the plan source from `$ARGUMENTS` or conversation context
 
 **Step 2: Load plan**

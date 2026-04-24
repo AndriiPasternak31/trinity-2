@@ -37,8 +37,9 @@ See `docs/DEVELOPMENT_WORKFLOW.md` for the full SDLC (Todo → In Progress → R
 
 1. **Fork and clone** the repository
 2. **Find or create an issue** — every PR must link to an issue
-3. **Create a feature branch** from `main`:
+3. **Create a feature branch** from `dev`:
    ```bash
+   git checkout dev && git pull origin dev
    git checkout -b feature/<issue-number>-your-feature-name
    ```
 4. **Make your changes** following our coding standards
@@ -47,7 +48,7 @@ See `docs/DEVELOPMENT_WORKFLOW.md` for the full SDLC (Todo → In Progress → R
    ```bash
    git commit -m "feat: Add support for custom metrics"
    ```
-7. **Push and create a PR** against `main` — include `Fixes #N` in the description
+7. **Push and create a PR** against `dev` — include `Fixes #N` in the description. `main` is reserved for release cuts; see `docs/DEVELOPMENT_WORKFLOW.md` §4b.
 
 ### Commit Message Format
 

@@ -37,7 +37,7 @@ Trinity follows a 4-stage lifecycle that maps 1:1 to the **Trinity Roadmap** Git
 │          │                                                          │
 ├──────────┼──────────────────────────────────────────────────────────┤
 │          │                                                          │
-│ DONE     │  PR merged to main, issue closed                         │
+│ DONE     │  PR merged to dev, issue closed                          │
 │          │  Docs up to date                                         │
 │          │  GitHub Project: Done                                    │
 │          │                                                          │
@@ -95,7 +95,8 @@ Run `/groom` periodically to keep the backlog healthy. It audits board coverage,
 
 ### Key Rules
 
-- **All work on feature branches** — direct pushes to `main` are blocked (branch protection)
+- **All work on feature branches** — direct pushes to `main` and `dev` are blocked (branch protection)
+- **Default base branch is `dev`** — PRs target `dev`; `main` only receives merges at release cuts (see §4b)
 - **Every PR links to an issue** — use `Fixes #N` in the PR description
 - **Claim issues via `/claim`** — comment `/claim` on an issue to auto-assign yourself (or assign manually). Use `/unclaim` to release.
 - **No merge without passing `/validate-pr`**
@@ -122,16 +123,16 @@ When picking up work:
 
 1. **Claim the issue** — comment `/claim` on the issue (GitHub Action auto-assigns you and adds `status-in-progress` label), or assign yourself manually
 2. Move to **In Progress** on the project board
-3. Create a feature branch from `main`
+3. Create a feature branch from `dev`
 
 #### Branch Convention
 
-All work happens on feature branches. Direct pushes to `main` are blocked by branch protection.
+All work happens on feature branches cut from `dev`. Direct pushes to `main` and `dev` are blocked by branch protection.
 
 **Naming**: `feature/<issue-number>-<short-slug>`
 - Example: `feature/68-live-execution-output`
 
-**Merge strategy**: Squash merge via PR with `Fixes #N`.
+**Merge strategy**: Squash merge via PR into `dev` with `Fixes #N`. `main` receives merges only at release cuts (see §4b).
 
 Then follow the development pipeline:
 
@@ -305,15 +306,40 @@ Runs a scoped security audit on the branch changes only. Checks secrets, depende
 
 ### 4. Done
 
-When the PR is approved and merged:
+When the PR is approved and merged to `dev`:
 
 1. Issue is **auto-closed** via `Fixes #N`
 2. Move to **Done** on the project board
 3. Remove status labels
 
-### 5. Release (CLI only)
+### 4b. Release cut (`dev` → `main`)
 
-If the merged changes affect `src/cli/`, publish a new CLI version:
+`main` represents the current release. Day-to-day development flows into `dev`; `main` only receives merges at release time.
+
+Run `/release` to automate this flow (pre-release checklist → version bump → release notes → PR → tag). The manual steps it orchestrates:
+
+1. Verify `dev` is green — tests pass, no open P0/P1 regressions
+2. Open a PR from `dev` → `main`
+3. Review the cumulative diff since the last release
+4. Squash-merge — the squash commit message is the release notes
+5. Tag `main` (e.g., `cli-v0.4.0` for a CLI release — triggers `publish-cli.yml`)
+
+Automations that fire on push to `main` (keep `main` releasable):
+- `publish-cli.yml` — publishes CLI to PyPI + updates Homebrew formula on tag
+- `sync-docs-to-vertex.yml` — syncs `docs/` to the public Vertex AI search index
+
+**Branch protection (setup required — see repo Settings → Branches):**
+
+| Branch | Require PR | Require status checks | Restrict pushes |
+|--------|------------|----------------------|-----------------|
+| `main` | ✅ | ✅ | Maintainers only |
+| `dev`  | ✅ | ✅ | All contributors via PR |
+
+Both branches must block direct pushes. Feature branches push freely.
+
+### 5. Release mechanics (CLI only)
+
+The release cut in §4b updates `main`. If the release includes CLI changes (`src/cli/`), publish a new CLI version by tagging `main`:
 
 ```bash
 git tag cli-v0.3.0
@@ -398,6 +424,7 @@ Agents are invoked automatically by Claude Code when appropriate. The `/test-run
 | `/validate-config` | Check env vars across docker-compose, .env.example, and code | Weekly |
 | `/groom` | Backlog grooming — audit board, rank issues, review priorities | Todo |
 | `/sprint [issue-number]` | Full dev cycle (orchestrates all above) | All |
+| `/release [version-tag]` | Cut a release — pre-release checklist, version bump, notes, `dev` → `main` merge, tag push | Release (§4b) |
 
 ---
 

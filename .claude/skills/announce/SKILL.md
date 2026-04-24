@@ -4,11 +4,12 @@ description: Send an announcement message to Discord, Slack, and/or Telegram cha
 allowed-tools: [Bash, Read]
 user-invocable: true
 metadata:
-  version: "1.4"
+  version: "1.5"
   created: 2026-03-28
-  updated: 2026-03-28
+  updated: 2026-04-24
   author: trinity
   changelog:
+    - "1.5: Require sequential (not parallel) sends and no-blind-retry rule to prevent duplicate messages"
     - "1.4: Add Telegram support via Bot API + sendMessage with topic threading"
     - "1.3: Save each announcement to docs/user-docs/dev-announcements/ with timestamped filename"
     - "1.2: Add message style rule — dense, no-filler announcements"
@@ -92,6 +93,24 @@ Resolve the webhook URL from the channel name:
 - If not found, stop and show available channels
 
 ### Step 3: Send Message
+
+#### Sending rules (critical — read before each run)
+
+1. **Sequential only — never parallel.** When sending to multiple channels in a single invocation, run one curl at a time. Do NOT fire parallel tool calls across platforms. A parallel cancellation can abort sibling tools *after* their curl has already fired, leaving you blind about whether the message landed. Order: send Discord → wait for result → send Slack → wait → send Telegram → wait.
+
+2. **Never blindly retry on ambiguous failure.** If a send's outcome is ambiguous — tool cancellation, network timeout, empty response body, missing `ok` field — STOP. These APIs have no idempotency key, so a retry will duplicate the message. Before resending: check the target channel directly (API read-back via `conversations.history` for Slack, `/getUpdates` or channel inspection for Telegram, webhook channels via the Discord UI), confirm the message is NOT already there, then retry. If in doubt, ask the user.
+
+3. **Scripts must exit 0 on the success path.** Avoid trailing shell idioms like `[ "$HTTP" != "204" ] && cat /tmp/out` — on success the bracket test returns exit 1 and can cause the parallel-tool harness to cancel sibling calls (which may have already fired). Use an explicit if-block instead:
+
+   ```bash
+   if [ "$HTTP" = "204" ]; then
+     echo "DISCORD: ok"
+   else
+     echo "DISCORD: failed HTTP $HTTP"
+     cat /tmp/out
+     exit 1
+   fi
+   ```
 
 #### Message Style
 
@@ -181,11 +200,15 @@ RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${ANNOUNCE_TELEGRAM_TOKE
 
 ### Step 4: Confirm
 
-Report the result:
+After each send completes, capture its outcome. For multi-channel announcements, accumulate per-channel results and present a single summary at the end (after all sequential sends have finished):
 
-```
-Sent to discord:updates (HTTP 204)
-```
+| Channel | Status |
+|---|---|
+| discord:updates | HTTP 204 ✓ |
+| slack:updates | ok=True, ts=... ✓ |
+| telegram:updates | ok=True, message_id=... ✓ |
+
+If any row is a ✗, do not silently retry — surface the error, and before resending to that channel, follow rule 2 of "Sending rules": verify the message is not already there (it may have landed before the reported failure).
 
 ### Step 5: Save Announcement Record
 
