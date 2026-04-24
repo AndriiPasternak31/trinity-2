@@ -857,6 +857,38 @@ Trinity is autonomous agent orchestration and infrastructure — sovereign infra
 - **Frontend**: TelegramChannelPanel extended with group list, trigger mode radio, welcome message config
 - **Flow**: `docs/memory/feature-flows/telegram-integration.md`
 
+### 15.1g Webhook Triggers for Agent Schedules (WEBHOOK-001)
+- **Status**: ✅ Implemented (2026-04-24)
+- **Requirement ID**: WEBHOOK-001
+- **Priority**: P1
+- **Issue**: #291
+- **Description**: Each agent schedule can optionally expose a public webhook URL so that external systems (CI/CD pipelines, CRMs, monitoring tools) can trigger schedule executions via a simple HTTP POST — no Trinity account or JWT required. Authentication is provided by a 256-bit opaque token embedded in the URL.
+- **Key Features**:
+  - Public trigger endpoint `POST /api/webhooks/{token}` — no JWT; returns 202 Accepted immediately
+  - JWT-auth management endpoints to generate, inspect, and revoke webhook tokens per schedule
+  - Token rotation: calling `POST .../webhook` again generates a new token and instantly invalidates the old URL
+  - Rate limiting: 10 calls / 60 s per token (Redis-backed, fail-open on Redis unavailability)
+  - Optional `context` field (max 4000 chars) appended to schedule message with framing wrapper to reduce prompt injection surface
+  - All trigger events audit-logged with `triggered_by="webhook"` in execution records
+  - O(1) token lookup via partial unique index on `agent_schedules.webhook_token`
+- **Database Changes**:
+  - `agent_schedules.webhook_token TEXT` — nullable 43-char urlsafe token
+  - `agent_schedules.webhook_enabled INTEGER DEFAULT 0`
+  - `CREATE UNIQUE INDEX idx_schedules_webhook_token ON agent_schedules(webhook_token) WHERE webhook_token IS NOT NULL`
+- **API Endpoints**:
+  - `POST /api/webhooks/{token}` — public trigger (no auth)
+  - `POST /api/agents/{name}/schedules/{id}/webhook` — generate/rotate token
+  - `GET /api/agents/{name}/schedules/{id}/webhook` — get status and URL
+  - `DELETE /api/agents/{name}/schedules/{id}/webhook` — revoke token
+- **Security**:
+  - Token: `secrets.token_urlsafe(32)` (256-bit entropy); stored plaintext (it is the credential, not a password)
+  - Token format validated by regex before DB lookup to prevent injection
+  - Rate limit keyed per token (not per IP) — matches the threat model of a shared trigger URL
+  - `Retry-After` header included in 429 responses
+  - Context field length-capped and framed as data, not instructions
+- **No UI in Phase 1**: webhook URL returned in management endpoint response; no SchedulesPanel widget yet
+- **Flow**: `docs/memory/feature-flows/webhook-triggers.md`
+
 ### 15.1f WhatsApp via Twilio (WHATSAPP-001)
 - **Status**: 🚧 Phase 1 MVP (2026-04-22)
 - **Requirement ID**: WHATSAPP-001

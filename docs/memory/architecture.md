@@ -143,6 +143,7 @@ Each agent runs as an isolated Docker container with standardized interfaces for
 - `slack.py` - Slack integration (OAuth, events, multi-agent channel routing, per-agent channel binding) (SLACK-001/002)
 - `telegram.py` - Telegram bot integration (webhook receiver, bot binding, group config) (TELEGRAM-001/TGRAM-GROUP)
 - `whatsapp.py` - WhatsApp via Twilio (webhook receiver, binding CRUD + test) (WHATSAPP-001)
+- `webhooks.py` - Public webhook trigger endpoint + JWT-auth webhook management (WEBHOOK-001, #291)
 - `messages.py` - Proactive agent-to-user messaging (#321)
 
 *Subscriptions & Skills:*
@@ -566,7 +567,7 @@ picks up on its next poll. (#389 S1a)
 | GET | `/api/agents/{name}/access-requests` | List pending access requests |
 | POST | `/api/agents/{name}/access-requests/{id}/decide` | Approve (auto-shares) or reject |
 
-### Schedules (9 endpoints)
+### Schedules (12 endpoints)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/agents/{name}/schedules` | List schedules |
@@ -578,6 +579,18 @@ picks up on its next poll. (#389 S1a)
 | POST | `/api/agents/{name}/schedules/{id}/disable` | Disable schedule |
 | POST | `/api/agents/{name}/schedules/{id}/trigger` | Manual trigger |
 | GET | `/api/agents/{name}/schedules/{id}/executions` | Execution history |
+| POST | `/api/agents/{name}/schedules/{id}/webhook` | Generate/rotate webhook token (WEBHOOK-001) |
+| GET | `/api/agents/{name}/schedules/{id}/webhook` | Get webhook status and URL (WEBHOOK-001) |
+| DELETE | `/api/agents/{name}/schedules/{id}/webhook` | Revoke webhook token (WEBHOOK-001) |
+
+### Webhook Triggers (WEBHOOK-001)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/webhooks/{webhook_token}` | Token (URL-embedded) | Trigger schedule execution — no JWT required; rate-limited 10 calls/60s per token; returns 202 Accepted |
+
+**Token lifecycle:** `POST .../webhook` generates a `secrets.token_urlsafe(32)` token stored in `agent_schedules.webhook_token` (partial unique index for O(1) lookup). Calling `POST .../webhook` again rotates the token, instantly invalidating the old URL. `DELETE .../webhook` nulls the token; subsequent trigger calls return 404.
+
+**Context injection:** Optional `{"context": "..."}` body (max 4000 chars) is appended to the schedule message wrapped in a framing header to reduce prompt injection surface. All triggers are audit-logged with `triggered_by="webhook"`.
 
 ### Auth, Users & MCP (15 endpoints)
 | Method | Path | Description |
@@ -818,6 +831,8 @@ CREATE TABLE agent_schedules (
     last_run_at TEXT,
     next_run_at TEXT,
     model TEXT,                                  -- MODEL-001: Model override (NULL = agent default)
+    webhook_token TEXT,                          -- WEBHOOK-001: opaque 43-char urlsafe token, nullable
+    webhook_enabled INTEGER DEFAULT 0,           -- WEBHOOK-001: 0 = disabled, 1 = active
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 ```
