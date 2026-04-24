@@ -11,6 +11,7 @@
 
 | Date | ID | Feature | Flow |
 |------|-----|---------|------|
+| 2026-04-24 | WEBHOOK-001 (#291) | Webhook triggers — token-authenticated public URL fires schedule executions | [webhook-triggers.md](feature-flows/webhook-triggers.md) |
 | 2026-04-23 | #476 | SQLite lexicographic cutoff bug fix — new `iso_cutoff(hours)` helper replaces `datetime('now', ...)` in 15 sites across rate-limit / dashboard / schedules; `max_retries` default flipped `1 → 0`; `cleanup_old_rate_limit_events` wired into `CleanupService` (phase 6, hourly) | [subscription-auto-switch.md](feature-flows/subscription-auto-switch.md), [cleanup-service.md](feature-flows/cleanup-service.md), [scheduler-service.md](feature-flows/scheduler-service.md) |
 | 2026-04-22 | #458 | `.gitignore` init fix — `initialize_git_in_container` now appends missing patterns instead of truncate-and-write; adds `.env`, `.env.*`, `.mcp.json` to the default list and runs for both `/home/developer` and legacy `/home/developer/workspace` (stops credential leak on first GitHub sync) | [github-repo-initialization.md](feature-flows/github-repo-initialization.md) |
 | 2026-04-21 | RELIABILITY-003 (#306) | WebSocket event bus on Redis Streams — replaces in-process broadcast with XADD/XREAD, adds reconnect replay via `?last-event-id=`, 3-failure eviction, MAXLEN trim (tunable) | [websocket-event-bus.md](feature-flows/websocket-event-bus.md) |
@@ -134,6 +135,7 @@
 | Agent Terminal | [agent-terminal.md](feature-flows/agent-terminal.md) | Browser-based xterm.js terminal with Claude/Gemini/Bash modes |
 | Credential Injection | [credential-injection.md](feature-flows/credential-injection.md) | CRED-002: Direct file injection, encrypted git storage |
 | Agent Scheduling | [scheduling.md](feature-flows/scheduling.md) | Cron-based automation with APScheduler |
+| Webhook Triggers | [webhook-triggers.md](feature-flows/webhook-triggers.md) | Token-authenticated public URL to fire schedule executions (WEBHOOK-001) |
 | Scheduler Service | [scheduler-service.md](feature-flows/scheduler-service.md) | Standalone scheduler with Redis distributed locks |
 | Execution Queue | [execution-queue.md](feature-flows/execution-queue.md) | Redis-based parallel execution prevention |
 | Execution Termination | [execution-termination.md](feature-flows/execution-termination.md) | Stop running executions via process registry |

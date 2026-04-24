@@ -455,6 +455,103 @@ async def trigger_schedule(
         )
 
 
+# Webhook Management Endpoints (WEBHOOK-001, #291)
+
+class WebhookStatusResponse(BaseModel):
+    """Webhook configuration for a schedule."""
+    schedule_id: str
+    has_token: bool
+    webhook_enabled: bool
+    webhook_url: Optional[str] = None
+
+
+def _build_webhook_url(request_base_url: str, token: str) -> str:
+    """Construct the full webhook URL from base URL and token."""
+    base = str(request_base_url).rstrip("/")
+    return f"{base}/api/webhooks/{token}"
+
+
+@router.post("/{name}/schedules/{schedule_id}/webhook", response_model=WebhookStatusResponse)
+async def generate_webhook(
+    name: str,
+    schedule_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate (or regenerate) a webhook URL for a schedule.
+
+    Creates an opaque 32-byte random token stored in the DB.
+    Calling again replaces the old token, immediately invalidating the old URL.
+    """
+    schedule = db.get_schedule(schedule_id)
+    if not schedule or schedule.agent_name != name:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+
+    if not db.can_user_access_agent(current_user.username, name):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    token = db.generate_webhook_token(schedule_id)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate webhook token"
+        )
+
+    webhook_url = _build_webhook_url(request.base_url, token)
+    logger.info(f"Webhook token generated for schedule {schedule_id} by {current_user.username}")
+
+    return WebhookStatusResponse(
+        schedule_id=schedule_id,
+        has_token=True,
+        webhook_enabled=True,
+        webhook_url=webhook_url,
+    )
+
+
+@router.get("/{name}/schedules/{schedule_id}/webhook", response_model=WebhookStatusResponse)
+async def get_webhook_status(
+    name: AuthorizedAgent,
+    schedule_id: str,
+    request: Request,
+):
+    """Get webhook configuration for a schedule."""
+    schedule = db.get_schedule(schedule_id)
+    if not schedule or schedule.agent_name != name:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+
+    status_data = db.get_webhook_status(schedule_id)
+    if status_data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+
+    token = status_data["webhook_token"]
+    webhook_url = _build_webhook_url(request.base_url, token) if token else None
+
+    return WebhookStatusResponse(
+        schedule_id=schedule_id,
+        has_token=status_data["has_token"],
+        webhook_enabled=status_data["webhook_enabled"],
+        webhook_url=webhook_url,
+    )
+
+
+@router.delete("/{name}/schedules/{schedule_id}/webhook", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_webhook(
+    name: str,
+    schedule_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Revoke the webhook token for a schedule, immediately invalidating the URL."""
+    schedule = db.get_schedule(schedule_id)
+    if not schedule or schedule.agent_name != name:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found")
+
+    if not db.can_user_access_agent(current_user.username, name):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    db.revoke_webhook_token(schedule_id)
+    logger.info(f"Webhook token revoked for schedule {schedule_id} by {current_user.username}")
+
+
 # Execution History Endpoints
 
 @router.get("/{name}/schedules/{schedule_id}/executions", response_model=List[ExecutionResponse])

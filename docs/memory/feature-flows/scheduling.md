@@ -375,6 +375,9 @@ executions?limit=100              AuthorizedAgent dependency         SELECT (spe
 | GET | `/api/agents/{name}/executions/{id}` | Get specific execution (full) | schedules.py:462 | AuthorizedAgent |
 | GET | `/api/agents/{name}/executions/{id}/log` | Get execution log | schedules.py:309 | AuthorizedAgent |
 | GET | `/api/agents/scheduler/status` | Scheduler status (admin) | schedules.py:354 | Admin only |
+| POST | `/api/agents/{name}/schedules/{id}/webhook` | Generate/rotate webhook token | schedules.py:474 | CurrentUser |
+| GET | `/api/agents/{name}/schedules/{id}/webhook` | Get webhook status and URL | schedules.py:511 | AuthorizedAgent |
+| DELETE | `/api/agents/{name}/schedules/{id}/webhook` | Revoke webhook token | schedules.py:537 | CurrentUser |
 
 ### Access Control Pattern
 
@@ -412,6 +415,80 @@ async def create_schedule(
 
 ---
 
+## Webhook Triggers (WEBHOOK-001, #291)
+
+Each schedule can optionally expose a public webhook URL. Calling the URL triggers the schedule exactly once — same execution path as a manual trigger but with `triggered_by="webhook"` in the execution record. No JWT or API key is required; the opaque token embedded in the URL is the credential.
+
+See [webhook-triggers.md](webhook-triggers.md) for the complete vertical slice.
+
+### Token Lifecycle
+
+```
+POST .../webhook  →  32-byte token stored in agent_schedules.webhook_token
+                      webhook_enabled = 1
+                      Returns full URL: {base}/api/webhooks/{token}
+
+GET .../webhook   →  Returns current status (has_token, webhook_enabled, webhook_url)
+
+DELETE .../webhook →  token = NULL, webhook_enabled = 0 — old URL returns 404 immediately
+```
+
+Calling `POST .../webhook` again rotates the token, instantly invalidating the previous URL.
+
+### Public Trigger Endpoint
+
+**File**: `src/backend/routers/webhooks.py` — router prefix `/api/webhooks`, **no JWT auth**
+
+```
+POST /api/webhooks/{webhook_token}
+Optional body: {"context": "...", "metadata": {...}}
+Returns: 202 Accepted
+```
+
+Flow: token format check → DB lookup via partial index → rate limit (10/60s, Redis, fail-open) → append context to message → forward to scheduler → audit log.
+
+### Schema Additions (migration `agent_schedules_webhook`)
+
+**File**: `src/backend/db/migrations.py:1631-1648`
+
+```sql
+ALTER TABLE agent_schedules ADD COLUMN webhook_token TEXT;          -- 43-char urlsafe token, nullable
+ALTER TABLE agent_schedules ADD COLUMN webhook_enabled INTEGER DEFAULT 0;
+
+-- O(1) lookup; partial so only non-NULL rows are indexed
+CREATE UNIQUE INDEX idx_schedules_webhook_token
+    ON agent_schedules(webhook_token)
+    WHERE webhook_token IS NOT NULL;
+```
+
+### DB Methods
+
+**File**: `src/backend/db/schedules.py:515-594`
+
+| Method | Purpose |
+|--------|---------|
+| `generate_webhook_token(schedule_id)` | `secrets.token_urlsafe(32)` → UPDATE + set `webhook_enabled=1` |
+| `get_schedule_by_webhook_token(token)` | O(1) SELECT via partial index |
+| `set_webhook_enabled(schedule_id, enabled)` | Enable/disable without revoking token |
+| `revoke_webhook_token(schedule_id)` | NULL token, set `webhook_enabled=0` |
+| `get_webhook_status(schedule_id)` | Returns `{webhook_token, webhook_enabled, has_token}` |
+
+### Scheduler Integration
+
+**File**: `src/scheduler/main.py:136-221`
+
+`_trigger_handler` reads `triggered_by` from the JSON body. Accepts `"manual"` or `"webhook"`; defaults to `"manual"`. Passes value through to `_execute_schedule_with_lock`, which stamps it on the `schedule_executions` row. Execution flow is otherwise identical to a manual trigger.
+
+### Security
+
+- Token entropy: `secrets.token_urlsafe(32)` = 43 chars ≈ 256 bits
+- Format guard: regex `^[A-Za-z0-9_\-]{20,60}$` before DB lookup (avoids injection)
+- Rate limit: 10 calls / 60s per token; fail-open on Redis unavailability
+- Prompt injection: caller `context` wrapped in labeled separator, capped at 4000 chars
+- Audit: every trigger writes to `audit_log` with caller IP; token truncated to 8 chars in endpoint field
+
+---
+
 ## Database Schema
 
 ### agent_schedules
@@ -435,6 +512,8 @@ CREATE TABLE agent_schedules (
     timeout_seconds INTEGER DEFAULT 900, -- Execution timeout (default 15 min, max 2h)
     allowed_tools TEXT,                  -- JSON array of tool names, NULL = all tools allowed
     model TEXT,                          -- Model override (MODEL-001), NULL = agent default
+    webhook_token TEXT,                  -- WEBHOOK-001: opaque 43-char urlsafe token, nullable
+    webhook_enabled INTEGER DEFAULT 0,  -- WEBHOOK-001: 0 = disabled, 1 = active
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
 ```

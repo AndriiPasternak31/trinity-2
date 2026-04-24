@@ -1628,6 +1628,25 @@ def _migrate_agent_git_config_branch_ownership(cursor, conn):
           "on agent_git_config(github_repo, working_branch) WHERE source_mode = 0")
 
 
+def _migrate_agent_schedules_webhook(cursor, conn):
+    """Add webhook_token and webhook_enabled columns to agent_schedules (WEBHOOK-001, #291)."""
+    cursor.execute("PRAGMA table_info(agent_schedules)")
+    columns = {row[1] for row in cursor.fetchall()}
+
+    if "webhook_token" not in columns:
+        cursor.execute("ALTER TABLE agent_schedules ADD COLUMN webhook_token TEXT")
+    if "webhook_enabled" not in columns:
+        cursor.execute("ALTER TABLE agent_schedules ADD COLUMN webhook_enabled INTEGER DEFAULT 0")
+
+    # Partial unique index — only applies to rows where a token is set
+    cursor.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_schedules_webhook_token "
+        "ON agent_schedules(webhook_token) WHERE webhook_token IS NOT NULL"
+    )
+
+    conn.commit()
+
+
 MIGRATIONS = [
     ("agent_sharing", _migrate_agent_sharing_table),
     ("schedule_executions_observability", _migrate_schedule_executions_observability),
@@ -1679,4 +1698,5 @@ MIGRATIONS = [
     ("agent_git_config_branch_ownership", _migrate_agent_git_config_branch_ownership),
     ("sync_health", _migrate_sync_health),
     ("whatsapp_bindings", _migrate_whatsapp_bindings),
+    ("agent_schedules_webhook", _migrate_agent_schedules_webhook),
 ]
