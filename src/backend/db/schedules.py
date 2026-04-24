@@ -513,6 +513,87 @@ class ScheduleOperations:
             return len(schedule_ids)
 
     # =========================================================================
+    # Webhook Management (WEBHOOK-001, #291)
+    # =========================================================================
+
+    def generate_webhook_token(self, schedule_id: str) -> Optional[str]:
+        """Generate (or regenerate) a webhook token for a schedule.
+
+        Creates a 32-byte URL-safe random token stored in the DB. Calling
+        again replaces the old token, immediately invalidating the old URL.
+        """
+        token = secrets.token_urlsafe(32)
+        now = utc_now_iso()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE agent_schedules
+                   SET webhook_token = ?, webhook_enabled = 1, updated_at = ?
+                 WHERE id = ?
+                """,
+                (token, now, schedule_id),
+            )
+            conn.commit()
+            if cursor.rowcount == 0:
+                return None
+        return token
+
+    def get_schedule_by_webhook_token(self, token: str) -> Optional[Schedule]:
+        """Look up a schedule by its webhook token (O(1) via index)."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM agent_schedules WHERE webhook_token = ?",
+                (token,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_schedule(row)
+
+    def set_webhook_enabled(self, schedule_id: str, enabled: bool) -> bool:
+        """Enable or disable webhook triggering for a schedule."""
+        now = utc_now_iso()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE agent_schedules SET webhook_enabled = ?, updated_at = ? WHERE id = ?",
+                (1 if enabled else 0, now, schedule_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def revoke_webhook_token(self, schedule_id: str) -> bool:
+        """Revoke a webhook token, immediately invalidating the URL."""
+        now = utc_now_iso()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE agent_schedules SET webhook_token = NULL, webhook_enabled = 0, updated_at = ? WHERE id = ?",
+                (now, schedule_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_webhook_status(self, schedule_id: str) -> Optional[Dict]:
+        """Return webhook configuration for a schedule."""
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT webhook_token, webhook_enabled FROM agent_schedules WHERE id = ?",
+                (schedule_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "webhook_token": row["webhook_token"],
+                "webhook_enabled": bool(row["webhook_enabled"]),
+                "has_token": row["webhook_token"] is not None,
+            }
+
+    # =========================================================================
     # Schedule Execution Management
     # =========================================================================
 

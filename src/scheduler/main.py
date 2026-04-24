@@ -135,19 +135,13 @@ class SchedulerApp:
 
     async def _trigger_handler(self, request: web.Request) -> web.Response:
         """
-        Manual trigger endpoint.
+        Manual/webhook trigger endpoint.
 
         POST /api/schedules/{schedule_id}/trigger
+        Optional JSON body: {"triggered_by": "manual" | "webhook"}
 
-        Manually triggers a schedule execution with the same flow as cron triggers,
+        Triggers a schedule execution with the same flow as cron triggers,
         including activity tracking and WebSocket broadcasts.
-
-        Returns:
-            {
-                "status": "triggered",
-                "schedule_id": "...",
-                "execution_id": "..."
-            }
         """
         schedule_id = request.match_info.get("schedule_id")
         if not schedule_id:
@@ -170,43 +164,61 @@ class SchedulerApp:
                 status=404
             )
 
-        logger.info(f"Manual trigger received for schedule {schedule_id} ({schedule.name})")
+        # Optional triggered_by from JSON body (webhook callers pass "webhook")
+        triggered_by = "manual"
+        try:
+            if request.content_type == "application/json" and request.content_length:
+                body = await request.json()
+                raw = body.get("triggered_by", "manual")
+                if raw in ("manual", "webhook"):
+                    triggered_by = raw
+        except Exception:
+            pass  # malformed body — default to "manual"
 
-        # Execute in background (fire-and-forget)
-        # Pass triggered_by="manual" to distinguish from cron triggers
-        asyncio.create_task(
-            self._execute_manual_trigger(schedule_id)
+        logger.info(
+            f"Trigger received for schedule {schedule_id} ({schedule.name}) "
+            f"triggered_by={triggered_by}"
         )
 
-        # Return immediately with execution info
-        # The actual execution will create its own execution record
+        # Execute in background (fire-and-forget)
+        asyncio.create_task(
+            self._execute_manual_trigger(schedule_id, triggered_by=triggered_by)
+        )
+
+        # Return immediately; execution creates its own record asynchronously
         return web.json_response({
             "status": "triggered",
             "schedule_id": schedule_id,
             "schedule_name": schedule.name,
             "agent_name": schedule.agent_name,
+            "triggered_by": triggered_by,
             "message": "Execution started in background"
         })
 
-    async def _execute_manual_trigger(self, schedule_id: str):
-        """Execute a manually triggered schedule."""
+    async def _execute_manual_trigger(self, schedule_id: str, triggered_by: str = "manual"):
+        """Execute a manually or webhook-triggered schedule."""
         try:
-            # Acquire lock (manual triggers still need locking to prevent concurrent execution)
+            # Acquire lock (prevents concurrent execution)
             lock = self.scheduler_service.lock_manager.try_acquire_schedule_lock(schedule_id)
             if not lock:
-                logger.warning(f"Manual trigger for {schedule_id}: schedule already executing")
+                logger.warning(
+                    f"Trigger for {schedule_id} (triggered_by={triggered_by}): "
+                    "schedule already executing"
+                )
                 return
 
             try:
                 await self.scheduler_service._execute_schedule_with_lock(
                     schedule_id,
-                    triggered_by="manual"
+                    triggered_by=triggered_by
                 )
             finally:
                 lock.release()
 
         except Exception as e:
-            logger.error(f"Manual trigger execution failed for {schedule_id}: {e}")
+            logger.error(
+                f"Trigger execution failed for {schedule_id} (triggered_by={triggered_by}): {e}"
+            )
 
     async def _run_until_shutdown(self):
         """Run the scheduler until shutdown signal."""

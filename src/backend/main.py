@@ -89,6 +89,7 @@ from routers.event_subscriptions import router as event_subscriptions_router, se
 from routers.users import router as users_router
 from routers.debug import router as debug_router  # #306 soak instrumentation
 from routers.messages import router as messages_router  # Proactive Messaging (#321)
+from routers.webhooks import router as webhooks_router  # Webhook triggers (WEBHOOK-001, #291)
 
 # Import activity service
 from services.activity_service import activity_service
@@ -726,6 +727,7 @@ app.include_router(voice_router)  # Voice Chat (VOICE-001)
 app.include_router(event_subscriptions_router)  # Agent Event Subscriptions (EVT-001)
 app.include_router(users_router)  # User Management (ROLE-001)
 app.include_router(debug_router)  # #306 soak dashboard
+app.include_router(webhooks_router)  # Webhook Triggers (WEBHOOK-001, #291)
 
 
 # WebSocket endpoint
