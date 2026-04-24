@@ -258,7 +258,7 @@
 |------|----------|-------------|
 | Agent Notifications | [agent-notifications.md](feature-flows/agent-notifications.md) | Agent-to-platform notifications (NOTIF-001) |
 | Events Page UI | [events-page.md](feature-flows/events-page.md) | Consolidated into Operating Room Notifications tab |
-| Operating Room | [operating-room.md](feature-flows/operating-room.md) | Unified operator command center: queue, notifications, cost alerts (OPS-001) |
+| Operating Room | [operating-room.md](feature-flows/operating-room.md) | Unified operator command center: queue, notifications, resolved (OPS-001) |
 
 ### Configuration & Settings
 
@@ -297,7 +297,7 @@
 | Templates Page | [templates-page.md](feature-flows/templates-page.md) | `/templates` route for browsing |
 | API Keys Page | [api-keys-page.md](feature-flows/api-keys-page.md) | `/api-keys` page UI flow |
 | Agents Page UI | [agents-page-ui-improvements.md](feature-flows/agents-page-ui-improvements.md) | Horizontal row tiles with success rate bars, filtering, responsive breakpoints |
-| Alerts Page | [alerts-page.md](feature-flows/alerts-page.md) | Consolidated into Operating Room Cost Alerts tab |
+| Alerts Page | [alerts-page.md](feature-flows/alerts-page.md) | Removed in #430 (process engine deletion; cost alerts were PE-only) |
 
 ### Chat & Sessions
 
@@ -313,29 +313,6 @@
 | Testing Agents Suite | [testing-agents.md](feature-flows/testing-agents.md) | Automated pytest suite (1460+ tests) |
 | Local Agent Deployment | [local-agent-deploy.md](feature-flows/local-agent-deploy.md) | Deploy local agents via MCP |
 | Dark Mode / Theme | [dark-mode-theme.md](feature-flows/dark-mode-theme.md) | Client-side theme system |
-
----
-
-## Process Engine Flows
-
-The Process Engine enables BPMN-inspired workflow orchestration with AI agents.
-
-**Index Document**: [process-engine/README.md](feature-flows/process-engine/README.md)
-
-| Flow | Document | Description |
-|------|----------|-------------|
-| Process Definition | [process-definition.md](feature-flows/process-engine/process-definition.md) | YAML schema, validation, versioning |
-| Process Execution | [process-execution.md](feature-flows/process-engine/process-execution.md) | Execution engine, step handlers, state machine |
-| Process Monitoring | [process-monitoring.md](feature-flows/process-engine/process-monitoring.md) | Real-time WebSocket events |
-| Human Approval | [human-approval.md](feature-flows/process-engine/human-approval.md) | Approval gates, inbox, timeout handling |
-| Process Scheduling | [process-scheduling.md](feature-flows/process-engine/process-scheduling.md) | Cron triggers, timer steps |
-| Process Analytics | [process-analytics.md](feature-flows/process-engine/process-analytics.md) | Cost tracking, metrics, trends |
-| Sub-Processes | [sub-processes.md](feature-flows/process-engine/sub-processes.md) | Parent-child linking, breadcrumbs |
-| Agent Roles (EMI) | [agent-roles-emi.md](feature-flows/process-engine/agent-roles-emi.md) | Executor/Monitor/Informed pattern |
-| Process Templates | [process-templates.md](feature-flows/process-engine/process-templates.md) | Bundled and user templates |
-| Onboarding & Docs | [onboarding-documentation.md](feature-flows/process-engine/onboarding-documentation.md) | Process Wizard, Help panel |
-| Execution List Page | [execution-list-page.md](feature-flows/execution-list-page.md) | `/executions` route |
-| Process Dashboard | [process-dashboard.md](feature-flows/process-dashboard.md) | `/process-dashboard` analytics |
 
 ---
 
