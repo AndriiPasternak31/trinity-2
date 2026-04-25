@@ -1040,13 +1040,30 @@ class TestAsyncCollaborationActivity:
         created_agent
     ):
         """Async task with X-Source-Agent header creates and completes collaboration activity."""
+        # The source agent must satisfy two production constraints:
+        #   1. It must be a real, accessible agent — /api/activities/timeline
+        #      filters activities by `agent_name ∈ accessible_agents`
+        #      (routers/activities.py:47-50), so non-existent sources are hidden.
+        #   2. It must NOT equal the target — chat.py:790 classifies
+        #      `source == target` as SELF_TASK (feature SELF-EXEC-001), which
+        #      writes a different activity_type and skips agent_collaboration.
+        agents_resp = api_client.get("/api/agents")
+        assert_status(agents_resp, 200)
+        other_agents = [
+            a['name'] for a in agents_resp.json()
+            if a['name'] != created_agent['name']
+        ]
+        if not other_agents:
+            pytest.skip("Need a second accessible agent to act as collaboration source")
+        source_agent_name = other_agents[0]
+
         response = api_client.post(
             f"/api/agents/{created_agent['name']}/task",
             json={
                 "message": "What is 5+5? Reply with just the number.",
                 "async_mode": True,
             },
-            headers={"X-Source-Agent": "test-source-agent"},
+            headers={"X-Source-Agent": source_agent_name},
             timeout=10.0,
         )
 
