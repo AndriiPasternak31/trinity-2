@@ -263,6 +263,25 @@ Use these thresholds to assess test health (based on **executed** tests, not inc
 - **Warning**: 75-90% pass rate, <5 failures
 - **Critical**: <75% pass rate or >5 failures
 
+## Recent Test Additions (2026-04-25)
+
+| Test File | Description | Tests Added |
+|-----------|-------------|-------------|
+| `unit/test_github_init_gitignore.py` | Gitignore widen + migrate-on-push (#462) — full exclusion list coverage, idempotency, doc/constant sync, `git rm --cached` for newly-ignored files | 4 new tests (file total 6) |
+
+**Gitignore Widen + Migrate (#462)** (`unit/test_github_init_gitignore.py`):
+
+- `test_preserves_preexisting_gitignore` — existing `.gitignore` content is retained after init (pre-existing test)
+- `test_fresh_agent_ignores_env_and_mcp_json` — fresh agent gets `.env` and `.mcp.json` exclusions (pre-existing test)
+- `test_full_documented_exclusion_list_present` — all patterns in `_GITIGNORE_PATTERNS` constant are written to `.gitignore` (new)
+- `test_idempotent_double_run` — running `initialize_git_in_container` twice does not duplicate patterns (new)
+- `test_doc_and_constant_in_sync` — `_GITIGNORE_PATTERNS` constant matches the exclusion block in `TRINITY_COMPATIBLE_AGENT_GUIDE.md` (new)
+- `test_rm_cached_for_newly_ignored_files` — `sync_to_github` calls `git rm --cached` for files that are tracked but now match a `.gitignore` pattern (new)
+
+Pure unit tests over `git_service.py` stubs; no backend container required. Run via `pytest tests/unit/test_github_init_gitignore.py`.
+
+---
+
 ## Recent Test Additions (2026-04-23)
 
 | Test File | Description | Tests Added |
