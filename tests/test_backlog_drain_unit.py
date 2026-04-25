@@ -326,18 +326,24 @@ def test_spawn_drain_calls_helper_with_expected_kwargs(backlog_module, monkeypat
     assert "release_slot" not in kwargs
 
 
-def test_spawn_drain_marks_self_task_when_source_matches_target(
+def test_spawn_drain_passes_through_self_task_from_metadata(
     backlog_module, monkeypatch
 ):
-    """is_self_task is derived from x_source_agent == agent_name."""
+    """Post-#500: `is_self_task` and `self_task_activity_id` are captured by
+    the chat router at enqueue time and replayed verbatim by the drain
+    (rather than re-derived). Pin that pass-through contract."""
+    metadata = _make_metadata(x_source_agent="self-agent")
+    metadata["is_self_task"] = True
+    metadata["self_task_activity_id"] = "selftask-1"
     kwargs = _run_drain(
         backlog_module,
         monkeypatch,
-        _make_metadata(x_source_agent="self-agent"),
+        metadata,
         agent_name="self-agent",
         execution_id="exec-2",
     )
     assert kwargs["is_self_task"] is True
+    assert kwargs["self_task_activity_id"] == "selftask-1"
 
 
 def test_spawn_drain_marks_non_self_when_source_missing(

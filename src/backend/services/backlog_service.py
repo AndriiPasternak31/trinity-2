@@ -16,8 +16,9 @@ Key invariants:
   drain), the slot we just acquired is immediately released.
 - Claim uses a single atomic UPDATE ... WHERE id = (SELECT ... ORDER BY
   queued_at LIMIT 1) RETURNING so concurrent drains can't double-claim.
-- Drain imports `_run_async_task_with_persistence` lazily to avoid a
-  circular import with routers/chat.py.
+- Drain imports `_run_async_task_with_persistence` lazily to avoid a circular
+  import with routers/chat.py. (#496: was `_execute_task_background`,
+  deleted by #95; lazy-import target updated.)
 - Credentials are never stored in backlog_metadata — only opaque references
   (subscription_id, user_id, mcp key id).
 """
@@ -68,7 +69,8 @@ class BacklogService:
         x_mcp_key_name: Optional[str],
         triggered_by: str,
         collaboration_activity_id: Optional[str],
-        task_activity_id: Optional[str],
+        is_self_task: bool = False,
+        self_task_activity_id: Optional[str] = None,
     ) -> bool:
         """Persist an async task request as a QUEUED backlog item.
 
@@ -99,6 +101,7 @@ class BacklogService:
             "create_new_session": request.create_new_session,
             "chat_session_id": request.chat_session_id,
             "resume_session_id": request.resume_session_id,
+            "inject_result": request.inject_result,
             "user_id": user_id,
             "user_email": user_email,
             "subscription_id": subscription_id,
@@ -107,7 +110,8 @@ class BacklogService:
             "x_mcp_key_name": x_mcp_key_name,
             "triggered_by": triggered_by,
             "collaboration_activity_id": collaboration_activity_id,
-            "task_activity_id": task_activity_id,
+            "is_self_task": is_self_task,
+            "self_task_activity_id": self_task_activity_id,
         }
         queued_at = utc_now_iso()
         ok = db.update_execution_to_queued(
@@ -139,6 +143,7 @@ class BacklogService:
         3. Atomically claim the oldest queued row.
         4. On any failure after (2), release the slot we grabbed.
         5. Spawn `_run_async_task_with_persistence` on the reconstituted request.
+           (#496: was `_execute_task_background`, deleted by #95.)
 
         Returns True if a row was drained, False otherwise.
         """
@@ -216,8 +221,12 @@ class BacklogService:
         try:
             await self._spawn_drain(agent_name, execution_id, metadata)
         except Exception as e:  # pragma: no cover - defensive
+            # #496: stable log token "backlog_drain_spawn_failed" so log-based
+            # detection (Vector / dashboards) can spot import drift or other
+            # spawn-time regressions at fleet scale rather than per-row.
             logger.error(
-                f"[Backlog] Failed to spawn drain for {execution_id}: {e}",
+                f"[Backlog] backlog_drain_spawn_failed agent='{agent_name}' "
+                f"execution_id={execution_id} error={e!r}",
                 exc_info=True,
             )
             db.update_execution_status(
@@ -236,12 +245,13 @@ class BacklogService:
         """Reconstruct a ParallelTaskRequest from metadata and spawn the
         existing background execution helper. Late-imported to avoid the
         chat.py <-> backlog_service.py cycle.
+
+        #496: lazy-imports `_run_async_task_with_persistence` (post-#95
+        replacement). The drain pre-acquires the slot under the real
+        execution_id (drain_next), so the helper passes
+        `slot_already_held=True` to TaskExecutionService, which releases the
+        slot in its `finally` block.
         """
-        # Issue #95 renamed this helper from `_execute_task_background` to
-        # `_run_async_task_with_persistence`. The wrapper passes
-        # `slot_already_held=True` to TaskExecutionService internally, so the
-        # drain no longer needs a `release_slot` flag — slot release happens
-        # in the service's finally block.
         from routers.chat import _run_async_task_with_persistence
 
         request = ParallelTaskRequest(
@@ -257,10 +267,8 @@ class BacklogService:
             create_new_session=metadata.get("create_new_session") or False,
             chat_session_id=metadata.get("chat_session_id"),
             resume_session_id=metadata.get("resume_session_id"),
+            inject_result=metadata.get("inject_result") or False,
         )
-
-        x_source_agent = metadata.get("x_source_agent")
-        is_self_task = bool(x_source_agent) and x_source_agent == agent_name
 
         task = asyncio.create_task(
             _run_async_task_with_persistence(
@@ -268,12 +276,12 @@ class BacklogService:
                 request=request,
                 execution_id=execution_id,
                 collaboration_activity_id=metadata.get("collaboration_activity_id"),
-                x_source_agent=x_source_agent,
+                x_source_agent=metadata.get("x_source_agent"),
                 user_id=metadata.get("user_id"),
                 user_email=metadata.get("user_email"),
                 subscription_id=metadata.get("subscription_id"),
-                is_self_task=is_self_task,
-                self_task_activity_id=None,
+                is_self_task=metadata.get("is_self_task") or False,
+                self_task_activity_id=metadata.get("self_task_activity_id"),
             )
         )
 
