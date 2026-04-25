@@ -920,7 +920,8 @@ class TestAsyncSessionPersistence:
             f"/api/agents/{created_agent['name']}/chat/sessions"
         )
         assert_status(sessions_resp, 200)
-        sessions = sessions_resp.json()
+        # Endpoint returns {agent_name, session_count, sessions: [...]}.
+        sessions = sessions_resp.json()["sessions"]
         assert len(sessions) > 0, "Should have at least one chat session after save_to_session"
 
     @pytest.mark.slow
@@ -980,7 +981,8 @@ class TestAsyncSessionPersistence:
             f"/api/agents/{created_agent['name']}/chat/sessions"
         )
         assert_status(sessions_resp, 200)
-        sessions = sessions_resp.json()
+        # Endpoint returns {agent_name, session_count, sessions: [...]}.
+        sessions = sessions_resp.json()["sessions"]
         matching = [s for s in sessions if s.get("id") == session_id]
         assert len(matching) > 0, f"Session {session_id} should still exist after async task"
 
