@@ -16,8 +16,8 @@ Key invariants:
   drain), the slot we just acquired is immediately released.
 - Claim uses a single atomic UPDATE ... WHERE id = (SELECT ... ORDER BY
   queued_at LIMIT 1) RETURNING so concurrent drains can't double-claim.
-- Drain imports `_execute_task_background` lazily to avoid a circular import
-  with routers/chat.py.
+- Drain imports `_run_async_task_with_persistence` lazily to avoid a
+  circular import with routers/chat.py.
 - Credentials are never stored in backlog_metadata — only opaque references
   (subscription_id, user_id, mcp key id).
 """
@@ -138,7 +138,7 @@ class BacklogService:
         2. Acquire a slot up-front (using current agent capacity & timeout).
         3. Atomically claim the oldest queued row.
         4. On any failure after (2), release the slot we grabbed.
-        5. Spawn `_execute_task_background` on the reconstituted request.
+        5. Spawn `_run_async_task_with_persistence` on the reconstituted request.
 
         Returns True if a row was drained, False otherwise.
         """
@@ -237,7 +237,12 @@ class BacklogService:
         existing background execution helper. Late-imported to avoid the
         chat.py <-> backlog_service.py cycle.
         """
-        from routers.chat import _execute_task_background
+        # Issue #95 renamed this helper from `_execute_task_background` to
+        # `_run_async_task_with_persistence`. The wrapper passes
+        # `slot_already_held=True` to TaskExecutionService internally, so the
+        # drain no longer needs a `release_slot` flag — slot release happens
+        # in the service's finally block.
+        from routers.chat import _run_async_task_with_persistence
 
         request = ParallelTaskRequest(
             message=metadata.get("message") or "",
@@ -254,18 +259,21 @@ class BacklogService:
             resume_session_id=metadata.get("resume_session_id"),
         )
 
+        x_source_agent = metadata.get("x_source_agent")
+        is_self_task = bool(x_source_agent) and x_source_agent == agent_name
+
         task = asyncio.create_task(
-            _execute_task_background(
+            _run_async_task_with_persistence(
                 agent_name=agent_name,
                 request=request,
                 execution_id=execution_id,
-                task_activity_id=metadata.get("task_activity_id"),
                 collaboration_activity_id=metadata.get("collaboration_activity_id"),
-                x_source_agent=metadata.get("x_source_agent"),
-                release_slot=True,
+                x_source_agent=x_source_agent,
                 user_id=metadata.get("user_id"),
                 user_email=metadata.get("user_email"),
                 subscription_id=metadata.get("subscription_id"),
+                is_self_task=is_self_task,
+                self_task_activity_id=None,
             )
         )
 

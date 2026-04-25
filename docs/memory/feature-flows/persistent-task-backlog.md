@@ -57,7 +57,7 @@ The backlog gives Trinity:
      slot acquired                           slot full
              │                                      │
              ▼                                      ▼
-    _execute_task_background()          backlog.enqueue()
+  _run_async_task_with_persistence()    backlog.enqueue()
              │                                      │
              ▼                          ┌───────────┴───────────┐
      finally: release_slot              │                       │
@@ -87,9 +87,10 @@ The backlog gives Trinity:
       │
       ▼
   asyncio.create_task(
-      _execute_task_background(
-          release_slot=True,
+      _run_async_task_with_persistence(
           identity from backlog_metadata,
+          # slot release happens inside TaskExecutionService
+          # via slot_already_held=True (set by the wrapper)
       )
   )
 ```
@@ -222,7 +223,7 @@ if _exec_row and _exec_row.status == TaskExecutionStatus.QUEUED:
 | Method | Purpose |
 |---|---|
 | `enqueue(...)` | Check depth, persist `backlog_metadata`, flip row to QUEUED. Returns False if at cap. |
-| `drain_next(agent_name)` | Acquire sentinel slot → atomically claim row → swap to real execution_id slot → reconstruct `ParallelTaskRequest` → spawn `_execute_task_background`. |
+| `drain_next(agent_name)` | Acquire sentinel slot → atomically claim row → swap to real execution_id slot → reconstruct `ParallelTaskRequest` → spawn `_run_async_task_with_persistence`. |
 | `on_slot_released(agent_name)` | Callback registered with SlotService. Tries `drain_next` once per release. |
 | `expire_stale(max_age_hours=24)` | Maintenance: mark old queued rows as FAILED. |
 | `drain_orphans_all()` | Maintenance: iterate agents with queued work, drain one item each. |
@@ -231,8 +232,11 @@ if _exec_row and _exec_row.status == TaskExecutionStatus.QUEUED:
 Design invariants:
 - Slot acquired **before** row is claimed — prevents RUNNING-without-slot orphans.
 - Single-statement `UPDATE ... WHERE id=(SELECT ... LIMIT 1) RETURNING` — atomic claim.
-- `_execute_task_background` is late-imported inside `_spawn_drain` to avoid a
-  `routers.chat` ↔ `services.backlog_service` cycle.
+- `_run_async_task_with_persistence` is late-imported inside `_spawn_drain`
+  to avoid a `routers.chat` ↔ `services.backlog_service` cycle. (Issue #496:
+  this lazy import was previously named `_execute_task_background` and silently
+  ImportError'd after #95 renamed the helper; now pinned by
+  `tests/test_backlog_drain_unit.py`.)
 - Identity replayed from `backlog_metadata`; no re-auth at drain time.
 
 ### Slot Service — `src/backend/services/slot_service.py`
@@ -316,7 +320,7 @@ page if demand emerges.
 | Corrupt `backlog_metadata` JSON | Row marked FAILED with reason, slot released, drain continues with next item. |
 | Slot acquisition fails after claim | Row released back to QUEUED via `release_claim_to_queued`; next callback retries. |
 | Backend crash mid-drain | Row stays RUNNING with no Claude session ID — existing cleanup service recovers it within the timeout window. New queued rows are drained by the 60s maintenance loop on restart. |
-| Agent container gone when drain fires | `_execute_task_background` surfaces an HTTP error, row marked FAILED. |
+| Agent container gone when drain fires | `_run_async_task_with_persistence` surfaces an HTTP error, row marked FAILED. |
 | Concurrent drains on same agent | Atomic UPDATE guarantees only one callback wins the row; others get None and release their sentinel slots. |
 | Cancel-while-queued | Terminate endpoint short-circuits, row moves to CANCELLED. The claim SQL's `WHERE status='queued'` filter naturally skips cancelled rows, so the drain path is race-safe. |
 

@@ -673,8 +673,12 @@ class TestBacklogDrain:
             spawned.update(kwargs)
 
         # Install a fake routers.chat module so the late import inside
-        # _spawn_drain picks up our stub instead of the real one.
-        fake_chat = types.SimpleNamespace(_execute_task_background=_fake_bg)
+        # _spawn_drain picks up our stub instead of the real one. Issue #496:
+        # the helper was renamed from `_execute_task_background` to
+        # `_run_async_task_with_persistence` by #95; the stub must match.
+        fake_chat = types.SimpleNamespace(
+            _run_async_task_with_persistence=_fake_bg,
+        )
         monkeypatch.setitem(sys.modules, "routers.chat", fake_chat)
 
         metadata = {
@@ -700,8 +704,13 @@ class TestBacklogDrain:
         await asyncio.sleep(0)
         assert spawned["agent_name"] == "alpha"
         assert spawned["execution_id"] == "exec-7"
-        assert spawned["release_slot"] is True
         assert spawned["user_id"] == 5
+        # `release_slot` was removed in #95 — slot release is now always
+        # handled inside TaskExecutionService via slot_already_held=True.
+        assert "release_slot" not in spawned
+        # Self-task derivation: no x_source_agent → not a self-task.
+        assert spawned["is_self_task"] is False
+        assert spawned["self_task_activity_id"] is None
 
 
 # ---------------------------------------------------------------------------
