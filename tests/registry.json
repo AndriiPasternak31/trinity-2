@@ -180,6 +180,13 @@
       "added": "2026-04-21",
       "categories": ["backend", "unit", "websocket", "redis-streams"],
       "description": "Unit tests for Redis Streams event bus (#306): last-event-id validation + id comparison, scope visibility (SCOPE_ALL vs SCOPE_SCOPED with accessible_agents), EventBus XADD envelope (dict + legacy JSON string + inferred agent_name), Redis-unavailable fallback buffer, StreamDispatcher 3-failure client eviction, slow-consumer queue overflow triggers resync marker, update_accessible_agents mutation, invalid last-event-id queues resync_required"
+    },
+    {
+      "file": "test_backlog_drain_unit.py",
+      "feature": "Issue #496",
+      "added": "2026-04-25",
+      "categories": ["backend", "unit", "backlog", "executions"],
+      "description": "Regression tests for BACKLOG-001 drain spawn (#496). Two AST-based contract tests pin the function name and signature in routers/chat.py (would have caught #95 silent rename). Three runtime spy tests verify _spawn_drain forwards the correct kwargs and derives is_self_task from x_source_agent."
     }
   ]
 }
