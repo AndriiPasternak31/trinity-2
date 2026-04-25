@@ -152,6 +152,9 @@ def poll_execution_until_done(
     """
     import time
 
+    # Terminal statuses per src/backend/models.py::TaskExecutionStatus —
+    # SUCCESS, FAILED, CANCELLED, SKIPPED. Polling past these wastes test time.
+    terminal = {"success", "failed", "cancelled", "skipped"}
     start = time.time()
     while time.time() - start < max_wait:
         poll = api_client.get(
@@ -159,7 +162,7 @@ def poll_execution_until_done(
         )
         if poll.status_code == 200:
             data = poll.json()
-            if data.get("status") in ["success", "failed"]:
+            if data.get("status") in terminal:
                 return data
         time.sleep(interval)
     return None

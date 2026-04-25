@@ -882,7 +882,6 @@ class TestAsyncModeUnifiedExecutor:
     # src/backend/routers/chat.py:688 where subscription_id is now passed.
 
 
-
 class TestAsyncSessionPersistence:
     """Issue #95: Tests for save_to_session via TaskExecutionService delegation."""
 
@@ -915,13 +914,14 @@ class TestAsyncSessionPersistence:
 
         poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
-        # Verify chat sessions contain messages
+        # Verify chat sessions contain messages — fail loudly on non-200 so a
+        # backend regression doesn't slip through silently.
         sessions_resp = api_client.get(
             f"/api/agents/{created_agent['name']}/chat/sessions"
         )
-        if sessions_resp.status_code == 200:
-            sessions = sessions_resp.json()
-            assert len(sessions) > 0, "Should have at least one chat session after save_to_session"
+        assert_status(sessions_resp, 200)
+        sessions = sessions_resp.json()
+        assert len(sessions) > 0, "Should have at least one chat session after save_to_session"
 
     @pytest.mark.slow
     @pytest.mark.requires_agent
@@ -975,14 +975,14 @@ class TestAsyncSessionPersistence:
 
         poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
-        # Session should still exist (messages were added to it)
+        # Session should still exist (messages were added to it).
         sessions_resp = api_client.get(
             f"/api/agents/{created_agent['name']}/chat/sessions"
         )
-        if sessions_resp.status_code == 200:
-            sessions = sessions_resp.json()
-            matching = [s for s in sessions if s.get("id") == session_id]
-            assert len(matching) > 0, f"Session {session_id} should still exist after async task"
+        assert_status(sessions_resp, 200)
+        sessions = sessions_resp.json()
+        matching = [s for s in sessions if s.get("id") == session_id]
+        assert len(matching) > 0, f"Session {session_id} should still exist after async task"
 
     @pytest.mark.slow
     @pytest.mark.requires_agent
@@ -1013,12 +1013,18 @@ class TestAsyncSessionPersistence:
 
         result = poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
-        # If task succeeded, session should exist (WebSocket broadcast happened)
-        if result and result.get("status") == "success":
-            sessions_resp = api_client.get(
-                f"/api/agents/{created_agent['name']}/chat/sessions"
-            )
-            assert sessions_resp.status_code == 200, "Should be able to list sessions"
+        assert result is not None, \
+            f"Execution {execution_id} did not reach a terminal status before timeout"
+        if result.get("status") != "success":
+            pytest.skip(f"Execution finished with status={result.get('status')}; "
+                        "WebSocket broadcast only fires on success")
+
+        # Session should be listable — proxy for the chat_response_ready broadcast
+        # having fired (the broadcast persists the session before notifying).
+        sessions_resp = api_client.get(
+            f"/api/agents/{created_agent['name']}/chat/sessions"
+        )
+        assert_status(sessions_resp, 200)
 
 
 class TestAsyncCollaborationActivity:
@@ -1110,6 +1116,9 @@ class TestAsyncSafetyNet:
         assert_status(poll, 200)
         exec_data = poll.json()
         assert exec_data["id"] == execution_id
-        # Status should be pending/running/dispatched (not failed/cancelled yet)
-        assert exec_data["status"] not in ["cancelled"], \
-            f"Execution should not be cancelled immediately, got {exec_data['status']}"
+        # Realistic states for a fresh async submission: queued (backlog), running
+        # (slot acquired, executing), or success (very fast agent finished before
+        # the GET returned). Anything else (failed/cancelled/skipped) means the
+        # safety net leaked — record was created but the task died on launch.
+        assert exec_data["status"] in {"queued", "running", "success"}, \
+            f"Execution should be in an early state, got {exec_data['status']}"
