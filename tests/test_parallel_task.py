@@ -1052,26 +1052,34 @@ class TestAsyncCollaborationActivity:
 
         poll_execution_until_done(api_client, created_agent['name'], execution_id)
 
-        # Check activities timeline for collaboration activity
-        time.sleep(1)  # Brief wait for activity completion
-        activities_resp = api_client.get(
-            "/api/activities/timeline",
-            params={"activity_types": "agent_collaboration"}
-        )
-        if activities_resp.status_code == 200:
-            activities = activities_resp.json()
-            collab_activities = [
-                a for a in activities.get("activities", [])
-                if a.get("details", {}).get("execution_id") == execution_id
-            ]
-            # Should have a collaboration activity for this execution
-            assert len(collab_activities) > 0, \
-                f"Should have collaboration activity for execution {execution_id}"
+        # The collaboration activity is written asynchronously after the
+        # execution finishes, so poll the timeline briefly instead of relying
+        # on a single fixed sleep.
+        deadline = time.time() + 10.0
+        collab_activities: list = []
+        while time.time() < deadline:
+            activities_resp = api_client.get(
+                "/api/activities/timeline",
+                params={"activity_types": "agent_collaboration"}
+            )
+            if activities_resp.status_code == 200:
+                activities = activities_resp.json().get("activities", [])
+                collab_activities = [
+                    a for a in activities
+                    if a.get("details", {}).get("execution_id") == execution_id
+                ]
+                if collab_activities:
+                    break
+            time.sleep(0.5)
+
+        assert len(collab_activities) > 0, \
+            f"Should have collaboration activity for execution {execution_id}"
 
 
 class TestAsyncSafetyNet:
     """Issue #95: Tests for safety net error handling in background task."""
 
+    @pytest.mark.requires_agent
     def test_async_mode_execution_record_exists_before_background(
         self,
         api_client: TrinityApiClient,

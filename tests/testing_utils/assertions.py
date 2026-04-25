@@ -142,7 +142,14 @@ def poll_execution_until_done(
     max_wait: int = 120,
     interval: float = 2.0,
 ) -> Optional[Dict[str, Any]]:
-    """Poll execution endpoint until terminal status. Returns final execution data or None on timeout."""
+    """Poll the execution endpoint until terminal status.
+
+    Returns the final execution payload, or ``None`` on timeout.
+
+    Intended for ``@pytest.mark.slow`` integration tests against a running
+    backend — blocks the calling thread for up to ``max_wait`` seconds via
+    ``time.sleep(interval)``. Do not call from non-slow tests.
+    """
     import time
 
     start = time.time()
